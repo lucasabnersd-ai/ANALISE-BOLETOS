@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Análise de Boletos — Associações Encontradas</title>
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#ffffff; --surface-2:#f8fafc; --line:#e2e8f0; --line-forte:#cbd5e1;
+  --txt:#0f172a; --txt-2:#475569; --txt-3:#94a3b8;
+  --azul:#1f4e79; --azul-claro:#e8f0f9;
+  --ok:#0f7b52; --ok-bg:#e6f5ee;
+  --alerta:#a16207; --alerta-bg:#fdf5e2;
+  --erro:#b32d2d; --erro-bg:#fdecec;
+  --sombra:0 1px 2px rgba(15,23,42,.05), 0 8px 24px -12px rgba(15,23,42,.18);
+  --raio:12px;
+}
+html[data-tema="escuro"]{
+  --bg:#0b1220; --surface:#111a2b; --surface-2:#0e1626; --line:#1e2c44; --line-forte:#2b3d5c;
+  --txt:#e8eefb; --txt-2:#9fb0c9; --txt-3:#68789a;
+  --azul:#5b9bd5; --azul-claro:#16263c;
+  --ok:#4ade80; --ok-bg:#10261c;
+  --alerta:#fbbf24; --alerta-bg:#2b220c;
+  --erro:#f87171; --erro-bg:#2b1414;
+  --sombra:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--txt);
+  font:15px/1.5 "Segoe UI", Calibri, system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.envolucro{max-width:1240px; margin:0 auto; padding:22px 20px 64px}
+
+/* ---------- cabecalho ---------- */
+.topo{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:20px}
+.topo h1{margin:0; font-size:22px; letter-spacing:-.3px; font-weight:650}
+.topo .sub{margin:4px 0 0; color:var(--txt-2); font-size:13.5px; max-width:70ch}
+.topo .selo{display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--txt-2);
+  background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:5px 12px}
+.ponto{width:7px; height:7px; border-radius:50%; background:var(--ok)}
+.acoes{display:flex; gap:8px; align-items:center}
+button.leve{
+  font:inherit; font-size:13px; color:var(--txt-2); background:var(--surface);
+  border:1px solid var(--line); border-radius:9px; padding:7px 12px; cursor:pointer; transition:.15s;
+}
+button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
+
+/* ---------- funil ---------- */
+.funil{display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:var(--line);
+  border:1px solid var(--line); border-radius:var(--raio); overflow:hidden; margin-bottom:14px}
+.funil .etapa{background:var(--surface); padding:13px 16px; position:relative}
+.funil .etapa b{display:block; font-size:21px; font-weight:640; letter-spacing:-.5px}
+.funil .etapa span{font-size:11.5px; color:var(--txt-2); text-transform:uppercase; letter-spacing:.55px}
+.funil .barra{height:3px; border-radius:2px; background:var(--line); margin-top:9px; overflow:hidden}
+.funil .barra i{display:block; height:100%; background:var(--azul); border-radius:2px}
+.funil .etapa.destaque b{color:var(--azul)}
+.funil .etapa.final b{color:var(--ok)}
+.funil .etapa.final .barra i{background:var(--ok)}
+
+/* ---------- indicadores ---------- */
+.cartoes{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px; margin-bottom:22px}
+.cartao{background:var(--surface); border:1px solid var(--line); border-radius:var(--raio);
+  padding:13px 15px; box-shadow:var(--sombra)}
+.cartao .rotulo{font-size:11.5px; text-transform:uppercase; letter-spacing:.55px; color:var(--txt-2)}
+.cartao .valor{font-size:25px; font-weight:640; letter-spacing:-.6px; margin-top:5px}
+.cartao .nota{font-size:12px; color:var(--txt-3); margin-top:2px}
+.cartao.ok .valor{color:var(--ok)}
+.cartao.alerta .valor{color:var(--alerta)}
+
+/* ---------- controles ---------- */
+.controles{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.busca{position:relative; flex:1 1 280px}
+.busca input{width:100%; font:inherit; font-size:14px; color:var(--txt); background:var(--surface);
+  border:1px solid var(--line); border-radius:10px; padding:9px 12px 9px 34px; outline:none}
+.busca input:focus{border-color:var(--azul)}
+.busca svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.45}
+.filtros{display:flex; gap:6px; flex-wrap:wrap}
+.filtro{font:inherit; font-size:13px; cursor:pointer; background:var(--surface); color:var(--txt-2);
+  border:1px solid var(--line); border-radius:999px; padding:7px 13px; transition:.15s}
+.filtro:hover{border-color:var(--line-forte)}
+.filtro[aria-pressed="true"]{background:var(--azul); border-color:var(--azul); color:#fff}
+html[data-tema="escuro"] .filtro[aria-pressed="true"]{color:#08111f}
+.contagem{font-size:13px; color:var(--txt-2); margin-left:auto}
+
+/* ---------- lista ---------- */
+.lista{display:flex; flex-direction:column; gap:10px}
+.item{background:var(--surface); border:1px solid var(--line); border-radius:var(--raio);
+  box-shadow:var(--sombra); overflow:hidden; transition:border-color .15s}
+.item:hover{border-color:var(--line-forte)}
+.item.aberto{border-color:var(--azul)}
+.cabeca{display:grid; grid-template-columns:minmax(200px,2.1fr) 132px 128px minmax(150px,1fr) 34px;
+  gap:14px; align-items:center; padding:13px 15px; cursor:pointer; user-select:none}
+.quem .nome{font-weight:600; font-size:14.5px; line-height:1.3}
+.quem .meta{font-size:12px; color:var(--txt-2); margin-top:3px; display:flex; gap:7px; flex-wrap:wrap}
+.quem .meta span{white-space:nowrap}
+.pastilha{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600;
+  padding:2px 8px; border-radius:999px; letter-spacing:.2px}
+.pastilha.ok{background:var(--ok-bg); color:var(--ok)}
+.pastilha.alerta{background:var(--alerta-bg); color:var(--alerta)}
+.pastilha.neutra{background:var(--surface-2); color:var(--txt-2); border:1px solid var(--line)}
+.dinheiro{text-align:right}
+.dinheiro .principal{font-variant-numeric:tabular-nums; font-weight:620; font-size:14.5px}
+.dinheiro .diferenca{font-size:11.5px; color:var(--alerta); margin-top:2px}
+.dinheiro .igual{font-size:11.5px; color:var(--txt-3); margin-top:2px}
+.datas{font-size:12.5px; color:var(--txt-2)}
+.datas b{display:block; color:var(--txt); font-weight:600; font-variant-numeric:tabular-nums; font-size:13.5px}
+.confianca .trilho{height:5px; background:var(--surface-2); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; position:relative}
+.confianca .trilho i{display:block; height:100%; background:var(--ok)}
+.confianca .trilho u{position:absolute; top:-2px; width:2px; height:calc(100% + 4px); background:var(--txt-3)}
+.confianca .legenda{display:flex; justify-content:space-between; font-size:11px; color:var(--txt-2); margin-top:5px}
+.seta{justify-self:end; color:var(--txt-3); transition:transform .18s}
+.item.aberto .seta{transform:rotate(180deg); color:var(--azul)}
+
+.faixa-alerta{display:flex; gap:9px; align-items:flex-start; background:var(--alerta-bg);
+  border-top:1px solid var(--line); padding:9px 15px; font-size:12.5px; color:var(--alerta); line-height:1.45}
+.faixa-alerta svg{flex:none; margin-top:1px}
+
+/* ---------- linha digitavel ---------- */
+.linha{display:flex; align-items:center; gap:10px; background:var(--azul-claro);
+  border-top:1px solid var(--line); padding:10px 15px}
+.linha code{font-family:"Cascadia Mono", Consolas, "Courier New", monospace; font-size:13.5px;
+  letter-spacing:.2px; color:var(--txt); flex:1; word-break:break-all; user-select:all}
+.linha .rot{font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--txt-2); flex:none}
+.copiar{font:inherit; font-size:12px; font-weight:600; cursor:pointer; flex:none;
+  background:var(--surface); color:var(--azul); border:1px solid var(--line-forte);
+  border-radius:8px; padding:6px 11px; transition:.15s}
+.copiar:hover{background:var(--azul); color:#fff; border-color:var(--azul)}
+.copiar.feito{background:var(--ok-bg); color:var(--ok); border-color:var(--ok)}
+
+/* ---------- detalhe ---------- */
+.detalhe{display:none; border-top:1px solid var(--line); padding:14px 15px 16px; background:var(--surface-2)}
+.item.aberto .detalhe{display:block}
+.detalhe h4{margin:0 0 9px; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--txt-2); font-weight:640}
+.criterios{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:15px}
+.criterio{font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid transparent; line-height:1.35}
+.criterio.ok{background:var(--ok-bg); color:var(--ok); border-color:color-mix(in srgb, var(--ok) 22%, transparent)}
+.criterio.atencao{background:var(--alerta-bg); color:var(--alerta); border-color:color-mix(in srgb, var(--alerta) 26%, transparent)}
+.grade{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px 18px}
+.campo .k{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--txt-3)}
+.campo .v{font-size:13.5px; margin-top:2px; word-break:break-word}
+.historico{margin-top:14px; padding:10px 12px; background:var(--surface); border:1px solid var(--line);
+  border-radius:9px; font-size:13px; color:var(--txt-2); line-height:1.5}
+
+.vazio{text-align:center; padding:48px 20px; color:var(--txt-3); font-size:14px}
+.rodape{margin-top:26px; padding-top:14px; border-top:1px solid var(--line);
+  display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--txt-3)}
+
+@media (max-width:820px){
+  .cabeca{grid-template-columns:1fr 34px; gap:10px}
+  .dinheiro{text-align:left}
+  .funil{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="envolucro">
+
+  <header class="topo">
+    <div>
+      <h1>Análise de Boletos <span style="color:var(--txt-3);font-weight:400">/</span> Associações encontradas</h1>
+      <p class="sub">Títulos do TOTVS que estavam <b>sem código de boleto</b> e foram associados a um boleto do DDA. Cada linha mostra o boleto correspondente, os critérios que sustentam a associação e os alertas de conferência.</p>
+    </div>
+    <div class="acoes">
+      <span class="selo"><i class="ponto"></i> Base de <b id="geradoEm">—</b></span>
+      <button class="leve" id="btnTema" type="button">Tema</button>
+    </div>
+  </header>
+
+  <section class="funil" id="funil"></section>
+  <section class="cartoes" id="cartoes"></section>
+
+  <div class="controles">
+    <label class="busca">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="busca" type="search" placeholder="Buscar por fornecedor, NF, CNPJ, linha digitável, histórico…" autocomplete="off">
+    </label>
+    <div class="filtros" id="filtros"></div>
+    <span class="contagem" id="contagem"></span>
+  </div>
+
+  <main class="lista" id="lista"></main>
+
+  <footer class="rodape">
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”</span>
+    <span id="atualizado"></span>
+  </footer>
+</div>
+
+<script>
+const DADOS = /*__DADOS__*/null;
+
+const brl = v => (v == null ? "—" : v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"}));
+const num = v => (v == null ? "—" : v.toLocaleString("pt-BR"));
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ehForte = r => (r.status || "").toUpperCase().includes("FORTE");
+
+const estado = {filtro:"todos", busca:""};
+
+/* ---------- funil e indicadores ---------- */
+function montarTopo(){
+  const i = DADOS.indicadores;
+  document.getElementById("geradoEm").textContent = i.gerado_em;
+  document.getElementById("atualizado").textContent = "Painel gerado em " + DADOS.atualizado_em;
+
+  const etapas = [
+    {n:i.total_totvs, r:"Títulos TOTVS (Boleto SC)", p:100},
+    {n:i.com_codigo, r:"Já tinham código", p:i.total_totvs ? i.com_codigo/i.total_totvs*100 : 0},
+    {n:i.sem_codigo, r:"Sem código de boleto", p:i.total_totvs ? i.sem_codigo/i.total_totvs*100 : 0, c:"destaque"},
+    {n:i.associados, r:"Associados agora", p:i.sem_codigo ? Math.max(i.associados/i.sem_codigo*100, 1.2) : 0, c:"final"},
+  ];
+  document.getElementById("funil").innerHTML = etapas.map(e => `
+    <div class="etapa ${e.c || ""}">
+      <span>${e.r}</span><b>${num(e.n)}</b>
+      <div class="barra"><i style="width:${Math.min(e.p,100).toFixed(1)}%"></i></div>
+    </div>`).join("");
+
+  const cartoes = [
+    {r:"Match forte", v:num(i.forte), n:"score ≥ 100", cl:"ok"},
+    {r:"Match provável", v:num(i.provavel), n:"score 75–99, margem segura", cl:i.provavel ? "alerta" : ""},
+    {r:"Com alerta", v:num(i.com_alerta), n:"parcelas / fatura a conferir", cl:i.com_alerta ? "alerta" : ""},
+    {r:"Divergência de valor", v:num(i.com_divergencia), n:"título × boleto", cl:i.com_divergencia ? "alerta" : ""},
+    {r:"Valor associado", v:brl(i.valor_associado), n:`${i.associados} boletos`},
+    {r:"Ainda sem match", v:num(i.sem_match), n:`+ ${num(i.futuros)} boletos futuros`},
+  ];
+  document.getElementById("cartoes").innerHTML = cartoes.map(c => `
+    <div class="cartao ${c.cl || ""}">
+      <div class="rotulo">${c.r}</div><div class="valor">${c.v}</div><div class="nota">${c.n}</div>
+    </div>`).join("");
+}
+
+/* ---------- filtros ---------- */
+const FILTROS = [
+  {id:"todos",     rot:"Todos",           teste:() => true},
+  {id:"forte",     rot:"Match forte",     teste:r => ehForte(r)},
+  {id:"provavel",  rot:"Match provável",  teste:r => !ehForte(r)},
+  {id:"alerta",    rot:"Com alerta",      teste:r => !!r.alerta},
+  {id:"diferenca", rot:"Valor divergente",teste:r => !!r.diferenca},
+];
+
+function montarFiltros(){
+  document.getElementById("filtros").innerHTML = FILTROS.map(f => {
+    const n = DADOS.associacoes.filter(f.teste).length;
+    return `<button class="filtro" type="button" data-f="${f.id}" aria-pressed="${f.id===estado.filtro}">${f.rot} <span style="opacity:.65">${n}</span></button>`;
+  }).join("");
+}
+
+function filtrar(){
+  const f = FILTROS.find(x => x.id === estado.filtro) || FILTROS[0];
+  const termo = estado.busca.trim().toLowerCase();
+  return DADOS.associacoes.filter(r => {
+    if (!f.teste(r)) return false;
+    if (!termo) return true;
+    return [r.razao_social, r.fornecedor_boleto, r.titulo, r.nf_boleto, r.cnpj,
+            r.linha_digitavel_crua, r.historico, r.centro_custo, r.fonte]
+      .join(" ").toLowerCase().includes(termo);
+  });
+}
+
+/* ---------- lista ---------- */
+function cartaoItem(r, indice){
+  const teto = Math.max(r.score, r.score2, 200);
+  const alerta = r.alerta ? `
+    <div class="faixa-alerta">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 9v4.5M12 17h.01M10.3 3.9 2.6 17.3A2 2 0 0 0 4.3 20.3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
+      </svg><span>${esc(r.alerta)}</span>
+    </div>` : "";
+
+  const dif = r.diferenca
+    ? `<div class="diferenca">${r.diferenca > 0 ? "+" : "−"} ${brl(Math.abs(r.diferenca)).replace("R$","R$")} vs. título</div>`
+    : `<div class="igual">confere com o título</div>`;
+
+  const parcela = r.parcela ? `<span>parcela ${esc(r.parcela)}</span>` : "";
+  const prorrogado = r.vencimento_real_iso && r.vencimento_real_iso !== r.vencimento_iso
+    ? `<span class="pastilha neutra" title="Vencimento real diferente do vencimento do título">real ${esc(r.vencimento_real)}</span>` : "";
+
+  return `
+  <article class="item" data-i="${indice}">
+    <div class="cabeca">
+      <div class="quem">
+        <div class="nome">${esc(r.razao_social || r.fornecedor_boleto)}</div>
+        <div class="meta">
+          <span class="pastilha ${ehForte(r) ? "ok" : "alerta"}">${esc(r.status)}</span>
+          <span>NF ${esc(r.titulo)}</span>${parcela}
+          <span>${esc(r.filial)}/${esc(r.prefixo)}</span>
+        </div>
+      </div>
+      <div class="dinheiro">
+        <div class="principal">${brl(r.valor_boleto)}</div>${dif}
+      </div>
+      <div class="datas">
+        <b>${esc(r.vencimento_boleto || r.vencimento)}</b>
+        <span>vencimento ${prorrogado}</span>
+      </div>
+      <div class="confianca">
+        <div class="trilho" title="Score ${r.score} · 2º colocado ${r.score2}">
+          <i style="width:${Math.min(r.score / teto * 100, 100).toFixed(1)}%"></i>
+          <u style="left:${Math.min(r.score2 / teto * 100, 100).toFixed(1)}%"></u>
+        </div>
+        <div class="legenda"><span>score <b style="color:var(--txt)">${r.score}</b></span><span>margem ${r.margem}</span></div>
+      </div>
+      <svg class="seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    ${alerta}
+    <div class="linha">
+      <span class="rot">Linha digitável</span>
+      <code>${esc(r.linha_digitavel)}</code>
+      <button class="copiar" type="button" data-copiar="${esc(r.linha_digitavel_crua)}">Copiar</button>
+    </div>
+    <div class="detalhe">
+      <h4>Critérios do match</h4>
+      <div class="criterios">
+        ${r.criterios.map(c => `<span class="criterio ${c.tipo}">${esc(c.texto)}</span>`).join("") || '<span class="criterio ok">—</span>'}
+      </div>
+      <h4>Título e boleto</h4>
+      <div class="grade">
+        <div class="campo"><div class="k">Valor do título</div><div class="v">${brl(r.valor_titulo)}</div></div>
+        <div class="campo"><div class="k">Valor do boleto</div><div class="v">${brl(r.valor_boleto)}</div></div>
+        <div class="campo"><div class="k">Venc. título</div><div class="v">${esc(r.vencimento) || "—"}</div></div>
+        <div class="campo"><div class="k">Venc. real</div><div class="v">${esc(r.vencimento_real) || "—"}</div></div>
+        <div class="campo"><div class="k">Venc. boleto</div><div class="v">${esc(r.vencimento_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">Emissão</div><div class="v">${esc(r.emissao) || "—"}</div></div>
+        <div class="campo"><div class="k">NF / doc. do boleto</div><div class="v">${esc(r.nf_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">CNPJ do boleto</div><div class="v">${esc(r.cnpj) || "—"}</div></div>
+        <div class="campo"><div class="k">Fornecedor no boleto</div><div class="v">${esc(r.fornecedor_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">Fonte</div><div class="v">${esc(r.fonte) || "—"}</div></div>
+        <div class="campo"><div class="k">Natureza</div><div class="v">${esc(r.natureza) || "—"}</div></div>
+        <div class="campo"><div class="k">Centro de custo</div><div class="v">${esc(r.centro_custo) || "—"}</div></div>
+      </div>
+      ${r.historico ? `<div class="historico"><b>Histórico:</b> ${esc(r.historico)}</div>` : ""}
+    </div>
+  </article>`;
+}
+
+function desenhar(){
+  const itens = filtrar();
+  document.getElementById("contagem").textContent =
+    `${itens.length} de ${DADOS.associacoes.length} associações`;
+  document.getElementById("lista").innerHTML = itens.length
+    ? itens.map(cartaoItem).join("")
+    : `<div class="vazio">Nenhuma associação com esses filtros.</div>`;
+}
+
+/* ---------- eventos ---------- */
+document.getElementById("filtros").addEventListener("click", e => {
+  const b = e.target.closest("[data-f]");
+  if (!b) return;
+  estado.filtro = b.dataset.f;
+  document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  desenhar();
+});
+
+document.getElementById("busca").addEventListener("input", e => {
+  estado.busca = e.target.value;
+  desenhar();
+});
+
+document.getElementById("lista").addEventListener("click", e => {
+  const botao = e.target.closest("[data-copiar]");
+  if (botao){
+    navigator.clipboard.writeText(botao.dataset.copiar).then(() => {
+      botao.textContent = "Copiado";
+      botao.classList.add("feito");
+      setTimeout(() => { botao.textContent = "Copiar"; botao.classList.remove("feito"); }, 1600);
+    });
+    return;
+  }
+  const cabeca = e.target.closest(".cabeca");
+  if (cabeca) cabeca.parentElement.classList.toggle("aberto");
+});
+
+document.getElementById("btnTema").addEventListener("click", () => {
+  const escuro = document.documentElement.dataset.tema === "escuro";
+  document.documentElement.dataset.tema = escuro ? "claro" : "escuro";
+  try { sessionStorage.setItem("painel_boletos_tema", document.documentElement.dataset.tema); } catch (e) {}
+});
+
+try {
+  const salvo = sessionStorage.getItem("painel_boletos_tema");
+  if (salvo) document.documentElement.dataset.tema = salvo;
+  else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.tema = "escuro";
+} catch (e) {}
+
+montarTopo();
+montarFiltros();
+desenhar();
+</script>
+</body>
+</html>

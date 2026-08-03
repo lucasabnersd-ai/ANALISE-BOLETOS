@@ -1,0 +1,13 @@
+# A planilha de origem nunca entra no repositorio
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+
+# Temporarios do Excel / OneDrive
+~$*
+*.tmp
+
+# Python
+__pycache__/
+*.pyc

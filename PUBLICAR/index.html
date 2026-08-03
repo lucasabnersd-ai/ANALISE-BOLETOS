@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Análise de Boletos — Associações Encontradas</title>
+<style>
+:root{
+  --bg:#f4f6fa; --surface:#ffffff; --surface-2:#f8fafc; --line:#e2e8f0; --line-forte:#cbd5e1;
+  --txt:#0f172a; --txt-2:#475569; --txt-3:#94a3b8;
+  --azul:#1f4e79; --azul-claro:#e8f0f9;
+  --ok:#0f7b52; --ok-bg:#e6f5ee;
+  --alerta:#a16207; --alerta-bg:#fdf5e2;
+  --erro:#b32d2d; --erro-bg:#fdecec;
+  --sombra:0 1px 2px rgba(15,23,42,.05), 0 8px 24px -12px rgba(15,23,42,.18);
+  --raio:12px;
+}
+html[data-tema="escuro"]{
+  --bg:#0b1220; --surface:#111a2b; --surface-2:#0e1626; --line:#1e2c44; --line-forte:#2b3d5c;
+  --txt:#e8eefb; --txt-2:#9fb0c9; --txt-3:#68789a;
+  --azul:#5b9bd5; --azul-claro:#16263c;
+  --ok:#4ade80; --ok-bg:#10261c;
+  --alerta:#fbbf24; --alerta-bg:#2b220c;
+  --erro:#f87171; --erro-bg:#2b1414;
+  --sombra:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--txt);
+  font:15px/1.5 "Segoe UI", Calibri, system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.envolucro{max-width:1240px; margin:0 auto; padding:22px 20px 64px}
+
+/* ---------- cabecalho ---------- */
+.topo{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:20px}
+.topo h1{margin:0; font-size:22px; letter-spacing:-.3px; font-weight:650}
+.topo .sub{margin:4px 0 0; color:var(--txt-2); font-size:13.5px; max-width:70ch}
+.topo .selo{display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--txt-2);
+  background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:5px 12px}
+.ponto{width:7px; height:7px; border-radius:50%; background:var(--ok)}
+.acoes{display:flex; gap:8px; align-items:center}
+button.leve{
+  font:inherit; font-size:13px; color:var(--txt-2); background:var(--surface);
+  border:1px solid var(--line); border-radius:9px; padding:7px 12px; cursor:pointer; transition:.15s;
+}
+button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
+
+/* ---------- funil ---------- */
+.funil{display:grid; grid-template-columns:repeat(4,1fr); gap:2px; background:var(--line);
+  border:1px solid var(--line); border-radius:var(--raio); overflow:hidden; margin-bottom:14px}
+.funil .etapa{background:var(--surface); padding:13px 16px; position:relative}
+.funil .etapa b{display:block; font-size:21px; font-weight:640; letter-spacing:-.5px}
+.funil .etapa span{font-size:11.5px; color:var(--txt-2); text-transform:uppercase; letter-spacing:.55px}
+.funil .barra{height:3px; border-radius:2px; background:var(--line); margin-top:9px; overflow:hidden}
+.funil .barra i{display:block; height:100%; background:var(--azul); border-radius:2px}
+.funil .etapa.destaque b{color:var(--azul)}
+.funil .etapa.final b{color:var(--ok)}
+.funil .etapa.final .barra i{background:var(--ok)}
+
+/* ---------- indicadores ---------- */
+.cartoes{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px; margin-bottom:22px}
+.cartao{background:var(--surface); border:1px solid var(--line); border-radius:var(--raio);
+  padding:13px 15px; box-shadow:var(--sombra)}
+.cartao .rotulo{font-size:11.5px; text-transform:uppercase; letter-spacing:.55px; color:var(--txt-2)}
+.cartao .valor{font-size:25px; font-weight:640; letter-spacing:-.6px; margin-top:5px}
+.cartao .nota{font-size:12px; color:var(--txt-3); margin-top:2px}
+.cartao.ok .valor{color:var(--ok)}
+.cartao.alerta .valor{color:var(--alerta)}
+
+/* ---------- controles ---------- */
+.controles{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.busca{position:relative; flex:1 1 280px}
+.busca input{width:100%; font:inherit; font-size:14px; color:var(--txt); background:var(--surface);
+  border:1px solid var(--line); border-radius:10px; padding:9px 12px 9px 34px; outline:none}
+.busca input:focus{border-color:var(--azul)}
+.busca svg{position:absolute; left:11px; top:50%; transform:translateY(-50%); opacity:.45}
+.filtros{display:flex; gap:6px; flex-wrap:wrap}
+.filtro{font:inherit; font-size:13px; cursor:pointer; background:var(--surface); color:var(--txt-2);
+  border:1px solid var(--line); border-radius:999px; padding:7px 13px; transition:.15s}
+.filtro:hover{border-color:var(--line-forte)}
+.filtro[aria-pressed="true"]{background:var(--azul); border-color:var(--azul); color:#fff}
+html[data-tema="escuro"] .filtro[aria-pressed="true"]{color:#08111f}
+.contagem{font-size:13px; color:var(--txt-2); margin-left:auto}
+
+/* ---------- lista ---------- */
+.lista{display:flex; flex-direction:column; gap:10px}
+.item{background:var(--surface); border:1px solid var(--line); border-radius:var(--raio);
+  box-shadow:var(--sombra); overflow:hidden; transition:border-color .15s}
+.item:hover{border-color:var(--line-forte)}
+.item.aberto{border-color:var(--azul)}
+.cabeca{display:grid; grid-template-columns:minmax(200px,2.1fr) 132px 128px minmax(150px,1fr) 34px;
+  gap:14px; align-items:center; padding:13px 15px; cursor:pointer; user-select:none}
+.quem .nome{font-weight:600; font-size:14.5px; line-height:1.3}
+.quem .meta{font-size:12px; color:var(--txt-2); margin-top:3px; display:flex; gap:7px; flex-wrap:wrap}
+.quem .meta span{white-space:nowrap}
+.pastilha{display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600;
+  padding:2px 8px; border-radius:999px; letter-spacing:.2px}
+.pastilha.ok{background:var(--ok-bg); color:var(--ok)}
+.pastilha.alerta{background:var(--alerta-bg); color:var(--alerta)}
+.pastilha.neutra{background:var(--surface-2); color:var(--txt-2); border:1px solid var(--line)}
+.dinheiro{text-align:right}
+.dinheiro .principal{font-variant-numeric:tabular-nums; font-weight:620; font-size:14.5px}
+.dinheiro .diferenca{font-size:11.5px; color:var(--alerta); margin-top:2px}
+.dinheiro .igual{font-size:11.5px; color:var(--txt-3); margin-top:2px}
+.datas{font-size:12.5px; color:var(--txt-2)}
+.datas b{display:block; color:var(--txt); font-weight:600; font-variant-numeric:tabular-nums; font-size:13.5px}
+.confianca .trilho{height:5px; background:var(--surface-2); border:1px solid var(--line);
+  border-radius:3px; overflow:hidden; position:relative}
+.confianca .trilho i{display:block; height:100%; background:var(--ok)}
+.confianca .trilho u{position:absolute; top:-2px; width:2px; height:calc(100% + 4px); background:var(--txt-3)}
+.confianca .legenda{display:flex; justify-content:space-between; font-size:11px; color:var(--txt-2); margin-top:5px}
+.seta{justify-self:end; color:var(--txt-3); transition:transform .18s}
+.item.aberto .seta{transform:rotate(180deg); color:var(--azul)}
+
+.faixa-alerta{display:flex; gap:9px; align-items:flex-start; background:var(--alerta-bg);
+  border-top:1px solid var(--line); padding:9px 15px; font-size:12.5px; color:var(--alerta); line-height:1.45}
+.faixa-alerta svg{flex:none; margin-top:1px}
+
+/* ---------- linha digitavel ---------- */
+.linha{display:flex; align-items:center; gap:10px; background:var(--azul-claro);
+  border-top:1px solid var(--line); padding:10px 15px}
+.linha code{font-family:"Cascadia Mono", Consolas, "Courier New", monospace; font-size:13.5px;
+  letter-spacing:.2px; color:var(--txt); flex:1; word-break:break-all; user-select:all}
+.linha .rot{font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--txt-2); flex:none}
+.copiar{font:inherit; font-size:12px; font-weight:600; cursor:pointer; flex:none;
+  background:var(--surface); color:var(--azul); border:1px solid var(--line-forte);
+  border-radius:8px; padding:6px 11px; transition:.15s}
+.copiar:hover{background:var(--azul); color:#fff; border-color:var(--azul)}
+.copiar.feito{background:var(--ok-bg); color:var(--ok); border-color:var(--ok)}
+
+/* ---------- detalhe ---------- */
+.detalhe{display:none; border-top:1px solid var(--line); padding:14px 15px 16px; background:var(--surface-2)}
+.item.aberto .detalhe{display:block}
+.detalhe h4{margin:0 0 9px; font-size:11.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--txt-2); font-weight:640}
+.criterios{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:15px}
+.criterio{font-size:12px; padding:4px 10px; border-radius:7px; border:1px solid transparent; line-height:1.35}
+.criterio.ok{background:var(--ok-bg); color:var(--ok); border-color:color-mix(in srgb, var(--ok) 22%, transparent)}
+.criterio.atencao{background:var(--alerta-bg); color:var(--alerta); border-color:color-mix(in srgb, var(--alerta) 26%, transparent)}
+.grade{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:11px 18px}
+.campo .k{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--txt-3)}
+.campo .v{font-size:13.5px; margin-top:2px; word-break:break-word}
+.historico{margin-top:14px; padding:10px 12px; background:var(--surface); border:1px solid var(--line);
+  border-radius:9px; font-size:13px; color:var(--txt-2); line-height:1.5}
+
+.vazio{text-align:center; padding:48px 20px; color:var(--txt-3); font-size:14px}
+.rodape{margin-top:26px; padding-top:14px; border-top:1px solid var(--line);
+  display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--txt-3)}
+
+@media (max-width:820px){
+  .cabeca{grid-template-columns:1fr 34px; gap:10px}
+  .dinheiro{text-align:left}
+  .funil{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="envolucro">
+
+  <header class="topo">
+    <div>
+      <h1>Análise de Boletos <span style="color:var(--txt-3);font-weight:400">/</span> Associações encontradas</h1>
+      <p class="sub">Títulos do TOTVS que estavam <b>sem código de boleto</b> e foram associados a um boleto do DDA. Cada linha mostra o boleto correspondente, os critérios que sustentam a associação e os alertas de conferência.</p>
+    </div>
+    <div class="acoes">
+      <span class="selo"><i class="ponto"></i> Base de <b id="geradoEm">—</b></span>
+      <button class="leve" id="btnTema" type="button">Tema</button>
+    </div>
+  </header>
+
+  <section class="funil" id="funil"></section>
+  <section class="cartoes" id="cartoes"></section>
+
+  <div class="controles">
+    <label class="busca">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="busca" type="search" placeholder="Buscar por fornecedor, NF, CNPJ, linha digitável, histórico…" autocomplete="off">
+    </label>
+    <div class="filtros" id="filtros"></div>
+    <span class="contagem" id="contagem"></span>
+  </div>
+
+  <main class="lista" id="lista"></main>
+
+  <footer class="rodape">
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”</span>
+    <span id="atualizado"></span>
+  </footer>
+</div>
+
+<script>
+const DADOS = {"indicadores":{"gerado_em":"03/08/2026","total_totvs":2924,"com_codigo":871,"sem_codigo":2053,"associados":19,"forte":18,"provavel":1,"com_alerta":5,"com_divergencia":2,"valor_associado":53145.04,"sem_match":1112,"nfs_multiplas":6,"futuros":817,"fontes":{"BOLETOS_ITAU":2462,"CENTRAL_GRAZIELA":1320,"CENTRAL_BH":872,"CENTRAL_LUCAS":345}},"associacoes":[{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000050174","parcela":"02","razao_social":"CONTINENTAL DISTRIBUIDORA DE PECAS LTDA","fornecedor_boleto":"CONTINENTAL DISTRIBUIDORA DE P","cnpj":"04.323.581/0001-53","nf_boleto":"50174","valor_titulo":546.67,"valor_boleto":546.67,"vencimento":"19/06/2026","vencimento_real":"19/06/2026","vencimento_boleto":"19/06/2026","status":"MATCH FORTE","score":196,"score2":106,"margem":90,"alerta":"TÍTULO COM MAIS DE UMA PARCELA NO DDA ITAÚ - NF 000050174: 2 parcela(s) encontrada(s) no DDA, total indicado/minimo 3. HÁ OUTRAS PARCELAS PARA ESTA NF; consultar a aba 'NFs Múltiplas Parcelas' e analisar todos os boletos.","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Parcela do titulo confere com a do boleto (002) + Razao social forte (100%) + Vencimento exato + Emissao exata","fonte":"BOLETOS_ITAU","linha_digitavel":"75691.31753 01030.990707 04977.240029 1 14820000054667","natureza":"2020081","emissao":"20/04/2026","historico":"URGENCIA : APLICAÇÃO VM330 QXR8F32 - CAMINHAO CAÇAMBA","centro_custo":"043.4.2","vencimento_iso":"2026-06-19","vencimento_real_iso":"2026-06-19","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Parcela do titulo confere com a do boleto (002)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691317530103099070704977240029114820000054667","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000040263","parcela":"01","razao_social":"RECH AGRICOLA S/A","fornecedor_boleto":"RECH AGRICOLA S A","cnpj":"10.209.063/0003-78","nf_boleto":"40263","valor_titulo":856.93,"valor_boleto":856.93,"vencimento":"24/07/2026","vencimento_real":"30/07/2026","vencimento_boleto":"24/07/2026","status":"MATCH FORTE","score":192,"score2":177,"margem":15,"alerta":"POSSIVEL PARCELA DE FATURA - NF 000040263 parcela 001 - CONFERIR DEMAIS PARCELAS","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Parcela do titulo confere com a do boleto (001) + Razao social forte (100%) + Vencimento exato + Emissao dif 7d","fonte":"BOLETOS_ITAU","linha_digitavel":"00190.00009 03256.579008 00041.063173 9 15170000085693","natureza":"2020081","emissao":"24/06/2026","historico":"VENC 24/07 MATERIAL SOLICITADO POR FABIO, APLICAÇÃO MQ37","centro_custo":"043.6.3","vencimento_iso":"2026-07-24","vencimento_real_iso":"2026-07-30","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Parcela do titulo confere com a do boleto (001)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao dif 7d","tipo":"atencao"}],"linha_digitavel_crua":"00190000090325657900800041063173915170000085693","diferenca":0.0},{"filial":"043","prefixo":"7","tipo":"NF","titulo":"000013303","parcela":"02","razao_social":"KOMATSU FOREST INDUSTRIA E COMERCIO DE MAQUINAS FLORESTAIS L","fornecedor_boleto":"KOMATSU FOREST INDUSTRIA E COM","cnpj":"75173575","nf_boleto":"13303","valor_titulo":8500.0,"valor_boleto":8499.15,"vencimento":"14/09/2026","vencimento_real":"14/09/2026","vencimento_boleto":"14/09/2026","status":"MATCH FORTE","score":184,"score2":90,"margem":94,"alerta":"TÍTULO COM MAIS DE UMA PARCELA NO DDA ITAÚ - NF 000013303: 3 parcelas no DDA. HÁ OUTRAS PARCELAS PARA ESTA NF; consultar a aba 'NFs Múltiplas Parcelas' e analisar todos os boletos.","criterio":"Valor dif R$0.85 + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Parcela do titulo confere com a do boleto (002) + Razao social forte (100%) + Vencimento exato + Emissao dif 1d","fonte":"BOLETOS_ITAU","linha_digitavel":"03399.81342 74000.000013 03429.801016 1 15690000849915","natureza":"2020081","emissao":"16/07/2026","historico":"APLICAÇÃO MQ58 - SOLICITANTE JOSE EUCLIDES","centro_custo":"043.6.3","vencimento_iso":"2026-09-14","vencimento_real_iso":"2026-09-14","criterios":[{"texto":"Valor dif R$0.85","tipo":"atencao"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Parcela do titulo confere com a do boleto (002)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao dif 1d","tipo":"atencao"}],"linha_digitavel_crua":"03399813427400000001303429801016115690000849915","diferenca":-0.85},{"filial":"043","prefixo":"7","tipo":"NF","titulo":"000013303","parcela":"03","razao_social":"KOMATSU FOREST INDUSTRIA E COMERCIO DE MAQUINAS FLORESTAIS L","fornecedor_boleto":"KOMATSU FOREST INDUSTRIA E COM","cnpj":"75173575","nf_boleto":"13303","valor_titulo":8500.0,"valor_boleto":8499.15,"vencimento":"14/10/2026","vencimento_real":"14/10/2026","vencimento_boleto":"14/10/2026","status":"MATCH FORTE","score":184,"score2":90,"margem":94,"alerta":"TÍTULO COM MAIS DE UMA PARCELA NO DDA ITAÚ - NF 000013303: 3 parcelas no DDA. HÁ OUTRAS PARCELAS PARA ESTA NF; consultar a aba 'NFs Múltiplas Parcelas' e analisar todos os boletos.","criterio":"Valor dif R$0.85 + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Parcela do titulo confere com a do boleto (003) + Razao social forte (100%) + Vencimento exato + Emissao dif 1d","fonte":"BOLETOS_ITAU","linha_digitavel":"03399.81342 74000.000013 03429.901014 9 15990000849915","natureza":"2020081","emissao":"16/07/2026","historico":"APLICAÇÃO MQ58 - SOLICITANTE JOSE EUCLIDES","centro_custo":"043.6.3","vencimento_iso":"2026-10-14","vencimento_real_iso":"2026-10-14","criterios":[{"texto":"Valor dif R$0.85","tipo":"atencao"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Parcela do titulo confere com a do boleto (003)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao dif 1d","tipo":"atencao"}],"linha_digitavel_crua":"03399813427400000001303429901014915990000849915","diferenca":-0.85},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000023313","parcela":"","razao_social":"MAXCINTAS INDUSTRIA E COMERCIO LTDA","fornecedor_boleto":"MAXCINTAS INDUSTRIA E COMERCIO LTDA","cnpj":"15.471.589/0001-83","nf_boleto":"23313","valor_titulo":4811.4,"valor_boleto":4811.4,"vencimento":"20/08/2026","vencimento_real":"20/08/2026","vencimento_boleto":"20/08/2026","status":"MATCH FORTE","score":176,"score2":63,"margem":113,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento exato + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"74891.12628 08949.004348 39694.871086 6 15440000481140","natureza":"2020081","emissao":"23/07/2026","historico":"MATERIAL SOLICITA POR ABEL TEIXEIRA PARA SUPRIR A FALTA DESS","centro_custo":"043.6.4","vencimento_iso":"2026-08-20","vencimento_real_iso":"2026-08-20","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"74891126280894900434839694871086615440000481140","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000029755","parcela":"","razao_social":"ML MOTO SERRA LTDA","fornecedor_boleto":"ML MOTO SERRA LTDA","cnpj":"04.696.553/0001-81","nf_boleto":"29755","valor_titulo":2656.2,"valor_boleto":2656.2,"vencimento":"23/08/2026","vencimento_real":"24/08/2026","vencimento_boleto":"23/08/2026","status":"MATCH FORTE","score":176,"score2":72,"margem":104,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento exato + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"75691.40978 01013.366305 02284.900012 9 15470000265620","natureza":"2020025","emissao":"24/07/2026","historico":"MATERIAL PARA LIMPEZA DAS CARRETAS FRENTE DE SERVIÇO 01 - S","centro_custo":"043.6.4","vencimento_iso":"2026-08-23","vencimento_real_iso":"2026-08-24","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691409780101336630502284900012915470000265620","diferenca":0.0},{"filial":"043","prefixo":"U","tipo":"NF","titulo":"000000103","parcela":"","razao_social":"SRJ AUTOPECAS LTDA","fornecedor_boleto":"SRJ AUTOPECAS LTDA","cnpj":"42.888.362/0001-00","nf_boleto":"103","valor_titulo":6730.0,"valor_boleto":6730.0,"vencimento":"22/08/2026","vencimento_real":"24/08/2026","vencimento_boleto":"22/08/2026","status":"MATCH FORTE","score":168,"score2":78,"margem":90,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento exato","fonte":"CENTRAL_BH","linha_digitavel":"75691.31415 01012.019707 00113.260012 6 15460000673000","natureza":"2020118","emissao":"23/07/2026","historico":"REGULARIZAÇÃO : N°0843 - SERVIÇO REALIZADO NA SANTA RITA R$","centro_custo":"043.6.4","vencimento_iso":"2026-08-22","vencimento_real_iso":"2026-08-24","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"}],"linha_digitavel_crua":"75691314150101201970700113260012615460000673000","diferenca":0.0},{"filial":"004","prefixo":"U","tipo":"NF","titulo":"000007207","parcela":"","razao_social":"SERQUIP - TRATAMENTO DE RESIDUOS MG LTDA","fornecedor_boleto":"SERQUIP - TRATAMENTO DE RESIDUOS MG LTDA","cnpj":"05.266.324/0003-51","nf_boleto":"7207","valor_titulo":439.32,"valor_boleto":439.32,"vencimento":"14/08/2026","vencimento_real":"14/08/2026","vencimento_boleto":"10/08/2026","status":"MATCH FORTE","score":166,"score2":68,"margem":98,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento dif 4d + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"34191.09008 03410.591402 39846.910006 1 15340000043932","natureza":"2020111","emissao":"09/07/2026","historico":"SERVIÇO DE COLETA E TRATAMENTO DE RESIDUOS MC 2325-R$ 439,32","centro_custo":"004.9.1","vencimento_iso":"2026-08-14","vencimento_real_iso":"2026-08-14","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento dif 4d","tipo":"atencao"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"34191090080341059140239846910006115340000043932","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000029735","parcela":"","razao_social":"ML MOTO SERRA LTDA","fornecedor_boleto":"ML MOTO SERRA LTDA","cnpj":"04.696.553/0001-81","nf_boleto":"29735","valor_titulo":89.9,"valor_boleto":89.9,"vencimento":"15/05/2026","vencimento_real":"15/05/2026","vencimento_boleto":"20/08/2026","status":"MATCH FORTE","score":161,"score2":76,"margem":85,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"75691.40978 01013.366305 02284.610017 1 15440000008990","natureza":"2020081","emissao":"21/07/2026","historico":"N° 248381 - MATERIAL COLETADO NA ML MOTOSSERAS DIA 09/04 AUT","centro_custo":"043.6.3","vencimento_iso":"2026-05-15","vencimento_real_iso":"2026-05-15","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691409780101336630502284610017115440000008990","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000029736","parcela":"","razao_social":"ML MOTO SERRA LTDA","fornecedor_boleto":"ML MOTO SERRA LTDA","cnpj":"04.696.553/0001-81","nf_boleto":"29736","valor_titulo":99.9,"valor_boleto":99.9,"vencimento":"29/05/2026","vencimento_real":"29/05/2026","vencimento_boleto":"20/08/2026","status":"MATCH FORTE","score":161,"score2":90,"margem":71,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"75691.40978 01013.366305 02284.620016 1 15440000009990","natureza":"2020051","emissao":"21/07/2026","historico":"N° 249519 - MATERIAL COLETADO NA ML MOTOSSERAS DIA 28/04 PAR","centro_custo":"043.6.3","vencimento_iso":"2026-05-29","vencimento_real_iso":"2026-05-29","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691409780101336630502284620016115440000009990","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000001528","parcela":"","razao_social":"SB PECAS E SERVICOS LTDA","fornecedor_boleto":"SB PECAS E SERVICOS LTDA","cnpj":"47.944.395/0001-44","nf_boleto":"1528","valor_titulo":439.04,"valor_boleto":439.04,"vencimento":"27/08/2026","vencimento_real":"27/08/2026","vencimento_boleto":"27/08/2026","status":"MATCH FORTE","score":161,"score2":48,"margem":113,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Nome similar (100%) + Vencimento exato + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"75691.31357 01104.798101 00315.690016 8 15510000043904","natureza":"2020081","emissao":"28/07/2026","historico":"URGENTE: APLICAÇÃO MQ20 - SOLICITANTE JOSE GERALDO","centro_custo":"043.6.3","vencimento_iso":"2026-08-27","vencimento_real_iso":"2026-08-27","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Nome similar (100%)","tipo":"atencao"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691313570110479810100315690016815510000043904","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000002089","parcela":"","razao_social":"SRJ AUTOPECAS LTDA","fornecedor_boleto":"SRJ AUTOPECAS LTDA","cnpj":"42.888.362/0001-00","nf_boleto":"2089","valor_titulo":270.2,"valor_boleto":270.2,"vencimento":"28/08/2026","vencimento_real":"28/08/2026","vencimento_boleto":"22/08/2026","status":"MATCH FORTE","score":158,"score2":73,"margem":85,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento dif 6d","fonte":"CENTRAL_BH","linha_digitavel":"75691.31415 01012.019707 00113.400014 9 15460000027020","natureza":"2020081","emissao":"29/07/2026","historico":"N° 745 - MATERIAL COLETADO NA SRJ DIA 09/06 PARA GO 22059","centro_custo":"043.6.4","vencimento_iso":"2026-08-28","vencimento_real_iso":"2026-08-28","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento dif 6d","tipo":"atencao"}],"linha_digitavel_crua":"75691314150101201970700113400014915460000027020","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000002090","parcela":"","razao_social":"SRJ AUTOPECAS LTDA","fornecedor_boleto":"SRJ AUTOPECAS LTDA","cnpj":"42.888.362/0001-00","nf_boleto":"2090","valor_titulo":410.1,"valor_boleto":410.1,"vencimento":"28/08/2026","vencimento_real":"28/08/2026","vencimento_boleto":"22/08/2026","status":"MATCH FORTE","score":158,"score2":73,"margem":85,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento dif 6d","fonte":"CENTRAL_BH","linha_digitavel":"75691.31415 01012.019707 00113.460018 5 15460000041010","natureza":"2020081","emissao":"29/07/2026","historico":"N°1040 MATERIAL COLETADO NA SRJ DIA 17/07 PARA GO22199 PELOP","centro_custo":"043.6.4","vencimento_iso":"2026-08-28","vencimento_real_iso":"2026-08-28","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento dif 6d","tipo":"atencao"}],"linha_digitavel_crua":"75691314150101201970700113460018515460000041010","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000002094","parcela":"","razao_social":"SRJ AUTOPECAS LTDA","fornecedor_boleto":"SRJ AUTOPECAS LTDA","cnpj":"42.888.362/0001-00","nf_boleto":"2094","valor_titulo":392.79,"valor_boleto":392.79,"vencimento":"28/08/2026","vencimento_real":"28/08/2026","vencimento_boleto":"22/08/2026","status":"MATCH FORTE","score":158,"score2":95,"margem":63,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%) + Vencimento dif 6d","fonte":"CENTRAL_BH","linha_digitavel":"75691.31415 01012.019707 00113.450019 7 15460000039279","natureza":"2020081","emissao":"29/07/2026","historico":"N° 802 - MATERIAL COLETADO NA SRJ DIA 12/06 PARA DBL3916","centro_custo":"043.6.4","vencimento_iso":"2026-08-28","vencimento_real_iso":"2026-08-28","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento dif 6d","tipo":"atencao"}],"linha_digitavel_crua":"75691314150101201970700113450019715460000039279","diferenca":0.0},{"filial":"043","prefixo":"1","tipo":"NF","titulo":"000008502","parcela":"","razao_social":"PADARIA E CONFEITARIA NOSSA SENHORA DA C","fornecedor_boleto":"PADARIA E CONFEITARIA NOSSA SENHORA DA C","cnpj":"03.615.090/0001-13","nf_boleto":"8502","valor_titulo":9824.5,"valor_boleto":9824.5,"vencimento":"11/08/2026","vencimento_real":"11/08/2026","vencimento_boleto":"30/07/2026","status":"MATCH FORTE","score":153,"score2":63,"margem":90,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + NF confere (Nosso Numero x No. Titulo) + Razao social forte (100%)","fonte":"CENTRAL_BH","linha_digitavel":"75691.40978 01004.166102 00112.540018 5 15230000982450","natureza":"2010009","emissao":"20/07/2026","historico":"FECHAMENTO MENSAL PADARIA NOSSA SENHORA DA CONCEIÇÃO ENTRE O","centro_custo":"043.6.4","vencimento_iso":"2026-08-11","vencimento_real_iso":"2026-08-11","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"NF confere (Nosso Numero x No. Titulo)","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"}],"linha_digitavel_crua":"75691409780100416610200112540018515230000982450","diferenca":0.0},{"filial":"004","prefixo":"FAT","tipo":"NF","titulo":"001318160","parcela":"01","razao_social":"WEMERSON JUNIOR DA SILVA 07446628693","fornecedor_boleto":"WEMERSON JUNIOR DA SILVA 07446628693","cnpj":"18.942.528/0001-45","nf_boleto":"1318","valor_titulo":1128.69,"valor_boleto":1128.69,"vencimento":"13/08/2026","vencimento_real":"13/08/2026","vencimento_boleto":"13/08/2026","status":"MATCH FORTE","score":121,"score2":19,"margem":102,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + Razao social forte (100%) + Vencimento exato + Emissao exata","fonte":"CENTRAL_BH","linha_digitavel":"75691.40978 01021.103609 00011.500014 3 15370000112869","natureza":"2020081","emissao":"13/07/2026","historico":"","centro_custo":"","vencimento_iso":"2026-08-13","vencimento_real_iso":"2026-08-13","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691409780102110360900011500014315370000112869","diferenca":0.0},{"filial":"004","prefixo":"MED","tipo":"CT","titulo":"000202565","parcela":"01","razao_social":"POTTENCIAL SEGURADORA S.A.","fornecedor_boleto":"POTTENCIAL SEGURADORA SA","cnpj":"11.699.534/0001-74","nf_boleto":"4350287","valor_titulo":3000.0,"valor_boleto":3000.0,"vencimento":"30/06/2026","vencimento_real":"30/06/2026","vencimento_boleto":"30/06/2026","status":"MATCH FORTE","score":113,"score2":98,"margem":15,"alerta":"","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + Razao social forte (100%) + Vencimento exato","fonte":"BOLETOS_ITAU","linha_digitavel":"23790.46507 50000.367388 56039.550001 6 14930000300000","natureza":"2030056","emissao":"01/06/2026","historico":"SEGURO DOS CABEÇOTES - HAVERESTES - AGOSTO - FOI PAGO MANUALMENTE ESSA PARCELA.","centro_custo":"","vencimento_iso":"2026-06-30","vencimento_real_iso":"2026-06-30","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento exato","tipo":"ok"}],"linha_digitavel_crua":"23790465075000036738856039550001614930000300000","diferenca":0.0},{"filial":"043","prefixo":"U","tipo":"NF","titulo":"007113861","parcela":"","razao_social":"ALELO INSTITUICAO DE PAGAMENTO SA","fornecedor_boleto":"ALELO INSTITUICAO DE PAGAMENTO","cnpj":"04.740.876/0001-25","nf_boleto":"51504737 5150473701","valor_titulo":13.35,"valor_boleto":13.35,"vencimento":"06/06/2026","vencimento_real":"08/06/2026","vencimento_boleto":"15/06/2026","status":"MATCH FORTE","score":111,"score2":37,"margem":74,"alerta":"POSSIVEL PARCELA DE FATURA - NF 051504737 parcela 001 - CONFERIR DEMAIS PARCELAS","criterio":"Valor exato + Numero fornecedor -> CNPJ/CPF confere + Razao social forte (100%) + Vencimento dif 7d + Emissao exata","fonte":"BOLETOS_ITAU","linha_digitavel":"23792.37403 40000.040564 80000.377301 1 14780000001335","natureza":"2020035","emissao":"05/06/2026","historico":"PEDIDO MAE REFERENTE A RECARGAS DE PEDAGIO ALELO VELO. L","centro_custo":"043.6.2","vencimento_iso":"2026-06-06","vencimento_real_iso":"2026-06-08","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Numero fornecedor -> CNPJ/CPF confere","tipo":"ok"},{"texto":"Razao social forte (100%)","tipo":"ok"},{"texto":"Vencimento dif 7d","tipo":"atencao"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"23792374034000004056480000377301114780000001335","diferenca":0.0},{"filial":"004","prefixo":"1","tipo":"NF","titulo":"000009293","parcela":"","razao_social":"LIDERANCA MANGUEIRAS E CONEXOES LTDA","fornecedor_boleto":"LIDERANCA MANGUEIRAS E CONEXOE","cnpj":"","nf_boleto":"929301","valor_titulo":4437.75,"valor_boleto":4437.75,"vencimento":"28/07/2026","vencimento_real":"30/07/2026","vencimento_boleto":"27/07/2026","status":"MATCH PROVÁVEL","score":78,"score2":25,"margem":53,"alerta":"","criterio":"Valor exato + Razao social forte (98%) + Vencimento dif 1d + Emissao exata","fonte":"BOLETOS_ITAU","linha_digitavel":"75691.40309 01055.147308 00054.410014 3 15200000443775","natureza":"2020081","emissao":"06/07/2026","historico":"VENC 28/07 MATERIAL PARA MONTAGEM DE ROL ON ATR8I24","centro_custo":"004.3.1","vencimento_iso":"2026-07-28","vencimento_real_iso":"2026-07-30","criterios":[{"texto":"Valor exato","tipo":"ok"},{"texto":"Razao social forte (98%)","tipo":"ok"},{"texto":"Vencimento dif 1d","tipo":"atencao"},{"texto":"Emissao exata","tipo":"ok"}],"linha_digitavel_crua":"75691403090105514730800054410014315200000443775","diferenca":0.0}],"atualizado_em":"03/08/2026 às 19:25"};
+
+const brl = v => (v == null ? "—" : v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"}));
+const num = v => (v == null ? "—" : v.toLocaleString("pt-BR"));
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ehForte = r => (r.status || "").toUpperCase().includes("FORTE");
+
+const estado = {filtro:"todos", busca:""};
+
+/* ---------- funil e indicadores ---------- */
+function montarTopo(){
+  const i = DADOS.indicadores;
+  document.getElementById("geradoEm").textContent = i.gerado_em;
+  document.getElementById("atualizado").textContent = "Painel gerado em " + DADOS.atualizado_em;
+
+  const etapas = [
+    {n:i.total_totvs, r:"Títulos TOTVS (Boleto SC)", p:100},
+    {n:i.com_codigo, r:"Já tinham código", p:i.total_totvs ? i.com_codigo/i.total_totvs*100 : 0},
+    {n:i.sem_codigo, r:"Sem código de boleto", p:i.total_totvs ? i.sem_codigo/i.total_totvs*100 : 0, c:"destaque"},
+    {n:i.associados, r:"Associados agora", p:i.sem_codigo ? Math.max(i.associados/i.sem_codigo*100, 1.2) : 0, c:"final"},
+  ];
+  document.getElementById("funil").innerHTML = etapas.map(e => `
+    <div class="etapa ${e.c || ""}">
+      <span>${e.r}</span><b>${num(e.n)}</b>
+      <div class="barra"><i style="width:${Math.min(e.p,100).toFixed(1)}%"></i></div>
+    </div>`).join("");
+
+  const cartoes = [
+    {r:"Match forte", v:num(i.forte), n:"score ≥ 100", cl:"ok"},
+    {r:"Match provável", v:num(i.provavel), n:"score 75–99, margem segura", cl:i.provavel ? "alerta" : ""},
+    {r:"Com alerta", v:num(i.com_alerta), n:"parcelas / fatura a conferir", cl:i.com_alerta ? "alerta" : ""},
+    {r:"Divergência de valor", v:num(i.com_divergencia), n:"título × boleto", cl:i.com_divergencia ? "alerta" : ""},
+    {r:"Valor associado", v:brl(i.valor_associado), n:`${i.associados} boletos`},
+    {r:"Ainda sem match", v:num(i.sem_match), n:`+ ${num(i.futuros)} boletos futuros`},
+  ];
+  document.getElementById("cartoes").innerHTML = cartoes.map(c => `
+    <div class="cartao ${c.cl || ""}">
+      <div class="rotulo">${c.r}</div><div class="valor">${c.v}</div><div class="nota">${c.n}</div>
+    </div>`).join("");
+}
+
+/* ---------- filtros ---------- */
+const FILTROS = [
+  {id:"todos",     rot:"Todos",           teste:() => true},
+  {id:"forte",     rot:"Match forte",     teste:r => ehForte(r)},
+  {id:"provavel",  rot:"Match provável",  teste:r => !ehForte(r)},
+  {id:"alerta",    rot:"Com alerta",      teste:r => !!r.alerta},
+  {id:"diferenca", rot:"Valor divergente",teste:r => !!r.diferenca},
+];
+
+function montarFiltros(){
+  document.getElementById("filtros").innerHTML = FILTROS.map(f => {
+    const n = DADOS.associacoes.filter(f.teste).length;
+    return `<button class="filtro" type="button" data-f="${f.id}" aria-pressed="${f.id===estado.filtro}">${f.rot} <span style="opacity:.65">${n}</span></button>`;
+  }).join("");
+}
+
+function filtrar(){
+  const f = FILTROS.find(x => x.id === estado.filtro) || FILTROS[0];
+  const termo = estado.busca.trim().toLowerCase();
+  return DADOS.associacoes.filter(r => {
+    if (!f.teste(r)) return false;
+    if (!termo) return true;
+    return [r.razao_social, r.fornecedor_boleto, r.titulo, r.nf_boleto, r.cnpj,
+            r.linha_digitavel_crua, r.historico, r.centro_custo, r.fonte]
+      .join(" ").toLowerCase().includes(termo);
+  });
+}
+
+/* ---------- lista ---------- */
+function cartaoItem(r, indice){
+  const teto = Math.max(r.score, r.score2, 200);
+  const alerta = r.alerta ? `
+    <div class="faixa-alerta">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 9v4.5M12 17h.01M10.3 3.9 2.6 17.3A2 2 0 0 0 4.3 20.3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
+      </svg><span>${esc(r.alerta)}</span>
+    </div>` : "";
+
+  const dif = r.diferenca
+    ? `<div class="diferenca">${r.diferenca > 0 ? "+" : "−"} ${brl(Math.abs(r.diferenca)).replace("R$","R$")} vs. título</div>`
+    : `<div class="igual">confere com o título</div>`;
+
+  const parcela = r.parcela ? `<span>parcela ${esc(r.parcela)}</span>` : "";
+  const prorrogado = r.vencimento_real_iso && r.vencimento_real_iso !== r.vencimento_iso
+    ? `<span class="pastilha neutra" title="Vencimento real diferente do vencimento do título">real ${esc(r.vencimento_real)}</span>` : "";
+
+  return `
+  <article class="item" data-i="${indice}">
+    <div class="cabeca">
+      <div class="quem">
+        <div class="nome">${esc(r.razao_social || r.fornecedor_boleto)}</div>
+        <div class="meta">
+          <span class="pastilha ${ehForte(r) ? "ok" : "alerta"}">${esc(r.status)}</span>
+          <span>NF ${esc(r.titulo)}</span>${parcela}
+          <span>${esc(r.filial)}/${esc(r.prefixo)}</span>
+        </div>
+      </div>
+      <div class="dinheiro">
+        <div class="principal">${brl(r.valor_boleto)}</div>${dif}
+      </div>
+      <div class="datas">
+        <b>${esc(r.vencimento_boleto || r.vencimento)}</b>
+        <span>vencimento ${prorrogado}</span>
+      </div>
+      <div class="confianca">
+        <div class="trilho" title="Score ${r.score} · 2º colocado ${r.score2}">
+          <i style="width:${Math.min(r.score / teto * 100, 100).toFixed(1)}%"></i>
+          <u style="left:${Math.min(r.score2 / teto * 100, 100).toFixed(1)}%"></u>
+        </div>
+        <div class="legenda"><span>score <b style="color:var(--txt)">${r.score}</b></span><span>margem ${r.margem}</span></div>
+      </div>
+      <svg class="seta" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    ${alerta}
+    <div class="linha">
+      <span class="rot">Linha digitável</span>
+      <code>${esc(r.linha_digitavel)}</code>
+      <button class="copiar" type="button" data-copiar="${esc(r.linha_digitavel_crua)}">Copiar</button>
+    </div>
+    <div class="detalhe">
+      <h4>Critérios do match</h4>
+      <div class="criterios">
+        ${r.criterios.map(c => `<span class="criterio ${c.tipo}">${esc(c.texto)}</span>`).join("") || '<span class="criterio ok">—</span>'}
+      </div>
+      <h4>Título e boleto</h4>
+      <div class="grade">
+        <div class="campo"><div class="k">Valor do título</div><div class="v">${brl(r.valor_titulo)}</div></div>
+        <div class="campo"><div class="k">Valor do boleto</div><div class="v">${brl(r.valor_boleto)}</div></div>
+        <div class="campo"><div class="k">Venc. título</div><div class="v">${esc(r.vencimento) || "—"}</div></div>
+        <div class="campo"><div class="k">Venc. real</div><div class="v">${esc(r.vencimento_real) || "—"}</div></div>
+        <div class="campo"><div class="k">Venc. boleto</div><div class="v">${esc(r.vencimento_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">Emissão</div><div class="v">${esc(r.emissao) || "—"}</div></div>
+        <div class="campo"><div class="k">NF / doc. do boleto</div><div class="v">${esc(r.nf_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">CNPJ do boleto</div><div class="v">${esc(r.cnpj) || "—"}</div></div>
+        <div class="campo"><div class="k">Fornecedor no boleto</div><div class="v">${esc(r.fornecedor_boleto) || "—"}</div></div>
+        <div class="campo"><div class="k">Fonte</div><div class="v">${esc(r.fonte) || "—"}</div></div>
+        <div class="campo"><div class="k">Natureza</div><div class="v">${esc(r.natureza) || "—"}</div></div>
+        <div class="campo"><div class="k">Centro de custo</div><div class="v">${esc(r.centro_custo) || "—"}</div></div>
+      </div>
+      ${r.historico ? `<div class="historico"><b>Histórico:</b> ${esc(r.historico)}</div>` : ""}
+    </div>
+  </article>`;
+}
+
+function desenhar(){
+  const itens = filtrar();
+  document.getElementById("contagem").textContent =
+    `${itens.length} de ${DADOS.associacoes.length} associações`;
+  document.getElementById("lista").innerHTML = itens.length
+    ? itens.map(cartaoItem).join("")
+    : `<div class="vazio">Nenhuma associação com esses filtros.</div>`;
+}
+
+/* ---------- eventos ---------- */
+document.getElementById("filtros").addEventListener("click", e => {
+  const b = e.target.closest("[data-f]");
+  if (!b) return;
+  estado.filtro = b.dataset.f;
+  document.querySelectorAll("[data-f]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  desenhar();
+});
+
+document.getElementById("busca").addEventListener("input", e => {
+  estado.busca = e.target.value;
+  desenhar();
+});
+
+document.getElementById("lista").addEventListener("click", e => {
+  const botao = e.target.closest("[data-copiar]");
+  if (botao){
+    navigator.clipboard.writeText(botao.dataset.copiar).then(() => {
+      botao.textContent = "Copiado";
+      botao.classList.add("feito");
+      setTimeout(() => { botao.textContent = "Copiar"; botao.classList.remove("feito"); }, 1600);
+    });
+    return;
+  }
+  const cabeca = e.target.closest(".cabeca");
+  if (cabeca) cabeca.parentElement.classList.toggle("aberto");
+});
+
+document.getElementById("btnTema").addEventListener("click", () => {
+  const escuro = document.documentElement.dataset.tema === "escuro";
+  document.documentElement.dataset.tema = escuro ? "claro" : "escuro";
+  try { sessionStorage.setItem("painel_boletos_tema", document.documentElement.dataset.tema); } catch (e) {}
+});
+
+try {
+  const salvo = sessionStorage.getItem("painel_boletos_tema");
+  if (salvo) document.documentElement.dataset.tema = salvo;
+  else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.tema = "escuro";
+} catch (e) {}
+
+montarTopo();
+montarFiltros();
+desenhar();
+</script>
+</body>
+</html>
