@@ -4,9 +4,21 @@ Versão visual da planilha `TRATAMENTO PYTHON BOLETOS.xlsx`. Hoje traz a aba
 **Associações Encontradas** — os títulos do TOTVS que estavam *sem código de
 boleto* e foram associados a um boleto do DDA.
 
-O painel mostra, para cada título: o boleto correspondente (linha digitável),
-os indicadores do cruzamento, os **critérios** que sustentam a associação e os
-**alertas** de conferência (parcelas de fatura, NFs com várias parcelas).
+O painel mantém a **mesma estrutura da planilha** — grade tipo Excel, com as
+colunas da aba na mesma ordem, cabeçalho fixo, numeração de linhas e ordenação
+ao clicar no título da coluna.
+
+Três modos de exibição:
+
+| Modo | Para que serve |
+|---|---|
+| **Essenciais** | As 18 colunas do dia a dia |
+| **Conferência** | Título × boleto lado a lado (`TÍT` / `BOL`): documento, fornecedor, **valor**, **vencimento** e venc. real, cada par com a diferença calculada e a célula destacada quando diverge |
+| **Todas as colunas** | As 38 colunas da aba (as vazias nas 19 linhas ficam de fora) |
+
+Outros recursos: **copiar o UUID** do título (para buscar no SE2) e copiar a
+linha digitável só com os 47 dígitos; clicar na linha abre os **critérios** do
+match e o histórico; filtros por status, alerta, `Valor ≠` e `Venc. ≠`.
 
 ## ⚠️ Este repositório é privado e deve continuar assim
 
