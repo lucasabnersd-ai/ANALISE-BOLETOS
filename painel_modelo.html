@@ -4,432 +4,258 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Análise de Boletos — Associações Encontradas</title>
+<title>Associações Encontradas — Análise de Boletos</title>
 <style>
 :root{
-  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f6f8fb; --line:#d9e0ea; --line-forte:#b9c4d4;
-  --txt:#0f172a; --txt-2:#4a5568; --txt-3:#8a97a8;
-  --azul:#1f4e79; --azul-2:#2f6ba8; --zebra:#ebf3fb; --sel:#dbeafe;
-  --ok:#0f7b52; --ok-bg:#e6f5ee;
-  --alerta:#9a6206; --alerta-bg:#fdf3dd;
-  --sombra:0 1px 2px rgba(15,23,42,.05), 0 8px 24px -14px rgba(15,23,42,.2);
+  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f5f7fa; --line:#d8dfe8; --line-forte:#b6c2d1;
+  --txt:#111827; --txt-2:#4b5563; --txt-3:#8b95a5;
+  --azul:#1f4e79; --azul-2:#2f6ba8; --zebra:#ebf3fb; --sel:#dceafc;
+  --ok:#0f7b52; --alerta:#8a5806; --alerta-bg:#fdf1d6;
 }
 html[data-tema="escuro"]{
-  --bg:#0b1220; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#31445f;
+  --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
   --txt:#e8eefb; --txt-2:#a3b3ca; --txt-3:#6b7b98;
-  --azul:#173250; --azul-2:#5b9bd5; --zebra:#14202f; --sel:#1c3454;
-  --ok:#4ade80; --ok-bg:#11291d;
-  --alerta:#fbbf24; --alerta-bg:#2c2410;
-  --sombra:0 1px 2px rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.8);
+  --azul:#17304c; --azul-2:#5b9bd5; --zebra:#141f2e; --sel:#1d3654;
+  --ok:#4ade80; --alerta:#fbbf24; --alerta-bg:#2e2611;
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--txt);
   font:14px/1.45 "Segoe UI", Calibri, system-ui, sans-serif; -webkit-font-smoothing:antialiased}
-.envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 40px}
+.envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 32px}
 
-/* ---------- cabecalho ---------- */
-.topo{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:16px}
-.topo h1{margin:0; font-size:21px; font-weight:650; letter-spacing:-.3px}
-.topo .sub{margin:4px 0 0; color:var(--txt-2); font-size:13px; max-width:78ch}
-.acoes{display:flex; gap:8px; align-items:center}
-.selo{display:inline-flex; align-items:center; gap:7px; font-size:12px; color:var(--txt-2);
-  background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:5px 12px}
-.ponto{width:7px; height:7px; border-radius:50%; background:var(--ok)}
-button.leve{font:inherit; font-size:13px; color:var(--txt-2); background:var(--surface);
-  border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer; transition:.15s}
+.topo{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
+.topo h1{margin:0; font-size:19px; font-weight:650; letter-spacing:-.2px}
+.topo h1 span{color:var(--txt-3); font-weight:400}
+.resumo{font-size:13px; color:var(--txt-2)}
+.resumo b{color:var(--txt); font-weight:640}
+.resumo .sep{color:var(--txt-3); margin:0 7px}
+.acoes{display:flex; gap:8px; align-items:center; margin-left:auto}
+.busca{position:relative}
+.busca input{width:250px; font:inherit; font-size:13px; color:var(--txt); background:var(--surface);
+  border:1px solid var(--line); border-radius:7px; padding:7px 10px 7px 30px; outline:none}
+.busca input:focus{border-color:var(--azul-2); width:320px}
+.busca svg{position:absolute; left:9px; top:50%; transform:translateY(-50%); opacity:.45}
+button.leve{font:inherit; font-size:12.5px; color:var(--txt-2); background:var(--surface);
+  border:1px solid var(--line); border-radius:7px; padding:7px 11px; cursor:pointer}
 button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 
-/* ---------- funil + indicadores ---------- */
-.funil{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line);
-  border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:12px}
-.funil .etapa{background:var(--surface); padding:11px 14px}
-.funil .etapa b{display:block; font-size:20px; font-weight:640; letter-spacing:-.5px}
-.funil .etapa span{font-size:11px; color:var(--txt-2); text-transform:uppercase; letter-spacing:.5px}
-.funil .barra{height:3px; border-radius:2px; background:var(--line); margin-top:8px; overflow:hidden}
-.funil .barra i{display:block; height:100%; background:var(--azul-2)}
-.funil .etapa.destaque b{color:var(--azul-2)}
-.funil .etapa.final b, .funil .etapa.final .barra i{color:var(--ok); background-color:var(--ok)}
-.funil .etapa.final b{background:none}
-.cartoes{display:grid; grid-template-columns:repeat(auto-fit,minmax(158px,1fr)); gap:10px; margin-bottom:16px}
-.cartao{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:11px 13px; box-shadow:var(--sombra)}
-.cartao .rotulo{font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--txt-2)}
-.cartao .valor{font-size:23px; font-weight:640; letter-spacing:-.5px; margin-top:4px}
-.cartao .nota{font-size:11.5px; color:var(--txt-3)}
-.cartao.ok .valor{color:var(--ok)} .cartao.alerta .valor{color:var(--alerta)}
-
-/* ---------- barra de ferramentas ---------- */
-.ferramentas{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px}
-.busca{position:relative; flex:1 1 260px; max-width:420px}
-.busca input{width:100%; font:inherit; font-size:13.5px; color:var(--txt); background:var(--surface);
-  border:1px solid var(--line); border-radius:8px; padding:8px 11px 8px 32px; outline:none}
-.busca input:focus{border-color:var(--azul-2)}
-.busca svg{position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:.45}
-.grupo{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--surface)}
-.grupo button{font:inherit; font-size:12.5px; color:var(--txt-2); background:transparent; border:0;
-  border-right:1px solid var(--line); padding:8px 12px; cursor:pointer; white-space:nowrap; transition:.15s}
-.grupo button:last-child{border-right:0}
-.grupo button:hover{background:var(--surface-2); color:var(--txt)}
-.grupo button[aria-pressed="true"]{background:var(--azul); color:#fff}
-html[data-tema="escuro"] .grupo button[aria-pressed="true"]{background:var(--azul-2); color:#08111f}
-.grupo button b{font-weight:600; opacity:.65; margin-left:4px}
-.contagem{font-size:12.5px; color:var(--txt-2); margin-left:auto; white-space:nowrap}
-
 /* ---------- planilha ---------- */
-.planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:8px 8px 0 0;
-  box-shadow:var(--sombra); overflow:auto; max-height:70vh}
-table.grade{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
-table.grade th, table.grade td{border-right:1px solid var(--line); border-bottom:1px solid var(--line);
-  padding:0; text-align:left; vertical-align:top}
+.planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:6px 6px 0 0;
+  overflow:auto; max-height:78vh}
+table{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
+th, td{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; text-align:left}
 
-/* linha de letras (A, B, C...) */
-tr.letras th{position:sticky; top:0; z-index:6; height:19px; background:var(--surface-2);
-  color:var(--txt-3); font:600 10.5px/19px "Segoe UI",sans-serif; text-align:center;
-  border-bottom:1px solid var(--line-forte); letter-spacing:.4px}
-/* linha de titulos */
-tr.titulos th{position:sticky; top:19px; z-index:6; background:var(--azul); color:#fff;
-  font-weight:600; font-size:12px; padding:7px 9px; white-space:nowrap; cursor:pointer;
-  border-bottom:2px solid var(--line-forte); border-right-color:rgba(255,255,255,.16)}
+tr.letras th{position:sticky; top:0; z-index:6; height:18px; background:var(--surface-2); color:var(--txt-3);
+  font:600 10px/18px "Segoe UI",sans-serif; text-align:center; letter-spacing:.4px;
+  border-bottom:1px solid var(--line-forte)}
+tr.titulos th{position:sticky; top:18px; z-index:6; background:var(--azul); color:#fff; font-weight:600;
+  font-size:11.5px; padding:7px 8px; white-space:nowrap; cursor:pointer; user-select:none;
+  border-bottom:2px solid var(--line-forte); border-right-color:rgba(255,255,255,.15)}
 tr.titulos th:hover{background:var(--azul-2)}
-tr.titulos th .ord{opacity:.4; margin-left:5px; font-size:10px}
-tr.titulos th.ativa .ord{opacity:1}
-/* canto e numeros de linha */
-th.canto{position:sticky; left:0; z-index:8; background:var(--surface-2); width:44px; min-width:44px}
+tr.titulos th .ord{opacity:0; margin-left:4px; font-size:9px}
+tr.titulos th:hover .ord, tr.titulos th.ativa .ord{opacity:.85}
+th.canto{position:sticky; left:0; z-index:8; background:var(--surface-2); width:40px; min-width:40px}
 tr.titulos th.canto{background:var(--azul); z-index:9; cursor:default}
-tr.titulos th.canto:hover{background:var(--azul)}
-td.gutter, th.gutter{position:sticky; left:0; z-index:4; width:44px; min-width:44px;
-  background:var(--surface-2); color:var(--txt-3); text-align:center; font-size:11px;
-  padding:6px 4px; cursor:pointer; border-right:1px solid var(--line-forte); user-select:none}
-tr.linha:hover td.gutter{background:var(--sel); color:var(--txt)}
-tr.linha.aberta td.gutter{background:var(--azul-2); color:#fff}
+td.gutter{position:sticky; left:0; z-index:4; width:40px; min-width:40px; background:var(--surface-2);
+  color:var(--txt-3); text-align:center; font-size:10.5px; padding:5px 3px;
+  border-right:1px solid var(--line-forte); user-select:none}
 
-tr.linha td{padding:6px 9px; background:var(--surface)}
-tr.linha.zebrada td, tr.linha.zebrada td.gutter{background:var(--zebra)}
-tr.linha:hover td{background:var(--sel)}
-tr.linha.aberta td{background:var(--sel)}
+td{padding:5px 8px; background:var(--surface); vertical-align:top}
+tr.zebrada td, tr.zebrada td.gutter{background:var(--zebra)}
+tr:hover td, tr:hover td.gutter{background:var(--sel)}
 td .txt{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 td.num{text-align:right; font-variant-numeric:tabular-nums}
-td.mono{font-family:"Cascadia Mono", Consolas, monospace; font-size:11.5px; letter-spacing:.1px}
+td.mono .txt{font-family:"Cascadia Mono", Consolas, monospace; font-size:11px; letter-spacing:.1px}
+td.forte .txt{color:var(--ok); font-weight:600}
+td.provavel .txt{color:var(--alerta); font-weight:600}
 
-/* celulas especiais */
-.pastilha{display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.3px;
-  padding:2px 7px; border-radius:4px; white-space:nowrap}
-.pastilha.ok{background:var(--ok-bg); color:var(--ok)}
-.pastilha.alerta{background:var(--alerta-bg); color:var(--alerta)}
-td.alerta-celula{background:var(--alerta-bg) !important; color:var(--alerta); cursor:pointer}
-tr.linha:hover td.alerta-celula{filter:brightness(.97)}
-.barra-score{display:flex; align-items:center; gap:6px}
-.barra-score .trilho{flex:1; height:5px; min-width:34px; background:var(--line); border-radius:3px; overflow:hidden; position:relative}
-.barra-score .trilho i{display:block; height:100%; background:var(--ok)}
-.barra-score .trilho u{position:absolute; top:0; width:2px; height:100%; background:var(--txt-3)}
-.barra-score b{font-variant-numeric:tabular-nums; font-size:11.5px}
-.copiavel{display:flex; align-items:center; gap:6px}
-.copiavel .txt{flex:1}
-.copiar{font:inherit; font-size:10.5px; font-weight:600; cursor:pointer; flex:none; opacity:0;
+/* divergencia entre boleto e titulo */
+td.difere{background:var(--alerta-bg) !important; color:var(--alerta); white-space:nowrap}
+td.difere .txt{display:inline}
+td.difere .delta{font-size:10.5px; font-weight:600; margin-left:6px; opacity:.85}
+td.alerta{background:var(--alerta-bg) !important; color:var(--alerta)}
+
+/* marcacao de tratado */
+td.check{text-align:center; padding:4px}
+td.check input{width:15px; height:15px; cursor:pointer; accent-color:var(--ok); margin:0}
+tr.feita td{color:var(--txt-3)}
+tr.feita td.check{box-shadow:inset 3px 0 0 var(--ok)}
+tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3)}
+tr.feita td.difere{color:var(--txt-3)}
+
+/* copiar */
+td.copiavel{position:relative; padding-right:4px}
+td.copiavel .interno{display:flex; align-items:center; gap:5px}
+td.copiavel .txt{flex:1}
+.copiar{font:inherit; font-size:10px; font-weight:600; cursor:pointer; flex:none; opacity:0;
   background:var(--surface); color:var(--azul-2); border:1px solid var(--line-forte);
-  border-radius:5px; padding:1px 6px; transition:.12s}
-tr.linha:hover .copiar{opacity:1}
-.copiar:hover{background:var(--azul-2); color:#fff; border-color:var(--azul-2)}
-.copiar.feito{opacity:1; background:var(--ok-bg); color:var(--ok); border-color:var(--ok)}
+  border-radius:4px; padding:1px 5px}
+tr:hover .copiar{opacity:1}
+.copiar:hover{background:var(--azul-2); color:#fff}
+.copiar.feito{opacity:1; color:var(--ok); border-color:var(--ok)}
 
-/* confronto titulo x boleto */
-.par{display:flex; flex-direction:column; gap:2px}
-.par .lado{display:flex; gap:6px; align-items:baseline; font-size:12px}
-.par .lado i{font-style:normal; font-size:9.5px; font-weight:700; letter-spacing:.5px;
-  color:var(--txt-3); width:24px; flex:none}
-.par .lado span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-.par .lado.b span{color:var(--txt-2)}
-.par .delta{font-size:10.5px; font-weight:600; margin-top:2px}
-.par .delta.igual{color:var(--ok)}
-.par .delta.difere{color:var(--alerta)}
-td.difere{background:var(--alerta-bg) !important}
-tr.linha:hover td.difere{filter:brightness(.97)}
-
-/* detalhe */
-tr.detalhe-linha td{padding:0; background:var(--surface-2)}
-tr.detalhe-linha .caixa{padding:12px 14px 14px 52px; border-left:3px solid var(--azul-2)}
-.detalhe-linha h4{margin:0 0 7px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--txt-2)}
-.criterios{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:12px}
-.criterio{font-size:11.5px; padding:3px 8px; border-radius:5px; border:1px solid transparent}
-.criterio.ok{background:var(--ok-bg); color:var(--ok); border-color:color-mix(in srgb, var(--ok) 22%, transparent)}
-.criterio.atencao{background:var(--alerta-bg); color:var(--alerta); border-color:color-mix(in srgb, var(--alerta) 26%, transparent)}
-.aviso{display:flex; gap:8px; background:var(--alerta-bg); color:var(--alerta); border-radius:7px;
-  padding:8px 10px; font-size:12px; line-height:1.45; margin-bottom:12px}
-.aviso svg{flex:none; margin-top:2px}
-.historico{background:var(--surface); border:1px solid var(--line); border-radius:7px;
-  padding:8px 10px; font-size:12px; color:var(--txt-2); line-height:1.5; max-width:110ch}
-
-/* abas estilo Excel */
-.abas{display:flex; gap:2px; align-items:stretch; background:var(--surface-2);
-  border:1px solid var(--line-forte); border-top:0; border-radius:0 0 8px 8px; padding:4px 6px; overflow-x:auto}
-.aba{font:inherit; font-size:12px; color:var(--txt-2); background:transparent; border:1px solid transparent;
-  border-radius:5px 5px 0 0; padding:6px 12px; white-space:nowrap; cursor:default}
+.abas{display:flex; gap:2px; background:var(--surface-2); border:1px solid var(--line-forte);
+  border-top:0; border-radius:0 0 6px 6px; padding:4px 6px; overflow-x:auto}
+.aba{font-size:11.5px; color:var(--txt-2); border:1px solid transparent; border-radius:4px 4px 0 0;
+  padding:5px 11px; white-space:nowrap}
 .aba.ativa{background:var(--surface); border-color:var(--line-forte); border-bottom-color:var(--surface);
   color:var(--txt); font-weight:600}
-.aba:not(.ativa){opacity:.62}
+.aba:not(.ativa){opacity:.55}
 .aba small{opacity:.7; margin-left:5px}
 
-.vazio{padding:36px; text-align:center; color:var(--txt-3)}
-.rodape{margin-top:14px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
-  font-size:11.5px; color:var(--txt-3)}
-@media (max-width:900px){ .funil{grid-template-columns:repeat(2,1fr)} }
+.vazio{padding:30px; text-align:center; color:var(--txt-3)}
+.rodape{margin-top:10px; font-size:11.5px; color:var(--txt-3); display:flex;
+  justify-content:space-between; gap:12px; flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div class="envolucro">
 
-  <header class="topo">
-    <div>
-      <h1>Análise de Boletos <span style="color:var(--txt-3);font-weight:400">/</span> Associações encontradas</h1>
-      <p class="sub">Títulos do TOTVS que estavam <b>sem código de boleto</b> e foram associados a um boleto do DDA. Mesma estrutura da aba da planilha — use <b>Conferência</b> para bater valor e vencimento do título contra os do boleto no SE2.</p>
-    </div>
+  <div class="topo">
+    <h1>Associações Encontradas <span>· Análise de Boletos</span></h1>
     <div class="acoes">
-      <span class="selo"><i class="ponto"></i> Base de <b id="geradoEm">—</b></span>
+      <label class="busca">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="busca" type="search" placeholder="Buscar…" autocomplete="off">
+      </label>
       <button class="leve" id="btnTema" type="button">Tema</button>
     </div>
-  </header>
-
-  <section class="funil" id="funil"></section>
-  <section class="cartoes" id="cartoes"></section>
-
-  <div class="ferramentas">
-    <label class="busca">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="busca" type="search" placeholder="Buscar em qualquer coluna…" autocomplete="off">
-    </label>
-    <div class="grupo" id="modos"></div>
-    <div class="grupo" id="filtros"></div>
-    <span class="contagem" id="contagem"></span>
   </div>
 
-  <div class="planilha"><table class="grade" id="grade"></table></div>
+  <div class="resumo" id="resumo"></div>
+
+  <div class="planilha"><table id="grade"></table></div>
   <div class="abas" id="abas"></div>
 
-  <footer class="rodape">
-    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. Clique no número da linha para abrir os detalhes; passe o mouse para copiar UUID e linha digitável.</span>
+  <div class="rodape">
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. Célula em âmbar = boleto diferente do título. Passe o mouse na linha para copiar o UUID e a linha digitável. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
     <span id="atualizado"></span>
-  </footer>
+  </div>
 </div>
 
 <script>
 const DADOS = /*__DADOS__*/null;
 
-const num = v => (v == null ? "—" : v.toLocaleString("pt-BR"));
-const brl = v => (v == null ? "—" : v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"}));
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num = v => v.toLocaleString("pt-BR");
 const letraCol = i => { let s = ""; i++; while (i > 0){ const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = (i - r - 1) / 26; } return s; };
 
-const MODOS = [
-  {id:"essenciais", rot:"Essenciais"},
-  {id:"conferencia", rot:"Conferência"},
-  {id:"todas", rot:"Todas as colunas"},
-];
-const difere = (r, rotulo) => r.confrontos.some(c => c.rotulo === rotulo && c.situacao === "difere");
-const FILTROS = [
-  {id:"todos",     rot:"Todos",      teste:() => true},
-  {id:"forte",     rot:"Forte",      teste:r => r.forte},
-  {id:"provavel",  rot:"Provável",   teste:r => !r.forte},
-  {id:"alerta",    rot:"Com alerta", teste:r => !!r.alerta},
-  {id:"valor",     rot:"Valor ≠",    teste:r => difere(r, "Valor")},
-  {id:"venc",      rot:"Venc. ≠",    teste:r => difere(r, "Vencimento") || difere(r, "Venc. real x boleto")},
-];
+const estado = {busca:"", ordem:null, desc:false};
 
-const estado = {modo:"essenciais", filtro:"todos", busca:"", ordem:null, desc:false, abertas:new Set()};
+/* Marcacao "tratado": guardada por UUID do titulo, no proprio navegador.
+   O registro definitivo continua sendo a coluna CHECK (FEITO) da planilha. */
+const CHAVE_FEITOS = "painel_boletos_feitos";
+const feitos = new Set();
+try {
+  JSON.parse(localStorage.getItem(CHAVE_FEITOS) || "[]").forEach(u => feitos.add(u));
+} catch (e) {}
+DADOS.linhas.forEach(r => { if (r.feito) feitos.add(r.uuid); });
 
-/* ---------- topo ---------- */
-function montarTopo(){
-  const i = DADOS.indicadores;
-  document.getElementById("geradoEm").textContent = i.gerado_em;
-  document.getElementById("atualizado").textContent = "Painel gerado em " + DADOS.atualizado_em;
-
-  document.getElementById("funil").innerHTML = [
-    {n:i.total_totvs, r:"Títulos TOTVS (Boleto SC)", p:100},
-    {n:i.com_codigo, r:"Já tinham código", p:i.total_totvs ? i.com_codigo/i.total_totvs*100 : 0},
-    {n:i.sem_codigo, r:"Sem código de boleto", p:i.total_totvs ? i.sem_codigo/i.total_totvs*100 : 0, c:"destaque"},
-    {n:i.associados, r:"Associados agora", p:i.sem_codigo ? Math.max(i.associados/i.sem_codigo*100, 1.2) : 0, c:"final"},
-  ].map(e => `<div class="etapa ${e.c||""}"><span>${e.r}</span><b>${num(e.n)}</b>
-      <div class="barra"><i style="width:${Math.min(e.p,100).toFixed(1)}%"></i></div></div>`).join("");
-
-  document.getElementById("cartoes").innerHTML = [
-    {r:"Match forte", v:num(i.forte), n:"score ≥ 100", cl:"ok"},
-    {r:"Match provável", v:num(i.provavel), n:"score 75–99", cl:i.provavel?"alerta":""},
-    {r:"Com alerta", v:num(i.com_alerta), n:"parcelas / fatura", cl:i.com_alerta?"alerta":""},
-    {r:"Divergência de valor", v:num(i.com_divergencia), n:"título × boleto", cl:i.com_divergencia?"alerta":""},
-    {r:"Valor associado", v:brl(i.valor_associado), n:`${i.associados} boletos`},
-    {r:"Ainda sem match", v:num(i.sem_match), n:`+ ${num(i.futuros)} futuros`},
-  ].map(c => `<div class="cartao ${c.cl||""}"><div class="rotulo">${c.r}</div>
-      <div class="valor">${c.v}</div><div class="nota">${c.n}</div></div>`).join("");
-
-  document.getElementById("abas").innerHTML = DADOS.abas.map(a =>
-    `<button class="aba ${a.ativa?"ativa":""}" type="button" ${a.ativa?"":'title="Ainda não levada para o painel"'}>
-       ${esc(a.nome)}<small>${num(a.linhas)}</small></button>`).join("");
-
-  document.getElementById("modos").innerHTML = MODOS.map(m =>
-    `<button type="button" data-modo="${m.id}" aria-pressed="${m.id===estado.modo}">${m.rot}</button>`).join("");
-  document.getElementById("filtros").innerHTML = FILTROS.map(f =>
-    `<button type="button" data-filtro="${f.id}" aria-pressed="${f.id===estado.filtro}">${f.rot}<b>${DADOS.linhas.filter(f.teste).length}</b></button>`).join("");
+function gravarFeitos(){
+  try { localStorage.setItem(CHAVE_FEITOS, JSON.stringify([...feitos])); } catch (e) {}
 }
 
-/* ---------- colunas conforme o modo ---------- */
-function colunasVisiveis(){
-  if (estado.modo === "conferencia") return null;              // grade de pares
-  return estado.modo === "todas" ? DADOS.colunas : DADOS.colunas.filter(c => c.essencial);
+function mostrarResumo(){
+  document.getElementById("resumo").innerHTML =
+    `Base de <b>${DADOS.gerado_em}</b><span class="sep">·</span>` +
+    `<b>${num(DADOS.associados)}</b> títulos associados de ${num(DADOS.sem_codigo)} sem código de boleto` +
+    `<span class="sep">·</span><b>${DADOS.com_alerta}</b> com alerta` +
+    `<span class="sep">·</span><b>${DADOS.divergentes}</b> com boleto diferente do título` +
+    `<span class="sep">·</span><b>${feitos.size}</b> tratado${feitos.size === 1 ? "" : "s"}`;
 }
+document.getElementById("atualizado").textContent = "Gerado em " + DADOS.atualizado_em;
+document.getElementById("abas").innerHTML = DADOS.abas.map(a =>
+  `<span class="aba ${a.ativa ? "ativa" : ""}" ${a.ativa ? "" : 'title="Ainda não levada para o painel"'}>${esc(a.nome)}<small>${num(a.linhas)}</small></span>`).join("");
 
-function linhasVisiveis(){
-  const f = FILTROS.find(x => x.id === estado.filtro) || FILTROS[0];
+function linhas(){
   const termo = estado.busca.trim().toLowerCase();
-  let itens = DADOS.linhas.filter(r => f.teste(r) && (!termo || r.busca.includes(termo)));
-
+  let itens = termo ? DADOS.linhas.filter(r => r.busca.includes(termo)) : DADOS.linhas.slice();
   if (estado.ordem){
-    const {chave, tipo} = estado.ordem;
-    itens = itens.slice().sort((a, b) => {
-      const va = tipo === "par" ? a.confrontos.find(c => c.rotulo === chave)?.ordem ?? 0 : a.o[chave];
-      const vb = tipo === "par" ? b.confrontos.find(c => c.rotulo === chave)?.ordem ?? 0 : b.o[chave];
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      const r = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb), "pt-BR");
+    const chave = estado.ordem;
+    itens.sort((a, b) => {
+      const va = a.o[chave], vb = b.o[chave];
+      if (va == null || va === "") return 1;
+      if (vb == null || vb === "") return -1;
+      const r = typeof va === "number" && typeof vb === "number"
+        ? va - vb : String(va).localeCompare(String(vb), "pt-BR");
       return estado.desc ? -r : r;
     });
   }
   return itens;
 }
 
-/* ---------- celulas ---------- */
 function celula(r, col){
-  const bruto = r.c[col.chave] ?? "";
-  const classe = [];
-  let conteudo = `<span class="txt" title="${esc(bruto)}">${esc(bruto)}</span>`;
-
-  switch (col.especial){
-    case "uuid":
-      classe.push("mono");
-      conteudo = `<div class="copiavel"><span class="txt" title="${esc(bruto)}">${esc(bruto)}</span>
-        <button class="copiar" type="button" data-copiar="${esc(bruto)}" title="Copiar UUID para buscar no SE2">UUID</button></div>`;
-      break;
-    case "linha":
-      classe.push("mono");
-      conteudo = `<div class="copiavel"><span class="txt" title="${esc(bruto)}">${esc(bruto)}</span>
-        <button class="copiar" type="button" data-copiar="${esc(r.linha_crua)}" title="Copiar só os 47 dígitos">copiar</button></div>`;
-      break;
-    case "status":
-      conteudo = `<span class="pastilha ${r.forte ? "ok" : "alerta"}">${esc(bruto)}</span>`;
-      break;
-    case "score": {
-      const teto = Math.max(r.score, r.score2, 200);
-      conteudo = `<div class="barra-score" title="Score ${r.score} · 2º colocado ${r.score2}">
-        <div class="trilho"><i style="width:${Math.min(r.score/teto*100,100).toFixed(1)}%"></i>
-        <u style="left:${Math.min(r.score2/teto*100,100).toFixed(1)}%"></u></div><b>${r.score}</b></div>`;
-      break;
-    }
-    case "alerta":
-      if (bruto) classe.push("alerta-celula");
-      conteudo = bruto ? `<span class="txt" title="${esc(bruto)}">⚠ ${esc(bruto)}</span>` : "";
-      break;
-    case "criterio":
-      conteudo = `<span class="txt" title="${esc(bruto)}">${esc(bruto)}</span>`;
-      break;
-    default:
-      if (col.tipo === "moeda" || col.tipo === "inteiro") classe.push("num");
+  const valor = r.c[col.chave] ?? "";
+  if (col.check){
+    return `<td class="check"><input type="checkbox" data-feito="${esc(r.uuid)}"
+      ${feitos.has(r.uuid) ? "checked" : ""} title="Marcar como tratado"></td>`;
   }
-  return `<td class="${classe.join(" ")}">${conteudo}</td>`;
+  const classes = [];
+  if (col.tipo === "moeda" || col.tipo === "inteiro") classes.push("num");
+  if (col.copiar) classes.push("mono", "copiavel");
+  if (col.rotulo === "Status") classes.push(r.forte ? "forte" : "provavel");
+  if (col.rotulo === "Alerta Fatura" && valor) classes.push("alerta");
+
+  const delta = r.difere[col.chave];
+  if (delta) classes.push("difere");
+
+  const texto = `<span class="txt" title="${esc(valor)}">${esc(valor)}</span>`;
+  const conteudo = col.copiar
+    ? `<div class="interno">${texto}<button class="copiar" type="button"
+         data-copiar="${esc(r.copia[col.chave] ?? valor)}" title="Copiar">${esc(col.copiar)}</button></div>`
+    : texto + (delta ? `<span class="delta">${esc(delta)}</span>` : "");
+
+  return `<td class="${classes.join(" ")}">${conteudo}</td>`;
 }
 
-function celulaPar(par){
-  const classe = par.situacao === "difere" ? "difere" : "";
-  return `<td class="${classe}"><div class="par">
-      <div class="lado"><i>TÍT</i><span title="${esc(par.titulo)}">${esc(par.titulo) || "—"}</span></div>
-      <div class="lado b"><i>BOL</i><span title="${esc(par.boleto)}">${esc(par.boleto) || "—"}</span></div>
-      ${par.delta ? `<div class="delta ${par.situacao}">${esc(par.delta)}</div>` : ""}
-    </div></td>`;
-}
-
-/* ---------- desenho da grade ---------- */
 function desenhar(){
-  const itens = linhasVisiveis();
-  const cols = colunasVisiveis();
-  const conferencia = cols === null;
-  document.getElementById("contagem").textContent =
-    `${itens.length} de ${DADOS.linhas.length} linhas · ${conferencia ? DADOS.confrontos.length + " confrontos" : cols.length + " colunas"}`;
-
-  const cabecalhos = conferencia
-    ? [{rot:"UUID do título", chave:"campo_uuid", largura:300, tipo:"col"},
-       {rot:"Status", chave:"status", largura:130, tipo:"col"},
-       ...DADOS.confrontos.map(c => ({rot:c.rotulo, chave:c.rotulo, largura:c.largura, tipo:"par"})),
-       {rot:"Alerta Fatura", chave:"alerta_fatura", largura:280, tipo:"col"}]
-    : cols.map(c => ({rot:c.rotulo, chave:c.chave, largura:c.largura, tipo:"col"}));
-
-  const total = cabecalhos.length + 1;
+  const itens = linhas();
+  const cols = DADOS.colunas;
   const grade = document.getElementById("grade");
 
   const cabeca = `<thead>
-    <tr class="letras"><th class="canto"></th>${cabecalhos.map((_, i) => `<th>${letraCol(i)}</th>`).join("")}</tr>
-    <tr class="titulos"><th class="canto">#</th>${cabecalhos.map(c => {
-      const ativa = estado.ordem && estado.ordem.chave === c.chave;
-      return `<th style="min-width:${c.largura}px" data-ord="${esc(c.chave)}" data-tipo="${c.tipo}" class="${ativa?"ativa":""}">
-        ${esc(c.rot)}<span class="ord">${ativa ? (estado.desc ? "▼" : "▲") : "▾"}</span></th>`;
+    <tr class="letras"><th class="canto"></th>${cols.map((_, i) => `<th>${letraCol(i)}</th>`).join("")}</tr>
+    <tr class="titulos"><th class="canto">#</th>${cols.map(c => {
+      const ativa = estado.ordem === c.chave;
+      return `<th style="min-width:${c.largura}px" data-ord="${c.chave}" class="${ativa ? "ativa" : ""}">
+        ${esc(c.rotulo)}<span class="ord">${ativa ? (estado.desc ? "▼" : "▲") : "▾"}</span></th>`;
     }).join("")}</tr></thead>`;
 
-  const corpo = itens.length ? itens.map((r, i) => {
-    const aberta = estado.abertas.has(r.uuid);
-    const celulas = conferencia
-      ? [celula(r, {chave:"campo_uuid", especial:"uuid"}),
-         celula(r, {chave:"status", especial:"status"}),
-         ...r.confrontos.map(celulaPar),
-         celula(r, {chave:"alerta_fatura", especial:"alerta"})].join("")
-      : cols.map(c => celula(r, c)).join("");
-
-    const detalhe = aberta ? `<tr class="detalhe-linha"><td colspan="${total}"><div class="caixa">
-        ${r.alerta ? `<div class="aviso"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 9v4.5M12 17h.01M10.3 3.9 2.6 17.3A2 2 0 0 0 4.3 20.3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg><span>${esc(r.alerta)}</span></div>` : ""}
-        <h4>Critérios do match</h4>
-        <div class="criterios">${r.criterios.map(c => `<span class="criterio ${c.tipo}">${esc(c.texto)}</span>`).join("") || "—"}</div>
-        ${r.historico ? `<h4>Histórico do título</h4><div class="historico">${esc(r.historico)}</div>` : ""}
-      </div></td></tr>` : "";
-
-    return `<tr class="linha ${aberta?"aberta":""} ${i % 2 ? "zebrada" : ""}" data-uuid="${esc(r.uuid)}">
-        <td class="gutter" title="Abrir detalhes">${i + 1}</td>${celulas}</tr>${detalhe}`;
-  }).join("") : `<tr><td class="vazio" colspan="${total}">Nenhuma linha com esses filtros.</td></tr>`;
+  const corpo = itens.length
+    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""}">
+        <td class="gutter">${i + 1}</td>${cols.map(c => celula(r, c)).join("")}</tr>`).join("")
+    : `<tr><td class="vazio" colspan="${cols.length + 1}">Nenhuma linha encontrada.</td></tr>`;
 
   grade.innerHTML = cabeca + "<tbody>" + corpo + "</tbody>";
+  mostrarResumo();
 }
 
-/* ---------- eventos ---------- */
-document.getElementById("modos").addEventListener("click", e => {
-  const b = e.target.closest("[data-modo]"); if (!b) return;
-  estado.modo = b.dataset.modo; estado.ordem = null;
-  document.querySelectorAll("[data-modo]").forEach(x => x.setAttribute("aria-pressed", x === b));
-  desenhar();
+document.getElementById("grade").addEventListener("change", e => {
+  const caixa = e.target.closest("[data-feito]");
+  if (!caixa) return;
+  caixa.checked ? feitos.add(caixa.dataset.feito) : feitos.delete(caixa.dataset.feito);
+  gravarFeitos();
+  caixa.closest("tr").classList.toggle("feita", caixa.checked);
+  mostrarResumo();
 });
-document.getElementById("filtros").addEventListener("click", e => {
-  const b = e.target.closest("[data-filtro]"); if (!b) return;
-  estado.filtro = b.dataset.filtro;
-  document.querySelectorAll("[data-filtro]").forEach(x => x.setAttribute("aria-pressed", x === b));
-  desenhar();
-});
+
 document.getElementById("busca").addEventListener("input", e => { estado.busca = e.target.value; desenhar(); });
 
 document.getElementById("grade").addEventListener("click", e => {
-  const copiar = e.target.closest("[data-copiar]");
-  if (copiar){
-    e.stopPropagation();
-    navigator.clipboard.writeText(copiar.dataset.copiar).then(() => {
-      const antes = copiar.textContent;
-      copiar.textContent = "copiado"; copiar.classList.add("feito");
-      setTimeout(() => { copiar.textContent = antes; copiar.classList.remove("feito"); }, 1500);
+  const botao = e.target.closest("[data-copiar]");
+  if (botao){
+    navigator.clipboard.writeText(botao.dataset.copiar).then(() => {
+      const antes = botao.textContent;
+      botao.textContent = "ok"; botao.classList.add("feito");
+      setTimeout(() => { botao.textContent = antes; botao.classList.remove("feito"); }, 1400);
     });
     return;
   }
   const titulo = e.target.closest("th[data-ord]");
   if (titulo){
     const chave = titulo.dataset.ord;
-    estado.desc = estado.ordem && estado.ordem.chave === chave ? !estado.desc : false;
-    estado.ordem = {chave, tipo: titulo.dataset.tipo};
-    desenhar();
-    return;
-  }
-  const linha = e.target.closest("tr.linha");
-  if (linha){
-    const uuid = linha.dataset.uuid;
-    estado.abertas.has(uuid) ? estado.abertas.delete(uuid) : estado.abertas.add(uuid);
+    estado.desc = estado.ordem === chave ? !estado.desc : false;
+    estado.ordem = chave;
     desenhar();
   }
 });
@@ -445,7 +271,6 @@ try {
   else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.tema = "escuro";
 } catch (e) {}
 
-montarTopo();
 desenhar();
 </script>
 </body>

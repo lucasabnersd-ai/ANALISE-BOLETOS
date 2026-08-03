@@ -4,21 +4,25 @@ Versão visual da planilha `TRATAMENTO PYTHON BOLETOS.xlsx`. Hoje traz a aba
 **Associações Encontradas** — os títulos do TOTVS que estavam *sem código de
 boleto* e foram associados a um boleto do DDA.
 
-O painel mantém a **mesma estrutura da planilha** — grade tipo Excel, com as
-colunas da aba na mesma ordem, cabeçalho fixo, numeração de linhas e ordenação
-ao clicar no título da coluna.
+É a **mesma planilha**: as colunas da aba, na mesma ordem, com cabeçalho e
+numeração de linha fixos e ordenação ao clicar no título da coluna. Nada de
+modos nem de barra de filtros — só uma busca.
 
-Três modos de exibição:
+O painel acrescenta as quatro coisas que a planilha não faz:
 
-| Modo | Para que serve |
-|---|---|
-| **Essenciais** | As 18 colunas do dia a dia |
-| **Conferência** | Título × boleto lado a lado (`TÍT` / `BOL`): documento, fornecedor, **valor**, **vencimento** e venc. real, cada par com a diferença calculada e a célula destacada quando diverge |
-| **Todas as colunas** | As 38 colunas da aba (as vazias nas 19 linhas ficam de fora) |
+- **Check por título** — a coluna `CHECK (FEITO)` vira caixa de seleção; a linha
+  marcada fica riscada. A marcação é gravada **neste navegador**, pela chave
+  UUID do título, e sobrevive a atualizações do painel. O registro definitivo
+  continua sendo a coluna `CHECK (FEITO)` na planilha — o que estiver preenchido
+  lá entra marcado.
+- **Divergência destacada** — quando `Valor Boleto` ou `Vencimento Boleto`
+  diferem do título, a célula fica em âmbar com a diferença ao lado
+  (`− R$ 0,85`, `+6 dias`).
+- **Copiar** — o UUID (para buscar no SE2) e a linha digitável só com os 47
+  dígitos, sem a pontuação de leitura.
+- **Abas da planilha** no rodapé, mostrando o que ainda falta levar.
 
-Outros recursos: **copiar o UUID** do título (para buscar no SE2) e copiar a
-linha digitável só com os 47 dígitos; clicar na linha abre os **critérios** do
-match e o histórico; filtros por status, alerta, `Valor ≠` e `Venc. ≠`.
+Colunas 100% vazias nas linhas associadas não são exibidas (exceto o check).
 
 ## ⚠️ Este repositório é privado e deve continuar assim
 
