@@ -32,6 +32,9 @@ BASE_PADRAO = Path(
 PASTA = Path(__file__).resolve().parent
 SAIDA_PADRAO = PASTA / "PUBLICAR" / "index.html"
 MODELO = PASTA / "painel_modelo.html"
+# Fora do repositorio (.gitignore): a carteira para subir e o painel de uso local.
+DADOS_JSON = PASTA / "DADOS" / "analise_boletos.json"
+DEV = PASTA / "dev.html"
 
 ABA_ASSOCIACOES = "Associações Encontradas"
 ABA_RESUMO = "Resumo"
@@ -365,13 +368,41 @@ def gerar(base: Path, saida: Path) -> dict:
         "abas": abas,
     }
 
-    html = MODELO.read_text(encoding="utf-8").replace(
-        "/*__DADOS__*/null",
-        json.dumps(dados, ensure_ascii=False, separators=(",", ":")),
-    )
+    carga = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
+    modelo = MODELO.read_text(encoding="utf-8")
+
+    # Publicacao: o HTML sai SEM a carteira (mesmo modelo dos outros paineis --
+    # o Pages serve publicamente mesmo com o repo privado). A carteira vai para
+    # um JSON a parte, que o supa.js entrega so depois do login.
     saida.parent.mkdir(parents=True, exist_ok=True)
-    saida.write_text(html, encoding="utf-8")
+    saida.write_text(modelo, encoding="utf-8")
+    conferir_sem_dados(saida, dados)
+
+    DADOS_JSON.parent.mkdir(parents=True, exist_ok=True)
+    DADOS_JSON.write_text(carga, encoding="utf-8")
+
+    # Uso local: dev.html com tudo embutido, fora do repositorio (.gitignore).
+    DEV.write_text(modelo.replace("/*__DADOS__*/null", carga), encoding="utf-8")
     return dados
+
+
+# Pedacos que so podem existir no dev.html. Se aparecerem no publicado, a
+# geracao para -- e a mesma trava que o painel do Geraldo tem.
+def conferir_sem_dados(arquivo: Path, dados: dict) -> None:
+    html = arquivo.read_text(encoding="utf-8")
+    suspeitos = []
+    for registro in dados["linhas"]:
+        for valor in (registro["uuid"], registro["copia"].get(chave_de("Linha Digitável"), "")):
+            if valor and valor in html:
+                suspeitos.append(valor)
+    if "/*__DADOS__*/null" not in html:
+        suspeitos.append("marcador /*__DADOS__*/null ausente")
+    if suspeitos:
+        arquivo.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"{arquivo.name} sairia com dados dentro ({len(suspeitos)} ocorrencia(s), "
+            f"ex.: {suspeitos[0][:40]}). Arquivo apagado -- nada foi publicado."
+        )
 
 
 def main() -> int:
@@ -388,7 +419,9 @@ def main() -> int:
 
     print(f"Linhas: {dados['associados']} | colunas: {len(dados['compacta'])}"
           f" | com alerta: {dados['com_alerta']} | boleto difere do titulo: {dados['divergentes']}")
-    print(f"Painel gerado: {args.saida}")
+    print(f"Publicavel (sem dados): {args.saida}")
+    print(f"Carteira para subir:    {DADOS_JSON}")
+    print(f"Painel local (com dados): {DEV}")
     return 0
 
 

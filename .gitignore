@@ -11,3 +11,13 @@
 # Python
 __pycache__/
 *.pyc
+
+# A carteira e o painel local NUNCA entram no repositorio: o Pages serve
+# publicamente mesmo com o repo privado.
+DADOS/
+dev.html
+*.json
+*.json.gz
+
+# Token estreito de upload
+.analise_boletos_token

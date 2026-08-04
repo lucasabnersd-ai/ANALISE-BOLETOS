@@ -170,7 +170,12 @@ td.acao{padding:3px 6px}
 </div>
 
 <script>
-const DADOS = /*__DADOS__*/null;
+/* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
+   GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
+   dos outros paineis). O marcador abaixo so e preenchido no dev.html, gerado
+   com `gerar_painel.py --dev` para uso local e fora do repositorio. */
+const DADOS_LOCAIS = /*__DADOS__*/null;
+let DADOS = null;
 
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const num = v => v.toLocaleString("pt-BR");
@@ -185,7 +190,6 @@ const feitos = new Set();
 try {
   JSON.parse(localStorage.getItem(CHAVE_FEITOS) || "[]").forEach(u => feitos.add(u));
 } catch (e) {}
-DADOS.linhas.forEach(r => { if (r.feito) feitos.add(r.uuid); });
 
 function gravarFeitos(){
   try { localStorage.setItem(CHAVE_FEITOS, JSON.stringify([...feitos])); } catch (e) {}
@@ -199,10 +203,6 @@ function mostrarResumo(){
     `<span class="sep">·</span><b>${DADOS.divergentes}</b> com boleto diferente do título` +
     `<span class="sep">·</span><b>${feitos.size}</b> tratado${feitos.size === 1 ? "" : "s"}`;
 }
-document.getElementById("atualizado").textContent = "Gerado em " + DADOS.atualizado_em;
-document.getElementById("abas").innerHTML = DADOS.abas.map(a =>
-  `<span class="aba ${a.ativa ? "ativa" : ""}" ${a.ativa ? "" : 'title="Ainda não levada para o painel"'}>${esc(a.nome)}<small>${num(a.linhas)}</small></span>`).join("");
-
 function linhas(){
   const termo = estado.busca.trim().toLowerCase();
   let itens = termo ? DADOS.linhas.filter(r => r.busca.includes(termo)) : DADOS.linhas.slice();
@@ -308,6 +308,7 @@ function desenharConferencia(itens){
 }
 
 function desenhar(){
+  if (!DADOS) return;               // ainda sem carteira: nada a desenhar
   const grade = document.getElementById("grade");
   grade.className = "conferencia";
   grade.innerHTML = desenharConferencia(linhas());
@@ -379,7 +380,21 @@ try {
   else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.tema = "escuro";
 } catch (e) {}
 
-desenhar();
+/* ---------- entrada dos dados ----------
+   O dev.html traz a carteira embutida; o index.html publicado nasce vazio e
+   espera o supa.js resolver window.__DADOS_BOLETOS__ depois do login. */
+function iniciar(dados){
+  DADOS = dados;
+  dados.linhas.forEach(r => { if (r.feito) feitos.add(r.uuid); });
+  document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
+  document.getElementById("abas").innerHTML = dados.abas.map(a =>
+    `<span class="aba ${a.ativa ? "ativa" : ""}" ${a.ativa ? "" : 'title="Ainda não levada para o painel"'}>${esc(a.nome)}<small>${num(a.linhas)}</small></span>`).join("");
+  desenhar();
+}
+window.__INICIAR_PAINEL__ = iniciar;
+
+if (DADOS_LOCAIS) iniciar(DADOS_LOCAIS);
+else if (window.__DADOS_BOLETOS__) Promise.resolve(window.__DADOS_BOLETOS__).then(iniciar);
 </script>
 </body>
 </html>

@@ -26,8 +26,10 @@ set "CODIGO=%ERRORLEVEL%"
 
 echo.
 if "%CODIGO%"=="0" (
-  echo CONCLUIDO. Abrindo o painel...
-  start "" "%~dp0PUBLICAR\index.html"
+  echo CONCLUIDO. Abrindo o painel local...
+  rem dev.html e o painel COM os dados, so nesta maquina. O PUBLICAR\index.html
+  rem nasce vazio de proposito -- e o que vai para o GitHub Pages.
+  start "" "%~dp0dev.html"
 ) else (
   echo OCORREU UM ERRO. Confira a mensagem acima.
 )
