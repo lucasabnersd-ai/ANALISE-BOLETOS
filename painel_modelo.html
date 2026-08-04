@@ -15,6 +15,7 @@
   --verde-bg:#bff0d2; --verde-txt:#04432a; --verde-linha:#2fa36b;
   --ambar-bg:#fbdf9e; --ambar-txt:#663b03; --ambar-linha:#d99a08;
   --roxo-bg:#e6dbff; --roxo-txt:#3f1478; --roxo-linha:#8b5cf6;
+  --sobe-bg:#fcdcdc; --sobe-txt:#8c1111; --desce-bg:#d6e8fb; --desce-txt:#0f3f70;
 }
 html[data-tema="escuro"]{
   --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
@@ -24,6 +25,7 @@ html[data-tema="escuro"]{
   --verde-bg:#0e5b3b; --verde-txt:#c8f9dd; --verde-linha:#34d399;
   --ambar-bg:#5c4008; --ambar-txt:#ffe3a6; --ambar-linha:#f0b429;
   --roxo-bg:#3a2a66; --roxo-txt:#e4d8ff; --roxo-linha:#a78bfa;
+  --sobe-bg:#5a1a1a; --sobe-txt:#ffd4d4; --desce-bg:#123a5e; --desce-txt:#cfe6ff;
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--txt);
@@ -78,15 +80,6 @@ tr.feita td{color:var(--txt-3)}
 tr.feita td.check{box-shadow:inset 3px 0 0 var(--ok)}
 tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3)}
 
-.abas{display:flex; gap:2px; background:var(--surface-2); border:1px solid var(--line-forte);
-  border-top:0; border-radius:0 0 6px 6px; padding:4px 6px; overflow-x:auto}
-.aba{font-size:11.5px; color:var(--txt-2); border:1px solid transparent; border-radius:4px 4px 0 0;
-  padding:5px 11px; white-space:nowrap}
-.aba.ativa{background:var(--surface); border-color:var(--line-forte); border-bottom-color:var(--surface);
-  color:var(--txt); font-weight:600}
-.aba:not(.ativa){opacity:.55}
-.aba small{opacity:.7; margin-left:5px}
-
 /* ---------- visao Conferencia ---------- */
 table.conferencia{table-layout:fixed; width:100%; font-size:12px}
 table.conferencia th, table.conferencia td{border-right:1px solid var(--line)}
@@ -107,10 +100,15 @@ tr.zebrada td.z-boleto{background:color-mix(in srgb, var(--zebra) 78%, var(--txt
 tr.zebrada td.z-delta{background:var(--surface-2)}
 table.conferencia tr:hover td{background:var(--sel) !important}
 
-.marca{display:inline-block; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
-  padding:1px 7px; border-radius:4px; white-space:nowrap}
+.marca{display:inline-block; font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums;
+  padding:1px 5px; border-radius:4px; white-space:nowrap}
 .marca.igual{color:var(--txt-3); font-weight:500}
 .marca.difere{background:var(--alerta-bg); color:var(--alerta)}
+/* Δ: a seta diz de cara para que lado o boleto puxou, sem precisar ler o sinal.
+   acima = boleto MAIOR que o titulo (vermelho); abaixo = menor (azul). */
+.marca.acima{background:var(--sobe-bg); color:var(--sobe-txt)}
+.marca.abaixo{background:var(--desce-bg); color:var(--desce-txt)}
+.marca .seta{font-size:9px; margin-right:2px}
 td.fornecedor .nome{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
 td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margin-top:1px}
 
@@ -120,10 +118,16 @@ td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margi
   overflow:hidden; text-overflow:ellipsis; vertical-align:middle}
 .selo.forte{background:var(--verde-bg); color:var(--verde-txt); border-color:var(--verde-linha)}
 .selo.provavel{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
-.selo.parcela, .selo.fatura{background:var(--roxo-bg); color:var(--roxo-txt); border-color:var(--roxo-linha)}
+.selo.parcela{background:var(--roxo-bg); color:var(--roxo-txt); border-color:var(--roxo-linha)}
+.selo.fatura{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
 .selo.outro{background:var(--alerta-bg); color:var(--alerta); border-color:var(--alerta)}
 td.selo-cel{text-align:center; cursor:default}
 td.selo-cel[title]{cursor:help}
+/* selo de parcela que abre o drill */
+.selo.abre{cursor:pointer; border-style:solid}
+.selo.abre::after{content:" ⌄"; font-size:9px; opacity:.75}
+.selo.abre:hover{filter:brightness(.94)}
+html[data-tema="escuro"] .selo.abre:hover{filter:brightness(1.25)}
 
 td.acao{padding:3px 6px}
 .botao-copia{display:flex; align-items:center; gap:5px; width:100%; font:inherit; font-size:10.5px;
@@ -131,13 +135,50 @@ td.acao{padding:3px 6px}
   padding:3px 7px; cursor:pointer; text-align:left}
 .botao-copia code{flex:1; font-family:"Cascadia Mono", Consolas, monospace; font-size:10px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--txt)}
-.botao-copia span{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
+.botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
 .botao-copia:hover{border-color:var(--azul-2)}
-.botao-copia.feito{border-color:var(--ok)} .botao-copia.feito span{color:var(--ok)}
+/* aviso de copiado: o botao inteiro fica verde por um instante */
+.botao-copia.feito{background:var(--verde-bg); border-color:var(--verde-linha)}
+.botao-copia.feito .rot{color:var(--verde-txt)}
+.botao-copia.feito code{color:var(--verde-txt); opacity:.75}
+.botao-copia.falhou{background:var(--alerta-bg); border-color:var(--alerta)}
+.botao-copia.falhou .rot{color:var(--alerta)}
 /* UUID e linha digitavel: campo so de copiar, sem gastar largura com o valor */
 .botao-copia.so{justify-content:center; padding:3px 4px}
-.botao-copia.so span{flex:1; text-align:center; font-size:10px}
+.botao-copia.so .rot{flex:1; text-align:center; font-size:10px}
 .botao-copia.so.vazio{opacity:.4; cursor:not-allowed}
+
+/* ---------- drill das parcelas da NF ---------- */
+.fundo-drill{position:fixed; inset:0; z-index:40; display:none; background:rgba(15,23,42,.55);
+  align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto}
+.fundo-drill.aberto{display:flex}
+.drill{width:min(980px,100%); background:var(--surface); color:var(--txt);
+  border:1px solid var(--line-forte); border-radius:10px; box-shadow:0 18px 50px rgba(0,0,0,.32)}
+.drill .cabeca{display:flex; align-items:flex-start; gap:12px; padding:14px 16px;
+  border-bottom:1px solid var(--line-forte); background:var(--roxo-bg); color:var(--roxo-txt);
+  border-radius:9px 9px 0 0}
+.drill .cabeca h2{margin:0; font-size:15px; font-weight:700}
+.drill .cabeca .sub{margin-top:3px; font-size:12px; opacity:.85}
+.drill .fechar{margin-left:auto; flex:none; font:inherit; font-size:16px; line-height:1; cursor:pointer;
+  background:transparent; border:1px solid currentColor; border-radius:6px; color:inherit; padding:3px 9px}
+.drill .fechar:hover{background:rgba(0,0,0,.08)}
+.drill .corpo{padding:14px 16px 16px}
+.drill table{width:100%; font-size:12px; table-layout:auto}
+.drill th{background:var(--surface-2); color:var(--txt-2); font-size:10.5px; text-transform:uppercase;
+  letter-spacing:.5px; text-align:left; padding:6px 8px; border-bottom:1px solid var(--line-forte);
+  position:static}
+.drill td{padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle}
+.drill tr.par td{background:var(--zebra)}
+.drill .num{text-align:right; font-variant-numeric:tabular-nums}
+.drill .parc{font-weight:700; color:var(--roxo-txt); background:var(--roxo-bg);
+  border-radius:4px; padding:1px 7px; font-size:10.5px}
+html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
+.drill .totais{display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; padding-top:10px;
+  border-top:1px solid var(--line-forte); font-size:12px; color:var(--txt-2)}
+.drill .totais b{color:var(--txt)}
+.drill .aviso{margin:0 0 12px; padding:9px 11px; border-radius:7px; font-size:11.5px;
+  background:var(--alerta-bg); color:var(--alerta)}
+.drill .semnada{padding:26px; text-align:center; color:var(--txt-3); font-size:12.5px}
 
 .vazio{padding:30px; text-align:center; color:var(--txt-3)}
 .rodape{margin-top:10px; font-size:11.5px; color:var(--txt-3); display:flex;
@@ -161,11 +202,23 @@ td.acao{padding:3px 6px}
   <div class="resumo" id="resumo"></div>
 
   <div class="planilha"><table id="grade"></table></div>
-  <div class="abas" id="abas"></div>
 
   <div class="rodape">
-    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. Δ em âmbar = boleto diferente do título; selo roxo = alerta de parcela ou de fatura (passe o mouse para ler). <b>UUID</b> e <b>linha digitável</b> são só botões de copiar. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. No Δ, <b>▲</b> = boleto acima do título e <b>▼</b> = abaixo. Selo <b>roxo PARCELA</b> abre as parcelas da NF (aba “NFs Múltiplas Parcelas”); selo <b>amarelo FATURA</b> é só aviso. Clique em qualquer campo com <b>⧉</b> para copiar. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
     <span id="atualizado"></span>
+  </div>
+</div>
+
+<div class="fundo-drill" id="fundoDrill">
+  <div class="drill" role="dialog" aria-modal="true" aria-labelledby="drillTitulo">
+    <div class="cabeca">
+      <div>
+        <h2 id="drillTitulo"></h2>
+        <div class="sub" id="drillSub"></div>
+      </div>
+      <button class="fechar" type="button" id="drillFechar" title="Fechar (Esc)">✕</button>
+    </div>
+    <div class="corpo" id="drillCorpo"></div>
   </div>
 </div>
 
@@ -226,10 +279,13 @@ function linhas(){
 function marca(valor, tipo){
   if (valor == null) return `<span class="marca igual">—</span>`;
   if (!valor) return `<span class="marca igual">ok</span>`;
-  const texto = tipo === "moeda"
-    ? (valor > 0 ? "+" : "−") + moeda(Math.abs(valor))
-    : (valor > 0 ? "+" : "−") + Math.abs(valor) + "d";
-  return `<span class="marca difere">${texto}</span>`;
+  const classe = valor > 0 ? "acima" : "abaixo";
+  const seta = valor > 0 ? "▲" : "▼";
+  const corpo = tipo === "moeda" ? moeda(Math.abs(valor)) : Math.abs(valor) + "d";
+  const dica = tipo === "moeda"
+    ? `Boleto ${valor > 0 ? "acima" : "abaixo"} do título em ${moeda(Math.abs(valor))}`
+    : `Vencimento do boleto ${valor > 0 ? "depois" : "antes"} do título em ${Math.abs(valor)} dia(s)`;
+  return `<span class="marca ${classe}" title="${esc(dica)}"><span class="seta">${seta}</span>${corpo}</span>`;
 }
 
 function celulaCompacta(r, col){
@@ -246,15 +302,16 @@ function celulaCompacta(r, col){
 
   const valor = r.c[col.chave] ?? "";
 
-  if (col.copiar){
+  if (col.copiavel){
     const copia = r.copia[col.chave] ?? valor;
     // so_botao: UUID e linha digitavel viram um campo enxuto, so de copiar
     if (col.so_botao){
       return `<td class="acao ${zona}"><button class="botao-copia so ${copia ? "" : "vazio"}" type="button"
-        data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span>${esc(col.copiar)}</span></button></td>`;
+        data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span class="rot">${esc(col.copiar)}</span></button></td>`;
     }
+    // o proprio valor e o botao: clicou, copiou (numero do titulo, cod. do fornecedor)
     return `<td class="acao ${zona}"><button class="botao-copia" type="button"
-      data-copiar="${esc(copia)}" title="${esc(valor)}"><code>${esc(valor) || "—"}</code><span>${esc(col.copiar)}</span></button></td>`;
+      data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
   if (col.chave === "status"){
     return `<td class="selo-cel ${zona}"><span class="selo ${r.forte ? "forte" : "provavel"}"
@@ -263,7 +320,11 @@ function celulaCompacta(r, col){
   if (col.chave === "alerta_fatura"){
     if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
     const classe = {PARCELA:"parcela", FATURA:"fatura"}[r.alerta.tipo] || "outro";
-    return `<td class="selo-cel ${zona}" title="${esc(valor)}"><span class="selo ${classe}">${esc(r.alerta.tipo)}</span></td>`;
+    const temDrill = r.alerta.tipo === "PARCELA" && (DADOS.parcelas || {})[r.alerta.nf];
+    const dica = temDrill ? "Clique para ver todas as parcelas desta NF\n\n" + valor : valor;
+    return `<td class="selo-cel ${zona}" title="${esc(dica)}"><span
+      class="selo ${classe}${temDrill ? " abre" : ""}"
+      ${temDrill ? `data-drill="${esc(r.alerta.nf)}"` : ""}>${esc(r.alerta.tipo)}</span></td>`;
   }
   if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"){
     return `<td class="fornecedor ${zona}"><span class="nome" title="${esc(valor)}">${esc(valor)}</span></td>`;
@@ -307,6 +368,57 @@ function desenharConferencia(itens){
   return cabeca + "<tbody>" + corpo + "</tbody>";
 }
 
+/* ---------- drill: todas as parcelas daquela NF ----------
+   Fonte: aba "NFs Múltiplas Parcelas" da base. O alerta diz quantas parcelas
+   o DDA achou; aqui o usuario ve uma por uma para decidir o que fazer. */
+function abrirDrill(nf){
+  const boletos = (DADOS.parcelas || {})[nf] || [];
+  const fundo = document.getElementById("fundoDrill");
+  const linhaDoAlerta = DADOS.linhas.find(r => r.alerta.nf === nf && r.alerta.tipo === "PARCELA");
+  const fornecedor = boletos.length ? boletos[0].fornecedor : "";
+
+  document.getElementById("drillTitulo").textContent = `NF ${nf} · ${boletos.length} parcela${boletos.length === 1 ? "" : "s"} no DDA`;
+  document.getElementById("drillSub").textContent =
+    [fornecedor, boletos.length ? boletos[0].empresa : ""].filter(Boolean).join(" · ");
+
+  const total = boletos.reduce((s, b) => s + (b.valor_n || 0), 0);
+  const corpo = boletos.length
+    ? `${linhaDoAlerta ? `<p class="aviso">${esc(linhaDoAlerta.c.alerta_fatura || "")}</p>` : ""}
+       <table><thead><tr>
+         <th>Parcela</th><th>Vencimento</th><th>Emissão</th><th class="num">Valor</th>
+         <th>Nosso Número</th><th>Linha digitável</th>
+       </tr></thead><tbody>
+       ${boletos.map((b, i) => `<tr class="${i % 2 ? "par" : ""}">
+         <td><span class="parc">${esc(b.parcela) || "—"}</span></td>
+         <td>${esc(b.venc)}</td>
+         <td>${esc(b.emissao)}</td>
+         <td class="num">${esc(b.valor)}</td>
+         <td>${esc(b.nosso)}</td>
+         <td><button class="botao-copia" type="button" data-copiar="${esc(b.copia)}"
+               title="Clique para copiar"><code>${esc(b.linha)}</code><span class="rot">⧉</span></button></td>
+       </tr>`).join("")}
+       </tbody></table>
+       <div class="totais">
+         <span><b>${boletos.length}</b> boleto${boletos.length === 1 ? "" : "s"}</span>
+         <span>Soma das parcelas: <b>${moeda(total)}</b></span>
+       </div>`
+    : `<div class="semnada">Esta NF não aparece na aba “NFs Múltiplas Parcelas” da base.</div>`;
+
+  document.getElementById("drillCorpo").innerHTML = corpo;
+  fundo.classList.add("aberto");
+  document.getElementById("drillFechar").focus();
+}
+
+function fecharDrill(){
+  document.getElementById("fundoDrill").classList.remove("aberto");
+}
+
+document.getElementById("drillFechar").addEventListener("click", fecharDrill);
+document.getElementById("fundoDrill").addEventListener("click", e => {
+  if (e.target.id === "fundoDrill") fecharDrill();   // clique fora da caixa
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") fecharDrill(); });
+
 function desenhar(){
   if (!DADOS) return;               // ainda sem carteira: nada a desenhar
   const grade = document.getElementById("grade");
@@ -346,20 +458,29 @@ async function copiarTexto(texto){
   return ok;
 }
 
-document.getElementById("grade").addEventListener("click", e => {
+/* Copiar vale na tabela E dentro do drill, por isso fica no document. */
+document.addEventListener("click", e => {
   const botao = e.target.closest("[data-copiar]");
-  if (botao){
-    if (!botao.dataset.copiar) return;
-    const rotulo = botao.querySelector("span") || botao;
-    const antes = rotulo.dataset.antes || rotulo.textContent;
-    rotulo.dataset.antes = antes;
-    copiarTexto(botao.dataset.copiar).then(ok => {
-      rotulo.textContent = ok ? "ok" : "falhou";
-      botao.classList.toggle("feito", ok);
-      setTimeout(() => { rotulo.textContent = antes; botao.classList.remove("feito"); }, 1400);
-    });
-    return;
-  }
+  if (!botao || !botao.dataset.copiar) return;
+  const rotulo = botao.querySelector(".rot") || botao;
+  const antes = rotulo.dataset.antes ?? rotulo.textContent;
+  rotulo.dataset.antes = antes;
+  clearTimeout(botao._voltar);
+  copiarTexto(botao.dataset.copiar).then(ok => {
+    rotulo.textContent = ok ? "copiado ✓" : "falhou";
+    botao.classList.toggle("feito", ok);
+    botao.classList.toggle("falhou", !ok);
+    botao._voltar = setTimeout(() => {
+      rotulo.textContent = antes;
+      botao.classList.remove("feito", "falhou");
+    }, 1600);
+  });
+});
+
+document.getElementById("grade").addEventListener("click", e => {
+  const parcela = e.target.closest("[data-drill]");
+  if (parcela){ abrirDrill(parcela.dataset.drill); return; }
+
   const titulo = e.target.closest("th[data-ord]");
   if (titulo){
     const chave = titulo.dataset.ord;
@@ -387,8 +508,6 @@ function iniciar(dados){
   DADOS = dados;
   dados.linhas.forEach(r => { if (r.feito) feitos.add(r.uuid); });
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
-  document.getElementById("abas").innerHTML = dados.abas.map(a =>
-    `<span class="aba ${a.ativa ? "ativa" : ""}" ${a.ativa ? "" : 'title="Ainda não levada para o painel"'}>${esc(a.nome)}<small>${num(a.linhas)}</small></span>`).join("");
   desenhar();
 }
 window.__INICIAR_PAINEL__ = iniciar;

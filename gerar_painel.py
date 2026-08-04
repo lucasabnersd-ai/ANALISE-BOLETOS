@@ -38,6 +38,7 @@ DEV = PASTA / "dev.html"
 
 ABA_ASSOCIACOES = "Associações Encontradas"
 ABA_RESUMO = "Resumo"
+ABA_PARCELAS = "NFs Múltiplas Parcelas"
 
 # So a linha digitavel entra; o codigo de barras fica de fora (pedido do usuario).
 IGNORAR = {"Código de Barras"}
@@ -52,8 +53,10 @@ DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         "DT Baixa", "DT Contab."}
 INTEIRO = {"Score Match", "2º Score", "Margem"}
 
-# Colunas com botao de copiar (o usuario cola no SE2 / no banco).
-COPIAVEIS = {"Campo UUID": "UUID", "Linha Digitável": "LINHA", "Fornecedor": "cód"}
+# Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
+# aparece nas que sao SO_BOTAO; nas outras o proprio valor e o botao.
+COPIAVEIS = {"Campo UUID": "UUID", "Linha Digitável": "LINHA",
+             "Fornecedor": "", "No. Titulo": ""}
 
 # Dessas o valor nem aparece: a coluna e so o botao de copiar (sao longas demais
 # e o usuario nunca le, so cola).
@@ -80,14 +83,16 @@ COMPACTA = [
     ("Campo UUID",        "",       "",           4),
     ("Filial",            "",       "",           3),
     ("Prefixo",           "",       "",           3.5),
-    ("No. Titulo",        "titulo", "",           6.5),
+    ("No. Titulo",        "titulo", "NF",         7),
+    # A NF do boleto sai do lugar dela na base para ficar colada na do titulo
+    # (pedido do usuario): e essa comparacao que ele faz o tempo todo.
+    ("NF/Doc Boleto",     "boleto", "NF",         6.5),
     ("Parcela",           "titulo", "",           3),
     ("Fornecedor",        "titulo", "",           5.5),
     ("Razão Social",      "titulo", "",          14),
-    ("NF/Doc Boleto",     "boleto", "",           5.5),
     ("Vlr.Titulo",        "titulo", "VALOR",      7),
     ("Valor Boleto",      "boleto", "VALOR",      7),
-    ("@delta_valor",      "delta",  "VALOR",      7.5),
+    ("@delta_valor",      "delta",  "VALOR",      5.5),
     ("Vencimento",        "titulo", "VENCIMENTO", 6),
     ("Vencto Real",       "titulo", "VENCIMENTO", 6),
     ("Vencimento Boleto", "boleto", "VENCIMENTO", 6),
@@ -280,7 +285,7 @@ def ler_associacoes(wb):
             "delta": {"valor": delta_bruto(origem, "Valor Boleto"),
                       "dias": delta_bruto(origem, "Vencimento Boleto")},
             "forte": "FORTE" in texto(origem.get("Status")).upper(),
-            "alerta": {"tipo": tipo_alerta(origem.get("Alerta Fatura"))},
+            "alerta": montar_alerta(origem),
             "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
         })
 
@@ -303,6 +308,7 @@ def montar_compacta(cabecalho: list[str]) -> list[dict]:
             "lado": lado,
             "grupo": grupo,
             "largura": largura,
+            "copiavel": rotulo in COPIAVEIS,
             "copiar": COPIAVEIS.get(rotulo, ""),
             "so_botao": rotulo in SO_BOTAO,
             "check": rotulo == COLUNA_CHECK,
@@ -319,6 +325,69 @@ def tipo_alerta(valor) -> str:
         if any(m in texto_alerta for m in marcadores):
             return rotulo
     return "ALERTA"
+
+
+def montar_alerta(origem: dict) -> dict:
+    """Tipo do alerta + a NF que o drill de parcelas abre.
+
+    A NF vem do TEXTO do alerta ("... - NF 000013303: ...") e nao da coluna
+    NF/Doc Boleto: quem escreveu o alerta sabia de qual NF estava falando, e a
+    coluna as vezes traz dois numeros no mesmo campo.
+    """
+    bruto = texto(origem.get("Alerta Fatura"))
+    tipo = tipo_alerta(bruto)
+    if not tipo:
+        return {"tipo": "", "nf": ""}
+    achada = re.search(r"\bNF\s+([0-9]+)", bruto, re.IGNORECASE)
+    nf = nf_chave(achada.group(1)) if achada else nf_chave(origem.get("NF/Doc Boleto"))
+    return {"tipo": tipo, "nf": nf}
+
+
+def nf_chave(valor) -> str:
+    """NF sem zeros a esquerda -- e o unico jeito de casar as duas abas."""
+    return re.sub(r"\D", "", texto(valor)).lstrip("0")
+
+
+def ler_parcelas(wb) -> dict[str, list[dict]]:
+    """Boletos da aba 'NFs Multiplas Parcelas', agrupados por NF.
+
+    A NF aparece em dois lugares e nem sempre no mesmo: em parte das linhas ela
+    esta na coluna 'NF (9 Digitos)', em outras essa coluna vem VAZIA e a NF so
+    existe dentro do 'Nosso Numero (Ref.)', no formato 0013303-01. Ignorar o
+    segundo caminho deixaria a NF 13303 (3 boletos) fora do drill.
+    """
+    if ABA_PARCELAS not in wb.sheetnames:
+        return {}
+
+    linhas = list(wb[ABA_PARCELAS].iter_rows(values_only=True))
+    if not linhas:
+        return {}
+    cabecalho = [texto(c) for c in linhas[0]]
+
+    por_nf: dict[str, list[dict]] = {}
+    for bruta in linhas[1:]:
+        origem = dict(zip(cabecalho, bruta))
+        nosso = texto(origem.get("Nosso Número (Ref.)"))
+        chave = nf_chave(origem.get("NF (9 Dígitos)")) or nf_chave(nosso.split("-")[0])
+        if not chave:
+            continue
+        digitos = re.sub(r"\D", "", texto(origem.get("Linha Digitável")))
+        por_nf.setdefault(chave, []).append({
+            "parcela": texto(origem.get("Parcela")),
+            "venc": texto(origem.get("Data Vencimento")),
+            "emissao": texto(origem.get("Data Emissão")),
+            "valor": moeda_br(numero(origem.get("Valor (R$)"))),
+            "valor_n": numero(origem.get("Valor (R$)")) or 0.0,
+            "fornecedor": texto(origem.get("Favorecido/Fornecedor")),
+            "empresa": texto(origem.get("Empresa Pagadora")),
+            "nosso": nosso,
+            "linha": formatar_linha_digitavel(origem.get("Linha Digitável")),
+            "copia": digitos,
+        })
+
+    for boletos in por_nf.values():
+        boletos.sort(key=lambda b: (b["parcela"], b["venc"]))
+    return por_nf
 
 
 def ler_resumo(wb) -> dict:
@@ -340,10 +409,7 @@ def gerar(base: Path, saida: Path) -> dict:
     try:
         colunas, compacta, registros = ler_associacoes(wb)
         resumo = ler_resumo(wb)
-        abas = [
-            {"nome": n, "linhas": max(wb[n].max_row - 1, 0), "ativa": n == ABA_ASSOCIACOES}
-            for n in wb.sheetnames if n != ABA_RESUMO
-        ]
+        parcelas = ler_parcelas(wb)
     finally:
         wb.close()
         if temporaria:
@@ -365,7 +431,12 @@ def gerar(base: Path, saida: Path) -> dict:
         # as celulas de cada registro.
         "compacta": compacta,
         "linhas": registros,
-        "abas": abas,
+        # So as NFs que algum alerta de parcela realmente abre -- nao adianta
+        # levar as 5 NFs da aba se o painel so tem 3 alertas.
+        "parcelas": {nf: parcelas[nf] for nf in
+                     {r["alerta"]["nf"] for r in registros
+                      if r["alerta"]["tipo"] == "PARCELA" and r["alerta"]["nf"]}
+                     if nf in parcelas},
     }
 
     carga = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
