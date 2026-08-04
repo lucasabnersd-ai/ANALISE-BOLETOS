@@ -11,17 +11,25 @@
   --txt:#111827; --txt-2:#4b5563; --txt-3:#8b95a5;
   --azul:#1f4e79; --azul-2:#2f6ba8; --zebra:#ebf3fb; --sel:#dceafc;
   --ok:#0f7b52; --alerta:#8a5806; --alerta-bg:#fdf1d6;
+  /* selos: fundo forte + letra escura, para ler de longe */
+  --verde-bg:#bff0d2; --verde-txt:#04432a; --verde-linha:#2fa36b;
+  --ambar-bg:#fbdf9e; --ambar-txt:#663b03; --ambar-linha:#d99a08;
+  --roxo-bg:#e6dbff; --roxo-txt:#3f1478; --roxo-linha:#8b5cf6;
 }
 html[data-tema="escuro"]{
   --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
   --txt:#e8eefb; --txt-2:#a3b3ca; --txt-3:#6b7b98;
   --azul:#17304c; --azul-2:#5b9bd5; --zebra:#141f2e; --sel:#1d3654;
   --ok:#4ade80; --alerta:#fbbf24; --alerta-bg:#2e2611;
+  --verde-bg:#0e5b3b; --verde-txt:#c8f9dd; --verde-linha:#34d399;
+  --ambar-bg:#5c4008; --ambar-txt:#ffe3a6; --ambar-linha:#f0b429;
+  --roxo-bg:#3a2a66; --roxo-txt:#e4d8ff; --roxo-linha:#a78bfa;
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--txt);
   font:14px/1.45 "Segoe UI", Calibri, system-ui, sans-serif; -webkit-font-smoothing:antialiased}
 .envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 32px}
+body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 
 .topo{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
 .topo h1{margin:0; font-size:19px; font-weight:650; letter-spacing:-.2px}
@@ -45,10 +53,7 @@ button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 table{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
 th, td{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; text-align:left}
 
-tr.letras th{position:sticky; top:0; z-index:6; height:18px; background:var(--surface-2); color:var(--txt-3);
-  font:600 10px/18px "Segoe UI",sans-serif; text-align:center; letter-spacing:.4px;
-  border-bottom:1px solid var(--line-forte)}
-tr.titulos th{position:sticky; top:18px; z-index:6; background:var(--azul); color:#fff; font-weight:600;
+tr.titulos th{position:sticky; z-index:6; background:var(--azul); color:#fff; font-weight:600;
   font-size:11.5px; padding:7px 8px; white-space:nowrap; cursor:pointer; user-select:none;
   border-bottom:2px solid var(--line-forte); border-right-color:rgba(255,255,255,.15)}
 tr.titulos th:hover{background:var(--azul-2)}
@@ -65,15 +70,6 @@ tr.zebrada td, tr.zebrada td.gutter{background:var(--zebra)}
 tr:hover td, tr:hover td.gutter{background:var(--sel)}
 td .txt{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 td.num{text-align:right; font-variant-numeric:tabular-nums}
-td.mono .txt{font-family:"Cascadia Mono", Consolas, monospace; font-size:11px; letter-spacing:.1px}
-td.forte .txt{color:var(--ok); font-weight:600}
-td.provavel .txt{color:var(--alerta); font-weight:600}
-
-/* divergencia entre boleto e titulo */
-td.difere{background:var(--alerta-bg) !important; color:var(--alerta); white-space:nowrap}
-td.difere .txt{display:inline}
-td.difere .delta{font-size:10.5px; font-weight:600; margin-left:6px; opacity:.85}
-td.alerta{background:var(--alerta-bg) !important; color:var(--alerta)}
 
 /* marcacao de tratado */
 td.check{text-align:center; padding:4px}
@@ -81,18 +77,6 @@ td.check input{width:15px; height:15px; cursor:pointer; accent-color:var(--ok); 
 tr.feita td{color:var(--txt-3)}
 tr.feita td.check{box-shadow:inset 3px 0 0 var(--ok)}
 tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3)}
-tr.feita td.difere{color:var(--txt-3)}
-
-/* copiar */
-td.copiavel{position:relative; padding-right:4px}
-td.copiavel .interno{display:flex; align-items:center; gap:5px}
-td.copiavel .txt{flex:1}
-.copiar{font:inherit; font-size:10px; font-weight:600; cursor:pointer; flex:none; opacity:0;
-  background:var(--surface); color:var(--azul-2); border:1px solid var(--line-forte);
-  border-radius:4px; padding:1px 5px}
-tr:hover .copiar{opacity:1}
-.copiar:hover{background:var(--azul-2); color:#fff}
-.copiar.feito{opacity:1; color:var(--ok); border-color:var(--ok)}
 
 .abas{display:flex; gap:2px; background:var(--surface-2); border:1px solid var(--line-forte);
   border-top:0; border-radius:0 0 6px 6px; padding:4px 6px; overflow-x:auto}
@@ -102,6 +86,58 @@ tr:hover .copiar{opacity:1}
   color:var(--txt); font-weight:600}
 .aba:not(.ativa){opacity:.55}
 .aba small{opacity:.7; margin-left:5px}
+
+/* ---------- visao Conferencia ---------- */
+table.conferencia{table-layout:fixed; width:100%; font-size:12px}
+table.conferencia th, table.conferencia td{border-right:1px solid var(--line)}
+tr.grupos th{position:sticky; top:0; z-index:7; background:var(--surface-2); color:var(--txt-2);
+  font:600 10.5px/1 "Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:.7px;
+  padding:6px 8px; text-align:center; border-bottom:1px solid var(--line-forte)}
+tr.grupos th.g-titulo{background:var(--surface-2); color:var(--txt-2)}
+tr.grupos th.g-delta{background:var(--alerta-bg); color:var(--alerta)}
+tr.grupos th.g-boleto{background:var(--zebra); color:var(--azul-2)}
+html[data-tema="escuro"] tr.grupos th.g-boleto{color:var(--azul-2)}
+table.conferencia tr.titulos th{top:23px}
+
+td.z-titulo{background:var(--surface)}
+td.z-boleto{background:var(--zebra)}
+td.z-delta{background:var(--surface); text-align:center}
+tr.zebrada td.z-titulo{background:var(--surface-2)}
+tr.zebrada td.z-boleto{background:color-mix(in srgb, var(--zebra) 78%, var(--txt) 4%)}
+tr.zebrada td.z-delta{background:var(--surface-2)}
+table.conferencia tr:hover td{background:var(--sel) !important}
+
+.marca{display:inline-block; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+  padding:1px 7px; border-radius:4px; white-space:nowrap}
+.marca.igual{color:var(--txt-3); font-weight:500}
+.marca.difere{background:var(--alerta-bg); color:var(--alerta)}
+td.fornecedor .nome{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margin-top:1px}
+
+/* selo de Status e de Alerta: fundo cheio e letra escura, para ler de longe */
+.selo{display:inline-block; max-width:100%; font-size:10.5px; font-weight:800; letter-spacing:.3px;
+  padding:2px 7px; border-radius:5px; border:1px solid transparent; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; vertical-align:middle}
+.selo.forte{background:var(--verde-bg); color:var(--verde-txt); border-color:var(--verde-linha)}
+.selo.provavel{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
+.selo.parcela, .selo.fatura{background:var(--roxo-bg); color:var(--roxo-txt); border-color:var(--roxo-linha)}
+.selo.outro{background:var(--alerta-bg); color:var(--alerta); border-color:var(--alerta)}
+td.selo-cel{text-align:center; cursor:default}
+td.selo-cel[title]{cursor:help}
+
+td.acao{padding:3px 6px}
+.botao-copia{display:flex; align-items:center; gap:5px; width:100%; font:inherit; font-size:10.5px;
+  color:var(--txt-2); background:var(--surface); border:1px solid var(--line); border-radius:5px;
+  padding:3px 7px; cursor:pointer; text-align:left}
+.botao-copia code{flex:1; font-family:"Cascadia Mono", Consolas, monospace; font-size:10px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--txt)}
+.botao-copia span{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
+.botao-copia:hover{border-color:var(--azul-2)}
+.botao-copia.feito{border-color:var(--ok)} .botao-copia.feito span{color:var(--ok)}
+/* UUID e linha digitavel: campo so de copiar, sem gastar largura com o valor */
+.botao-copia.so{justify-content:center; padding:3px 4px}
+.botao-copia.so span{flex:1; text-align:center; font-size:10px}
+.botao-copia.so.vazio{opacity:.4; cursor:not-allowed}
 
 .vazio{padding:30px; text-align:center; color:var(--txt-3)}
 .rodape{margin-top:10px; font-size:11.5px; color:var(--txt-3); display:flex;
@@ -128,7 +164,7 @@ tr:hover .copiar{opacity:1}
   <div class="abas" id="abas"></div>
 
   <div class="rodape">
-    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. Célula em âmbar = boleto diferente do título. Passe o mouse na linha para copiar o UUID e a linha digitável. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. Δ em âmbar = boleto diferente do título; selo roxo = alerta de parcela ou de fatura (passe o mouse para ler). <b>UUID</b> e <b>linha digitável</b> são só botões de copiar. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
     <span id="atualizado"></span>
   </div>
 </div>
@@ -138,7 +174,7 @@ const DADOS = /*__DADOS__*/null;
 
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const num = v => v.toLocaleString("pt-BR");
-const letraCol = i => { let s = ""; i++; while (i > 0){ const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = (i - r - 1) / 26; } return s; };
+const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
 
 const estado = {busca:"", ordem:null, desc:false};
 
@@ -172,8 +208,10 @@ function linhas(){
   let itens = termo ? DADOS.linhas.filter(r => r.busca.includes(termo)) : DADOS.linhas.slice();
   if (estado.ordem){
     const chave = estado.ordem;
+    const deDelta = chave === "delta_valor" ? "valor" : chave === "delta_dias" ? "dias" : null;
+    const ler = r => deDelta ? Math.abs(r.delta[deDelta] ?? 0) : r.o[chave];
     itens.sort((a, b) => {
-      const va = a.o[chave], vb = b.o[chave];
+      const va = ler(a), vb = ler(b);
       if (va == null || va === "") return 1;
       if (vb == null || vb === "") return -1;
       const r = typeof va === "number" && typeof vb === "number"
@@ -184,51 +222,98 @@ function linhas(){
   return itens;
 }
 
-function celula(r, col){
-  const valor = r.c[col.chave] ?? "";
-  if (col.check){
-    return `<td class="check"><input type="checkbox" data-feito="${esc(r.uuid)}"
-      ${feitos.has(r.uuid) ? "checked" : ""} title="Marcar como tratado"></td>`;
-  }
-  const classes = [];
-  if (col.tipo === "moeda" || col.tipo === "inteiro") classes.push("num");
-  if (col.copiar) classes.push("mono", "copiavel");
-  if (col.rotulo === "Status") classes.push(r.forte ? "forte" : "provavel");
-  if (col.rotulo === "Alerta Fatura" && valor) classes.push("alerta");
-
-  const delta = r.difere[col.chave];
-  if (delta) classes.push("difere");
-
-  const texto = `<span class="txt" title="${esc(valor)}">${esc(valor)}</span>`;
-  const conteudo = col.copiar
-    ? `<div class="interno">${texto}<button class="copiar" type="button"
-         data-copiar="${esc(r.copia[col.chave] ?? valor)}" title="Copiar">${esc(col.copiar)}</button></div>`
-    : texto + (delta ? `<span class="delta">${esc(delta)}</span>` : "");
-
-  return `<td class="${classes.join(" ")}">${conteudo}</td>`;
+/* ---------- visao Conferencia (mesma ordem de colunas da base) ---------- */
+function marca(valor, tipo){
+  if (valor == null) return `<span class="marca igual">—</span>`;
+  if (!valor) return `<span class="marca igual">ok</span>`;
+  const texto = tipo === "moeda"
+    ? (valor > 0 ? "+" : "−") + moeda(Math.abs(valor))
+    : (valor > 0 ? "+" : "−") + Math.abs(valor) + "d";
+  return `<span class="marca difere">${texto}</span>`;
 }
 
-function desenhar(){
-  const itens = linhas();
-  const cols = DADOS.colunas;
-  const grade = document.getElementById("grade");
+function celulaCompacta(r, col){
+  const zona = col.lado ? `z-${col.lado === "delta" ? "delta" : col.lado}` : "z-titulo";
 
-  const cabeca = `<thead>
-    <tr class="letras"><th class="canto"></th>${cols.map((_, i) => `<th>${letraCol(i)}</th>`).join("")}</tr>
+  if (col.check){
+    return `<td class="check ${zona}"><input type="checkbox" data-feito="${esc(r.uuid)}"
+      ${feitos.has(r.uuid) ? "checked" : ""} title="Marcar como tratado"></td>`;
+  }
+  if (col.tipo === "delta"){
+    const chave = col.chave === "delta_valor" ? "valor" : "dias";
+    return `<td class="${zona}">${marca(r.delta[chave], chave === "valor" ? "moeda" : "dias")}</td>`;
+  }
+
+  const valor = r.c[col.chave] ?? "";
+
+  if (col.copiar){
+    const copia = r.copia[col.chave] ?? valor;
+    // so_botao: UUID e linha digitavel viram um campo enxuto, so de copiar
+    if (col.so_botao){
+      return `<td class="acao ${zona}"><button class="botao-copia so ${copia ? "" : "vazio"}" type="button"
+        data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span>${esc(col.copiar)}</span></button></td>`;
+    }
+    return `<td class="acao ${zona}"><button class="botao-copia" type="button"
+      data-copiar="${esc(copia)}" title="${esc(valor)}"><code>${esc(valor) || "—"}</code><span>${esc(col.copiar)}</span></button></td>`;
+  }
+  if (col.chave === "status"){
+    return `<td class="selo-cel ${zona}"><span class="selo ${r.forte ? "forte" : "provavel"}"
+      title="${esc(valor)}">${esc(valor)}</span></td>`;
+  }
+  if (col.chave === "alerta_fatura"){
+    if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
+    const classe = {PARCELA:"parcela", FATURA:"fatura"}[r.alerta.tipo] || "outro";
+    return `<td class="selo-cel ${zona}" title="${esc(valor)}"><span class="selo ${classe}">${esc(r.alerta.tipo)}</span></td>`;
+  }
+  if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"){
+    return `<td class="fornecedor ${zona}"><span class="nome" title="${esc(valor)}">${esc(valor)}</span></td>`;
+  }
+
+  const classe = (col.tipo === "moeda" || col.tipo === "inteiro") ? "num" : "";
+  return `<td class="${classe} ${zona}"><span class="txt" title="${esc(valor)}">${esc(valor)}</span></td>`;
+}
+
+function desenharConferencia(itens){
+  const cols = DADOS.compacta;
+  const grupos = [];
+  cols.forEach(c => {
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.nome === c.grupo && c.grupo) ultimo.qtd++;
+    else grupos.push({nome:c.grupo, qtd:1});
+  });
+
+  // Em table-layout:fixed as larguras vem da primeira linha -- que aqui tem
+  // colspan. Por isso as medidas ficam no colgroup, que tem precedencia.
+  const medidas = `<colgroup><col style="width:40px">${
+    cols.map(c => `<col style="width:${c.largura}%">`).join("")}</colgroup>`;
+
+  const cabeca = `${medidas}<thead>
+    <tr class="grupos"><th class="canto"></th>${grupos.map(g => {
+      const classe = g.nome === "VALOR" || g.nome === "VENCIMENTO" ? "g-delta"
+        : g.nome === "FORNECEDOR" ? "g-boleto" : "g-titulo";
+      return `<th colspan="${g.qtd}" class="${g.nome ? classe : "g-titulo"}">${esc(g.nome)}</th>`;
+    }).join("")}</tr>
     <tr class="titulos"><th class="canto">#</th>${cols.map(c => {
       const ativa = estado.ordem === c.chave;
-      return `<th style="min-width:${c.largura}px" data-ord="${c.chave}" class="${ativa ? "ativa" : ""}">
+      return `<th style="width:${c.largura}%" data-ord="${c.chave}" class="${ativa ? "ativa" : ""}">
         ${esc(c.rotulo)}<span class="ord">${ativa ? (estado.desc ? "▼" : "▲") : "▾"}</span></th>`;
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
     ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""}">
-        <td class="gutter">${i + 1}</td>${cols.map(c => celula(r, c)).join("")}</tr>`).join("")
+        <td class="gutter">${i + 1}</td>${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
     : `<tr><td class="vazio" colspan="${cols.length + 1}">Nenhuma linha encontrada.</td></tr>`;
 
-  grade.innerHTML = cabeca + "<tbody>" + corpo + "</tbody>";
+  return cabeca + "<tbody>" + corpo + "</tbody>";
+}
+
+function desenhar(){
+  const grade = document.getElementById("grade");
+  grade.className = "conferencia";
+  grade.innerHTML = desenharConferencia(linhas());
   mostrarResumo();
 }
+document.body.classList.add("amplo");
 
 document.getElementById("grade").addEventListener("change", e => {
   const caixa = e.target.closest("[data-feito]");
@@ -241,13 +326,36 @@ document.getElementById("grade").addEventListener("change", e => {
 
 document.getElementById("busca").addEventListener("input", e => { estado.busca = e.target.value; desenhar(); });
 
+/* navigator.clipboard falha quando a aba nao esta em foco ou fora de HTTPS;
+   por isso o plano B com textarea + execCommand. */
+async function copiarTexto(texto){
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch (e) {}
+  const campo = document.createElement("textarea");
+  campo.value = texto;
+  campo.setAttribute("readonly", "");
+  campo.style.cssText = "position:fixed;top:0;left:-9999px";
+  document.body.appendChild(campo);
+  campo.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) {}
+  campo.remove();
+  return ok;
+}
+
 document.getElementById("grade").addEventListener("click", e => {
   const botao = e.target.closest("[data-copiar]");
   if (botao){
-    navigator.clipboard.writeText(botao.dataset.copiar).then(() => {
-      const antes = botao.textContent;
-      botao.textContent = "ok"; botao.classList.add("feito");
-      setTimeout(() => { botao.textContent = antes; botao.classList.remove("feito"); }, 1400);
+    if (!botao.dataset.copiar) return;
+    const rotulo = botao.querySelector("span") || botao;
+    const antes = rotulo.dataset.antes || rotulo.textContent;
+    rotulo.dataset.antes = antes;
+    copiarTexto(botao.dataset.copiar).then(ok => {
+      rotulo.textContent = ok ? "ok" : "falhou";
+      botao.classList.toggle("feito", ok);
+      setTimeout(() => { rotulo.textContent = antes; botao.classList.remove("feito"); }, 1400);
     });
     return;
   }
