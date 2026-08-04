@@ -78,35 +78,42 @@ CONFRONTOS = {
 # ORDEM DA BASE. Como a base ja poe titulo e boleto lado a lado, a unica coisa
 # acrescentada e a coluna de diferenca (@delta_*), logo depois do par.
 #   (rotulo, lado, grupo, largura relativa)
+# Empresa pagadora e contraparte NAO entram aqui: elas sao colunas do drill
+# (o usuario corrigiu isso em 04/08/2026). A tabela principal segue enxuta.
 COMPACTA = [
-    ("CHECK (FEITO)",     "",       "",           3),
-    ("Campo UUID",        "",       "",           4),
+    ("CHECK (FEITO)",     "",       "",           2.5),
+    ("Campo UUID",        "",       "",           3.5),
     ("Filial",            "",       "",           3),
-    ("Prefixo",           "",       "",           3.5),
-    ("No. Titulo",        "titulo", "NF",         7),
+    ("Prefixo",           "",       "",           3),
     # A NF do boleto sai do lugar dela na base para ficar colada na do titulo
     # (pedido do usuario): e essa comparacao que ele faz o tempo todo.
-    ("NF/Doc Boleto",     "boleto", "NF",         6.5),
+    ("No. Titulo",        "titulo", "NF",         6.5),
+    ("NF/Doc Boleto",     "boleto", "NF",         6),
     ("Parcela",           "titulo", "",           3),
-    ("Fornecedor",        "titulo", "",           5.5),
-    ("Razão Social",      "titulo", "",          14),
-    ("Vlr.Titulo",        "titulo", "VALOR",      7),
-    ("Valor Boleto",      "boleto", "VALOR",      7),
-    ("@delta_valor",      "delta",  "VALOR",      5.5),
-    ("Vencimento",        "titulo", "VENCIMENTO", 6),
-    ("Vencto Real",       "titulo", "VENCIMENTO", 6),
-    ("Vencimento Boleto", "boleto", "VENCIMENTO", 6),
-    ("@delta_dias",       "delta",  "VENCIMENTO", 4),
-    ("Status",            "",       "",           8),
-    ("Alerta Fatura",     "",       "",           6),
-    ("Linha Digitável",   "",       "",           4.5),
+    ("Fornecedor",        "titulo", "",           5),
+    ("Razão Social",      "titulo", "",          13),
+    ("Vlr.Titulo",        "titulo", "VALOR",      6.5),
+    ("Valor Boleto",      "boleto", "VALOR",      6.5),
+    ("@delta_valor",      "delta",  "VALOR",      5),
+    ("Vencimento",        "titulo", "VENCIMENTO", 5.5),
+    ("Vencto Real",       "titulo", "VENCIMENTO", 5.5),
+    ("Vencimento Boleto", "boleto", "VENCIMENTO", 5.5),
+    ("@delta_dias",       "delta",  "VENCIMENTO", 3.5),
+    ("Status",            "",       "",           7),
+    ("Alerta Fatura",     "",       "",           5),
+    ("@tratativa",        "",       "",           3.5),
+    ("Linha Digitável",   "",       "",           4),
 ]
 
 # Cabecalho mais curto na Conferencia (o painel casa a coluna pela chave, nao
 # pelo rotulo -- renomear aqui e seguro).
 ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Alerta Fatura": "Alerta", "Campo UUID": "UUID",
-                    "Linha Digitável": "Linha dig."}
+                    "Linha Digitável": "Linha dig.", "@tratativa": "Tratativa",
+                    "No. Titulo": "Nº título", "NF/Doc Boleto": "NF boleto",
+                    "Razão Social": "Razão social", "Fornecedor": "Cód.",
+                    "Vlr.Titulo": "Vlr. título", "Vencto Real": "Vencto real",
+                    "Vencimento Boleto": "Venc. boleto"}
 
 LARGURAS = {
     "Campo UUID": 296, "Razão Social": 250, "Fornecedor Boleto": 200,
@@ -304,7 +311,8 @@ def montar_compacta(cabecalho: list[str]) -> list[dict]:
         colunas.append({
             "chave": rotulo.lstrip("@") if virtual else chave_de(rotulo),
             "rotulo": ROTULOS_COMPACTA.get(rotulo, rotulo),
-            "tipo": "delta" if virtual else tipo_da_coluna(rotulo),
+            "tipo": ("tratativa" if rotulo == "@tratativa" else "delta") if virtual
+                    else tipo_da_coluna(rotulo),
             "lado": lado,
             "grupo": grupo,
             "largura": largura,
@@ -340,7 +348,18 @@ def montar_alerta(origem: dict) -> dict:
         return {"tipo": "", "nf": ""}
     achada = re.search(r"\bNF\s+([0-9]+)", bruto, re.IGNORECASE)
     nf = nf_chave(achada.group(1)) if achada else nf_chave(origem.get("NF/Doc Boleto"))
-    return {"tipo": tipo, "nf": nf}
+    # O quadro que aparece ao passar o mouse: o que a base tem para justificar
+    # o alerta, sem obrigar o usuario a abrir o Excel.
+    return {
+        "tipo": tipo,
+        "nf": nf,
+        "texto": bruto,
+        "criterio": texto(origem.get("Critério Match")),
+        "fonte": texto(origem.get("Fonte Boleto")),
+        "score": texto(origem.get("Score Match")),
+        "score2": texto(origem.get("2º Score")),
+        "margem": texto(origem.get("Margem")),
+    }
 
 
 def nf_chave(valor) -> str:

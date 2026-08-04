@@ -15,7 +15,8 @@
   --verde-bg:#bff0d2; --verde-txt:#04432a; --verde-linha:#2fa36b;
   --ambar-bg:#fbdf9e; --ambar-txt:#663b03; --ambar-linha:#d99a08;
   --roxo-bg:#e6dbff; --roxo-txt:#3f1478; --roxo-linha:#8b5cf6;
-  --sobe-bg:#fcdcdc; --sobe-txt:#8c1111; --desce-bg:#d6e8fb; --desce-txt:#0f3f70;
+  --sobe-bg:#fcdcdc; --sobe-txt:#8c1111; --sobe-linha:#e88a8a;
+  --desce-bg:#d6e8fb; --desce-txt:#0f3f70; --desce-linha:#88b4e0;
 }
 html[data-tema="escuro"]{
   --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
@@ -25,7 +26,8 @@ html[data-tema="escuro"]{
   --verde-bg:#0e5b3b; --verde-txt:#c8f9dd; --verde-linha:#34d399;
   --ambar-bg:#5c4008; --ambar-txt:#ffe3a6; --ambar-linha:#f0b429;
   --roxo-bg:#3a2a66; --roxo-txt:#e4d8ff; --roxo-linha:#a78bfa;
-  --sobe-bg:#5a1a1a; --sobe-txt:#ffd4d4; --desce-bg:#123a5e; --desce-txt:#cfe6ff;
+  --sobe-bg:#5a1a1a; --sobe-txt:#ffd4d4; --sobe-linha:#b45252;
+  --desce-bg:#123a5e; --desce-txt:#cfe6ff; --desce-linha:#4a7fb5;
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--txt);
@@ -34,7 +36,7 @@ body{margin:0; background:var(--bg); color:var(--txt);
 body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 
 .topo{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
-.topo h1{margin:0; font-size:19px; font-weight:650; letter-spacing:-.2px}
+.topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px}
 .topo h1 span{color:var(--txt-3); font-weight:400}
 .resumo{font-size:13px; color:var(--txt-2)}
 .resumo b{color:var(--txt); font-weight:640}
@@ -50,17 +52,21 @@ button.leve{font:inherit; font-size:12.5px; color:var(--txt-2); background:var(-
 button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 
 /* ---------- planilha ---------- */
-.planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:6px 6px 0 0;
-  overflow:auto; max-height:78vh}
+.planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
+  overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05)}
+html[data-tema="escuro"] .planilha{box-shadow:0 8px 26px rgba(0,0,0,.35)}
 table{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
 th, td{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; text-align:left}
 
-tr.titulos th{position:sticky; z-index:6; background:var(--azul); color:#fff; font-weight:600;
-  font-size:11.5px; padding:7px 8px; white-space:nowrap; cursor:pointer; user-select:none;
-  border-bottom:2px solid var(--line-forte); border-right-color:rgba(255,255,255,.15)}
+tr.titulos th{position:sticky; z-index:6; background:var(--azul); color:#fff; font-weight:700;
+  font-size:10px; letter-spacing:.6px; text-transform:uppercase; line-height:1.25;
+  padding:8px 7px; cursor:pointer; user-select:none; text-align:center; vertical-align:middle;
+  white-space:normal; overflow-wrap:anywhere;
+  border-bottom:2px solid var(--line-forte); border-right-color:rgba(255,255,255,.18)}
 tr.titulos th:hover{background:var(--azul-2)}
-tr.titulos th .ord{opacity:0; margin-left:4px; font-size:9px}
-tr.titulos th:hover .ord, tr.titulos th.ativa .ord{opacity:.85}
+tr.titulos th.ativa{background:var(--azul-2); box-shadow:inset 0 -3px 0 rgba(255,255,255,.55)}
+tr.titulos th .ord{opacity:0; margin-left:3px; font-size:8px}
+tr.titulos th:hover .ord, tr.titulos th.ativa .ord{opacity:.9}
 th.canto{position:sticky; left:0; z-index:8; background:var(--surface-2); width:40px; min-width:40px}
 tr.titulos th.canto{background:var(--azul); z-index:9; cursor:default}
 td.gutter{position:sticky; left:0; z-index:4; width:40px; min-width:40px; background:var(--surface-2);
@@ -84,13 +90,15 @@ tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3
 table.conferencia{table-layout:fixed; width:100%; font-size:12px}
 table.conferencia th, table.conferencia td{border-right:1px solid var(--line)}
 tr.grupos th{position:sticky; top:0; z-index:7; background:var(--surface-2); color:var(--txt-2);
-  font:600 10.5px/1 "Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:.7px;
-  padding:6px 8px; text-align:center; border-bottom:1px solid var(--line-forte)}
-tr.grupos th.g-titulo{background:var(--surface-2); color:var(--txt-2)}
+  font:700 9.5px/1 "Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:1.1px;
+  padding:7px 8px; text-align:center; border-bottom:1px solid var(--line-forte)}
+tr.grupos th.g-titulo{background:var(--surface-2); color:var(--txt-3)}
 tr.grupos th.g-delta{background:var(--alerta-bg); color:var(--alerta)}
 tr.grupos th.g-boleto{background:var(--zebra); color:var(--azul-2)}
+tr.grupos th.g-parte{background:var(--roxo-bg); color:var(--roxo-txt)}
+tr.grupos th.g-nf{background:var(--verde-bg); color:var(--verde-txt)}
 html[data-tema="escuro"] tr.grupos th.g-boleto{color:var(--azul-2)}
-table.conferencia tr.titulos th{top:23px}
+table.conferencia tr.titulos th{top:24px}
 
 td.z-titulo{background:var(--surface)}
 td.z-boleto{background:var(--zebra)}
@@ -100,15 +108,45 @@ tr.zebrada td.z-boleto{background:color-mix(in srgb, var(--zebra) 78%, var(--txt
 tr.zebrada td.z-delta{background:var(--surface-2)}
 table.conferencia tr:hover td{background:var(--sel) !important}
 
-.marca{display:inline-block; font-size:10.5px; font-weight:700; font-variant-numeric:tabular-nums;
-  padding:1px 5px; border-radius:4px; white-space:nowrap}
-.marca.igual{color:var(--txt-3); font-weight:500}
+.marca{display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700;
+  font-variant-numeric:tabular-nums; padding:2px 7px; border-radius:999px; white-space:nowrap;
+  border:1px solid transparent; line-height:1.35}
+.marca.igual{color:var(--txt-3); font-weight:600; background:var(--surface-2);
+  border-color:var(--line); font-size:10px; letter-spacing:.4px}
 .marca.difere{background:var(--alerta-bg); color:var(--alerta)}
 /* Δ: a seta diz de cara para que lado o boleto puxou, sem precisar ler o sinal.
    acima = boleto MAIOR que o titulo (vermelho); abaixo = menor (azul). */
-.marca.acima{background:var(--sobe-bg); color:var(--sobe-txt)}
-.marca.abaixo{background:var(--desce-bg); color:var(--desce-txt)}
-.marca .seta{font-size:9px; margin-right:2px}
+.marca.acima{background:var(--sobe-bg); color:var(--sobe-txt); border-color:var(--sobe-linha)}
+.marca.abaixo{background:var(--desce-bg); color:var(--desce-txt); border-color:var(--desce-linha)}
+.marca .seta{font-size:8px; line-height:1; opacity:.9}
+
+/* ---------- quadro que aparece ao passar o mouse ---------- */
+.cartao{position:fixed; z-index:60; max-width:430px; display:none; pointer-events:none;
+  background:var(--surface); color:var(--txt); border:1px solid var(--line-forte);
+  border-radius:9px; box-shadow:0 14px 38px rgba(15,23,42,.28); padding:0; overflow:hidden;
+  font-size:11.5px; line-height:1.45}
+.cartao.aberto{display:block}
+.cartao .topo-cartao{padding:8px 11px; font-weight:800; font-size:10.5px; letter-spacing:.7px;
+  text-transform:uppercase}
+.cartao.parcela .topo-cartao{background:var(--roxo-bg); color:var(--roxo-txt)}
+.cartao.fatura  .topo-cartao{background:var(--ambar-bg); color:var(--ambar-txt)}
+.cartao.nota    .topo-cartao{background:var(--verde-bg); color:var(--verde-txt)}
+.cartao .conteudo{padding:10px 11px}
+.cartao .frase{margin:0 0 9px; color:var(--txt)}
+.cartao dl{margin:0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px}
+.cartao dt{color:var(--txt-3); font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+  white-space:nowrap}
+.cartao dd{margin:0; color:var(--txt-2)}
+.cartao .rodape-cartao{padding:7px 11px; border-top:1px solid var(--line); background:var(--surface-2);
+  color:var(--txt-3); font-size:10.5px}
+
+/* ---------- tratativa ---------- */
+td.trat{text-align:center; padding:3px}
+.btn-trat{font:inherit; font-size:10px; font-weight:700; cursor:pointer; line-height:1;
+  background:var(--surface); color:var(--txt-3); border:1px dashed var(--line-forte);
+  border-radius:999px; padding:3px 8px; white-space:nowrap}
+.btn-trat:hover{border-color:var(--azul-2); color:var(--azul-2); border-style:solid}
+.btn-trat.tem{background:var(--verde-bg); color:var(--verde-txt); border:1px solid var(--verde-linha)}
 td.fornecedor .nome{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
 td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margin-top:1px}
 
@@ -172,6 +210,8 @@ td.acao{padding:3px 6px}
 .drill .num{text-align:right; font-variant-numeric:tabular-nums}
 .drill .parc{font-weight:700; color:var(--roxo-txt); background:var(--roxo-bg);
   border-radius:4px; padding:1px 7px; font-size:10.5px}
+.drill td.parte{max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:11px; color:var(--txt-2)}
 html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 .drill .totais{display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; padding-top:10px;
   border-top:1px solid var(--line-forte); font-size:12px; color:var(--txt-2)}
@@ -208,6 +248,8 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <span id="atualizado"></span>
   </div>
 </div>
+
+<div class="cartao" id="cartao"></div>
 
 <div class="fundo-drill" id="fundoDrill">
   <div class="drill" role="dialog" aria-modal="true" aria-labelledby="drillTitulo">
@@ -246,6 +288,16 @@ try {
 
 function gravarFeitos(){
   try { localStorage.setItem(CHAVE_FEITOS, JSON.stringify([...feitos])); } catch (e) {}
+}
+
+/* Tratativa: anotacao livre por titulo, na mesma logica do check -- gravada
+   por UUID neste navegador, entao sobrevive a cada regeracao do painel. */
+const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
+let tratativas = {};
+try { tratativas = JSON.parse(localStorage.getItem(CHAVE_TRATATIVAS) || "{}") || {}; } catch (e) {}
+
+function gravarTratativas(){
+  try { localStorage.setItem(CHAVE_TRATATIVAS, JSON.stringify(tratativas)); } catch (e) {}
 }
 
 function mostrarResumo(){
@@ -299,6 +351,11 @@ function celulaCompacta(r, col){
     const chave = col.chave === "delta_valor" ? "valor" : "dias";
     return `<td class="${zona}">${marca(r.delta[chave], chave === "valor" ? "moeda" : "dias")}</td>`;
   }
+  if (col.tipo === "tratativa"){
+    const nota = tratativas[r.uuid] || "";
+    return `<td class="trat ${zona}"><button class="btn-trat ${nota ? "tem" : ""}" type="button"
+      data-trat="${esc(r.uuid)}">${nota ? "✎ nota" : "+ nota"}</button></td>`;
+  }
 
   const valor = r.c[col.chave] ?? "";
 
@@ -321,9 +378,9 @@ function celulaCompacta(r, col){
     if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
     const classe = {PARCELA:"parcela", FATURA:"fatura"}[r.alerta.tipo] || "outro";
     const temDrill = r.alerta.tipo === "PARCELA" && (DADOS.parcelas || {})[r.alerta.nf];
-    const dica = temDrill ? "Clique para ver todas as parcelas desta NF\n\n" + valor : valor;
-    return `<td class="selo-cel ${zona}" title="${esc(dica)}"><span
-      class="selo ${classe}${temDrill ? " abre" : ""}"
+    // sem title: quem explica o alerta agora e o quadro que abre no hover
+    return `<td class="selo-cel ${zona}"><span
+      class="selo ${classe}${temDrill ? " abre" : ""}" data-cartao="${esc(r.uuid)}"
       ${temDrill ? `data-drill="${esc(r.alerta.nf)}"` : ""}>${esc(r.alerta.tipo)}</span></td>`;
   }
   if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"){
@@ -350,8 +407,8 @@ function desenharConferencia(itens){
 
   const cabeca = `${medidas}<thead>
     <tr class="grupos"><th class="canto"></th>${grupos.map(g => {
-      const classe = g.nome === "VALOR" || g.nome === "VENCIMENTO" ? "g-delta"
-        : g.nome === "FORNECEDOR" ? "g-boleto" : "g-titulo";
+      const classe = {VALOR:"g-delta", VENCIMENTO:"g-delta", CONTRAPARTE:"g-parte",
+                      NF:"g-nf", EMPRESA:"g-boleto"}[g.nome] || "g-titulo";
       return `<th colspan="${g.qtd}" class="${g.nome ? classe : "g-titulo"}">${esc(g.nome)}</th>`;
     }).join("")}</tr>
     <tr class="titulos"><th class="canto">#</th>${cols.map(c => {
@@ -368,6 +425,71 @@ function desenharConferencia(itens){
   return cabeca + "<tbody>" + corpo + "</tbody>";
 }
 
+/* ---------- quadro de hover ----------
+   Substitui o `title` do navegador: cabe texto longo, formatado, e nao some
+   sozinho depois de alguns segundos. */
+const cartao = document.getElementById("cartao");
+
+function posicionarCartao(alvo){
+  const r = alvo.getBoundingClientRect();
+  cartao.classList.add("aberto");                 // precisa medir ja visivel
+  const c = cartao.getBoundingClientRect();
+  const folga = 8;
+  let x = Math.min(Math.max(folga, r.left), innerWidth  - c.width  - folga);
+  let y = r.bottom + folga;
+  if (y + c.height > innerHeight - folga) y = Math.max(folga, r.top - c.height - folga);
+  cartao.style.left = x + "px";
+  cartao.style.top  = y + "px";
+}
+
+function abrirCartaoAlerta(alvo, uuid){
+  const r = DADOS.linhas.find(l => l.uuid === uuid);
+  if (!r || !r.alerta.tipo) return;
+  const a = r.alerta;
+  const linhas = [
+    ["NF", a.nf || "—"],
+    ["Fornecedor", r.c.razao_social || r.c.fornecedor_boleto || "—"],
+    ["Critério do match", a.criterio || "—"],
+    ["Fonte", a.fonte || "—"],
+    ["Score", [a.score && `${a.score} pts`, a.score2 && `2º ${a.score2}`,
+               a.margem && `margem ${a.margem}`].filter(Boolean).join(" · ") || "—"],
+  ];
+  cartao.className = "cartao " + (a.tipo === "PARCELA" ? "parcela" : "fatura");
+  cartao.innerHTML =
+    `<div class="topo-cartao">Alerta de ${esc(a.tipo.toLowerCase())}</div>
+     <div class="conteudo">
+       <p class="frase">${esc(a.texto)}</p>
+       <dl>${linhas.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("")}</dl>
+     </div>` +
+    (a.tipo === "PARCELA" && (DADOS.parcelas || {})[a.nf]
+      ? `<div class="rodape-cartao">Clique para ver as ${DADOS.parcelas[a.nf].length} parcelas desta NF</div>`
+      : "");
+  posicionarCartao(alvo);
+}
+
+function abrirCartaoTratativa(alvo, uuid){
+  const nota = tratativas[uuid];
+  if (!nota) return;
+  cartao.className = "cartao nota";
+  cartao.innerHTML = `<div class="topo-cartao">Tratativa</div>
+    <div class="conteudo"><p class="frase">${esc(nota)}</p></div>
+    <div class="rodape-cartao">Clique para editar ou apagar</div>`;
+  posicionarCartao(alvo);
+}
+
+function fecharCartao(){ cartao.classList.remove("aberto"); }
+
+document.addEventListener("mouseover", e => {
+  const selo = e.target.closest("[data-cartao]");
+  if (selo) return abrirCartaoAlerta(selo, selo.dataset.cartao);
+  const trat = e.target.closest("[data-trat]");
+  if (trat) return abrirCartaoTratativa(trat, trat.dataset.trat);
+});
+document.addEventListener("mouseout", e => {
+  if (e.target.closest("[data-cartao]") || e.target.closest("[data-trat]")) fecharCartao();
+});
+addEventListener("scroll", fecharCartao, true);
+
 /* ---------- drill: todas as parcelas daquela NF ----------
    Fonte: aba "NFs Múltiplas Parcelas" da base. O alerta diz quantas parcelas
    o DDA achou; aqui o usuario ve uma por uma para decidir o que fazer. */
@@ -378,18 +500,21 @@ function abrirDrill(nf){
   const fornecedor = boletos.length ? boletos[0].fornecedor : "";
 
   document.getElementById("drillTitulo").textContent = `NF ${nf} · ${boletos.length} parcela${boletos.length === 1 ? "" : "s"} no DDA`;
-  document.getElementById("drillSub").textContent =
-    [fornecedor, boletos.length ? boletos[0].empresa : ""].filter(Boolean).join(" · ");
+  // empresa e contraparte agora sao colunas da tabela; aqui fica so o contexto
+  document.getElementById("drillSub").textContent = fornecedor;
 
   const total = boletos.reduce((s, b) => s + (b.valor_n || 0), 0);
   const corpo = boletos.length
     ? `${linhaDoAlerta ? `<p class="aviso">${esc(linhaDoAlerta.c.alerta_fatura || "")}</p>` : ""}
        <table><thead><tr>
-         <th>Parcela</th><th>Vencimento</th><th>Emissão</th><th class="num">Valor</th>
+         <th>Parcela</th><th>Empresa pagadora</th><th>Contraparte</th>
+         <th>Vencimento</th><th>Emissão</th><th class="num">Valor</th>
          <th>Nosso Número</th><th>Linha digitável</th>
        </tr></thead><tbody>
        ${boletos.map((b, i) => `<tr class="${i % 2 ? "par" : ""}">
          <td><span class="parc">${esc(b.parcela) || "—"}</span></td>
+         <td class="parte" title="${esc(b.empresa)}">${esc(b.empresa) || "—"}</td>
+         <td class="parte" title="${esc(b.fornecedor)}">${esc(b.fornecedor) || "—"}</td>
          <td>${esc(b.venc)}</td>
          <td>${esc(b.emissao)}</td>
          <td class="num">${esc(b.valor)}</td>
@@ -478,6 +603,19 @@ document.addEventListener("click", e => {
 });
 
 document.getElementById("grade").addEventListener("click", e => {
+  const nota = e.target.closest("[data-trat]");
+  if (nota){
+    const uuid = nota.dataset.trat;
+    const antes = tratativas[uuid] || "";
+    const texto = prompt("Tratativa deste título (deixe em branco para apagar):", antes);
+    if (texto === null) return;                    // cancelou
+    if (texto.trim()) tratativas[uuid] = texto.trim(); else delete tratativas[uuid];
+    gravarTratativas();
+    fecharCartao();
+    desenhar();
+    return;
+  }
+
   const parcela = e.target.closest("[data-drill]");
   if (parcela){ abrirDrill(parcela.dataset.drill); return; }
 
