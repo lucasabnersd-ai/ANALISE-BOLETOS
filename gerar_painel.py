@@ -217,6 +217,9 @@ ABAS = {
         "prefixo_uuid": "BOL:",
         "rotulos": {"Fornecedor": "Fornecedor", "Parcela": "Parc."},
         "nao_copiar": {"Fornecedor"},
+        # As duas NFs viram campo de copiar: e o que se cola no TOTVS para
+        # procurar o titulo que ainda nao foi associado.
+        "copiar_extra": {"NF Normalizada": "", "NF/Doc Original": ""},
         # Esta aba se PARTE EM DUAS no painel, pela data de vencimento. O corte
         # acontece no navegador, nao aqui: so assim a NF anda sozinha da visao
         # futura para a visao passado quando o dia vira -- se o corte fosse
@@ -487,9 +490,11 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
         if not virtual and rotulo != COLUNA_CHECK and rotulo not in ordem_base:
             continue  # a base mudou de nome: melhor faltar a coluna do que errar
         # Em Futuros NF a coluna "Fornecedor" e o NOME, nao o codigo: la ela nao
-        # vira botao de copiar e nem se chama "Cód.".
+        # vira botao de copiar e nem se chama "Cód.". A mesma aba ganha as NFs
+        # copiaveis, que nao sao copiaveis nas outras.
         rotulos = {**ROTULOS_COMPACTA, **cfg.get("rotulos", {})}
-        copiavel = rotulo in COPIAVEIS and rotulo not in cfg.get("nao_copiar", ())
+        copiaveis = {**COPIAVEIS, **cfg.get("copiar_extra", {})}
+        copiavel = rotulo in copiaveis and rotulo not in cfg.get("nao_copiar", ())
         colunas.append({
             "chave": rotulo.lstrip("@") if virtual else chave_de(rotulo),
             "rotulo": rotulos.get(rotulo, rotulo),
@@ -503,7 +508,7 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             "papel": ("status" if rotulo == cfg["col_status"]
                       else "alerta" if rotulo == "Alerta Fatura" else ""),
             "copiavel": copiavel,
-            "copiar": COPIAVEIS.get(rotulo, "") if copiavel else "",
+            "copiar": copiaveis.get(rotulo, "") if copiavel else "",
             "so_botao": rotulo in SO_BOTAO,
             "check": rotulo == COLUNA_CHECK,
             # Cabecalho da EXPORTACAO. Na tela o rotulo e abreviado porque o
