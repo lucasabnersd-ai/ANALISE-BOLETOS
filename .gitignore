@@ -19,5 +19,10 @@ dev.html
 *.json
 *.json.gz
 
+# Os backups do banco sao a carteira inteira em texto puro (fornecedor, CNPJ,
+# linha digitavel). Ja caem no *.json acima, mas a pasta fica barrada por nome
+# tambem: um backup salvo com outra extensao nao pode escapar para o Pages.
+BACKUPS/
+
 # Token estreito de upload
 .analise_boletos_token
