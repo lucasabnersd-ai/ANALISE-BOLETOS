@@ -109,13 +109,15 @@
 
   /* ---------------- dados ---------------- */
   async function baixarCarteira() {
+    // so os ativos: os que sairam da base ficam no banco, mas fora do painel
     var t = await sb.from("analise_boletos_titulos")
-      .select("uuid,dados").order("uuid", { ascending: true });
+      .select("uuid,dados").eq("ativo", true)
+      .order("uuid", { ascending: true }).limit(20000);
     if (t.error) throw t.error;
     if (!t.data.length) throw new Error("a carteira está vazia no servidor");
 
     var m = await sb.from("analise_boletos_marcacoes")
-      .select("uuid,feito,tratativa,tratado_em,quem");
+      .select("uuid,feito,tratativa,tratado_em,tratado_por,quem").limit(20000);
     if (m.error) throw m.error;
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
@@ -134,12 +136,15 @@
         delta: d.delta || {}, forte: !!d.forte,
         alerta: d.alerta || { tipo: "", nf: "" },
         match: d.match || null,
+        selo: d.selo || "", ocr: !!d.ocr,
         feito: marca.feito != null ? marca.feito : !!d.feito,
         tratativa: marca.tratativa || "",
         tratado_em: marca.tratado_em || "",
+        tratado_por: marca.tratado_por || "",
         quem: marca.quem || "",
-        // remontados aqui para nao trafegar duplicado
-        o: d.c || {},
+        // `o` so traz o que difere do exibido (numero cru, data ISO); o resto
+        // cai no proprio `c`. Ordenar pelo texto formatado daria ordem errada.
+        o: Object.assign({}, d.c || {}, d.o || {}),
         busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),
       });
     });
@@ -151,6 +156,7 @@
         id: id, nome: m.nome || id, cor: m.cor || "azul",
         ordem: m.ordem == null ? 99 : m.ordem,
         compacta: m.compacta || [], parcelas: m.parcelas || {},
+        pills: m.pills || null, ocr: m.ocr || 0,
         com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
         linhas: porAba[id],
       };

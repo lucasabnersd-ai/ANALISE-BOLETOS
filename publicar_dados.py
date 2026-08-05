@@ -46,6 +46,13 @@ def enxugar(carga: dict) -> list[dict]:
                 "dados": {
                     "aba": aba["id"],
                     "c": {k: v for k, v in r["c"].items() if k in usadas and v},
+                    # `o` e a chave de ORDENACAO: numero cru e data ISO. Sem ele
+                    # o painel ordenava pelo texto formatado ("R$ 5.427,50",
+                    # "01/08/2026") e a ordem saia errada.
+                    "o": {k: v for k, v in r["o"].items()
+                          if k in usadas and v not in (None, "") and v != r["c"].get(k)},
+                    "selo": r["selo"],
+                    "ocr": r["ocr"],
                     "copia": r["copia"],
                     "difere": r["difere"],
                     "delta": r["delta"],
@@ -68,6 +75,8 @@ def enxugar(carga: dict) -> list[dict]:
                         "divergentes": aba["divergentes"],
                         "compacta": aba["compacta"],
                         "parcelas": aba["parcelas"],
+                        "pills": aba["pills"],
+                        "ocr": aba["ocr"],
                     } if primeiro else None,
                 },
             })

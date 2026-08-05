@@ -189,8 +189,14 @@ ABAS = {
     },
     "futuros": {
         "planilha": ABA_FUTUROS,
-        "nome": "Futuros NF Não Associada",
+        "nome": "NFs (não associadas · visão futura)",
         "cor": "vermelho",
+        # Botoes de filtro por fonte do boleto, so nesta aba.
+        "pills": "Fonte Boleto",
+        # Todo mundo aqui e "sem par encontrado" (decisao do usuario): a base
+        # ainda traz "CANDIDATO EM REVISÃO" em alguns, mas no painel nao vale
+        # a distincao -- nenhum deles achou titulo.
+        "forcar_status": "SEM PAR ENCONTRADO",
         "compacta": COMPACTA_FUTUROS,
         "confrontos": {},          # nao ha titulo para confrontar
         "col_status": "Situação",
@@ -394,6 +400,8 @@ def ler_aba(wb, cfg: dict):
             elif rotulo == "Linha Digitável":
                 celulas[chave] = formatar_linha_digitavel(valor)
                 ordem[chave] = re.sub(r"\D", "", texto(valor))
+            elif rotulo == cfg["col_status"] and cfg.get("forcar_status"):
+                celulas[chave] = ordem[chave] = cfg["forcar_status"]
             else:
                 celulas[chave] = ordem[chave] = texto(valor)
 
@@ -416,6 +424,7 @@ def ler_aba(wb, cfg: dict):
             # titulo esta em revisao, entao o selo nunca e verde.
             "forte": "FORTE" in texto(origem.get(cfg["col_status"])).upper(),
             "selo": selo_status(origem, cfg),
+            "ocr": ocr_suspeito(origem),
             "alerta": montar_alerta(origem, cfg),
             "match": montar_match(origem, cfg),
             "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
@@ -489,12 +498,25 @@ def chave_registro(origem: dict, cfg: dict) -> str:
 
 def selo_status(origem: dict, cfg: dict) -> str:
     """forte (verde) / provavel (ambar) / grave (vermelho)."""
-    valor = texto(origem.get(cfg["col_status"])).upper()
+    valor = (cfg.get("forcar_status") or texto(origem.get(cfg["col_status"]))).upper()
     if "FORTE" in valor:
         return "forte"
     if "SEM PAR" in valor:
         return "grave"
     return "provavel"
+
+
+# Boletos do CENTRAL cujo fornecedor saiu como "FABIO COSTA LIMA" sao leitura
+# errada do OCR -- o nome nao e do fornecedor de verdade. Marcar para a pessoa
+# nao sair atras do Fabio.
+OCR_FORNECEDOR = "FABIO COSTA LIMA"
+OCR_FONTE = "CENTRAL"
+
+
+def ocr_suspeito(origem: dict) -> bool:
+    fornecedor = texto(origem.get("Fornecedor")).upper()
+    fonte = texto(origem.get("Fonte Boleto")).upper()
+    return OCR_FORNECEDOR in fornecedor and OCR_FONTE in fonte
 
 
 def montar_match(origem: dict, cfg: dict) -> dict:
@@ -646,6 +668,14 @@ def gerar(base: Path, saida: Path) -> dict:
             "cor": cfg["cor"],
             "compacta": compacta,
             "linhas": registros,
+            # botoes de filtro (so onde a aba define uma coluna para isso)
+            "pills": {
+                "chave": chave_de(cfg["pills"]),
+                "rotulo": cfg["pills"],
+                "valores": sorted({r["c"].get(chave_de(cfg["pills"]), "")
+                                   for r in registros} - {""}),
+            } if cfg.get("pills") else None,
+            "ocr": sum(1 for r in registros if r["ocr"]),
             "com_alerta": sum(1 for r in registros if r["c"].get("alerta_fatura")),
             "divergentes": sum(1 for r in registros if r["difere"]),
             # So as NFs que algum alerta de parcela realmente abre -- nao adianta

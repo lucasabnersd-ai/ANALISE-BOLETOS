@@ -120,6 +120,31 @@ body[data-aba="futuros"] tr.grupos th.g-parte{background:var(--sobe-bg); color:v
 .filtros button{font:inherit; font-size:11.5px; font-weight:600; cursor:pointer; color:var(--txt-2);
   background:var(--surface-2); border:1px solid var(--line-forte); border-radius:6px; padding:6px 12px}
 .filtros button:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
+.filtros .espaco{flex:1}
+.filtros input[type="date"]{width:140px}
+#exportar{background:var(--acento, var(--azul-2)); border-color:var(--acento, var(--azul-2)); color:#fff}
+#exportar:hover{filter:brightness(1.08); color:#fff}
+
+/* botoes de filtro por fonte do boleto */
+.pills{display:flex; gap:6px; flex-wrap:wrap; margin:0 0 9px}
+.pills:empty{display:none}
+.pills button{font:inherit; font-size:11.5px; font-weight:650; cursor:pointer; color:var(--txt-2);
+  background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:5px 13px;
+  display:inline-flex; align-items:center; gap:6px}
+.pills button small{font-size:10px; font-weight:700; opacity:.75}
+.pills button:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
+.pills button.ativa{background:var(--acento, var(--azul-2)); border-color:var(--acento, var(--azul-2));
+  color:#fff}
+.pills button.ativa small{opacity:.9}
+
+/* aviso proprio da aba */
+.aviso-aba{margin:0 0 10px; padding:10px 13px; border-radius:9px; font-size:12.5px; line-height:1.5;
+  background:var(--ambar-bg); color:var(--ambar-txt); border:1px solid var(--ambar-linha)}
+.aviso-aba b{font-weight:800}
+.aviso-aba[hidden]{display:none}
+/* marca na linha lida errado pelo OCR */
+.selo.ocr{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha);
+  margin-left:5px; cursor:help}
 
 /* ---------- planilha ---------- */
 .planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
@@ -225,7 +250,9 @@ td.z-delta{white-space:nowrap; overflow:hidden; padding:5px 3px}
 
 /* ---------- tratativa ---------- */
 td.quando{white-space:nowrap; font-size:11px; color:var(--verde-txt); background:var(--verde-bg);
-  font-variant-numeric:tabular-nums; text-align:center}
+  font-variant-numeric:tabular-nums; text-align:center; line-height:1.3}
+td.quando .por{display:block; font-size:9.5px; opacity:.8; overflow:hidden;
+  text-overflow:ellipsis; font-variant-numeric:normal}
 td.trat{text-align:center; padding:3px}
 .btn-trat{font:inherit; font-size:10px; font-weight:700; cursor:pointer; line-height:1;
   background:var(--surface); color:var(--txt-3); border:1px dashed var(--line-forte);
@@ -312,6 +339,11 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 /* caixa da tratativa: mesma moldura do drill, mas estreita */
 .drill.estreito{width:min(560px,100%)}
 .drill .cabeca.verde{background:var(--verde-bg); color:var(--verde-txt)}
+.drill .campo-nome{display:flex; flex-direction:column; gap:4px; margin-bottom:10px;
+  font-size:9.5px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--txt-3)}
+.drill .campo-nome input{font:inherit; font-size:12.5px; color:var(--txt); background:var(--surface-2);
+  border:1px solid var(--line-forte); border-radius:7px; padding:7px 10px; outline:none}
+.drill .campo-nome input:focus{border-color:var(--azul-2)}
 .drill textarea{width:100%; box-sizing:border-box; font:inherit; font-size:12.5px; line-height:1.5;
   color:var(--txt); background:var(--surface-2); border:1px solid var(--line-forte);
   border-radius:8px; padding:10px 11px; resize:vertical; outline:none}
@@ -358,12 +390,18 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   <div class="filtros" id="filtros">
     <label>Fornecedor<input type="search" data-filtro="fornecedor" placeholder="nome ou código" autocomplete="off"></label>
     <label>Valor<input type="search" data-filtro="valor" placeholder="5.427 ou 5427" autocomplete="off"></label>
-    <label>Vencimento<input type="search" data-filtro="venc" placeholder="01/08 ou 08/2026" autocomplete="off"></label>
+    <label>Vencimento de<input type="date" data-filtro="vencDe"></label>
+    <label>até<input type="date" data-filtro="vencAte"></label>
     <label>Nº título<input type="search" data-filtro="titulo" placeholder="000050174" autocomplete="off"></label>
     <label>NF<input type="search" data-filtro="nf" placeholder="50174" autocomplete="off"></label>
     <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
     <button type="button" id="limparFiltros" hidden>Limpar</button>
+    <span class="espaco"></span>
+    <button type="button" id="exportar" title="Baixa o que está na tela, com as marcações">⤓ Exportar</button>
   </div>
+
+  <div class="pills" id="pills"></div>
+  <div class="aviso-aba" id="avisoAba" hidden></div>
 
   <div class="planilha"><table id="grade"></table></div>
 
@@ -398,6 +436,11 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
       <button class="fechar" type="button" id="notaFechar" title="Fechar (Esc)">✕</button>
     </div>
     <div class="corpo">
+      <label class="campo-nome">Quem está tratando
+        <input id="notaQuem" type="text" maxlength="120" autocomplete="name"
+          placeholder="seu nome" list="pessoas">
+      </label>
+      <datalist id="pessoas"></datalist>
       <textarea id="notaTexto" rows="5" maxlength="2000"
         placeholder="O que foi feito neste título? Ex.: liguei no fornecedor, aguardando 2ª via."></textarea>
       <div class="botoes">
@@ -423,8 +466,8 @@ const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const num = v => v.toLocaleString("pt-BR");
 const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
 
-const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"",
-                filtros:{fornecedor:"", valor:"", venc:"", titulo:"", nf:"", uuid:""}};
+const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:"",
+                filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"", titulo:"", nf:"", uuid:""}};
 
 /* A aba ativa responde por linhas, colunas e parcelas. Cada aba da base vira
    uma aba aqui, com colunas proprias -- elas nao tem os mesmos campos. */
@@ -474,9 +517,25 @@ const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
 let tratativas = {};
 try { tratativas = JSON.parse(localStorage.getItem(CHAVE_TRATATIVAS) || "{}") || {}; } catch (e) {}
 
+/* Quem esta tratando: digitado pela pessoa, por titulo. O ultimo nome usado
+   fica lembrado para nao ter de redigitar a cada linha. */
+const CHAVE_RESP = "painel_boletos_responsaveis";
+const CHAVE_ULTIMO_RESP = "painel_boletos_ultimo_resp";
+let responsaveis = {};
+try { responsaveis = JSON.parse(localStorage.getItem(CHAVE_RESP) || "{}") || {}; } catch (e) {}
+let ultimoResp = "";
+try { ultimoResp = localStorage.getItem(CHAVE_ULTIMO_RESP) || ""; } catch (e) {}
+
 function gravarTratativas(uuid){
-  if (noBanco()) { window.__SALVAR_MARCACAO__(uuid, {tratativa: tratativas[uuid] || null}); return; }
-  try { localStorage.setItem(CHAVE_TRATATIVAS, JSON.stringify(tratativas)); } catch (e) {}
+  if (noBanco()) {
+    window.__SALVAR_MARCACAO__(uuid, {tratativa: tratativas[uuid] || null,
+                                      tratado_por: responsaveis[uuid] || null});
+    return;
+  }
+  try {
+    localStorage.setItem(CHAVE_TRATATIVAS, JSON.stringify(tratativas));
+    localStorage.setItem(CHAVE_RESP, JSON.stringify(responsaveis));
+  } catch (e) {}
 }
 
 function mostrarResumo(){
@@ -491,12 +550,41 @@ function mostrarResumo(){
    isso a lista de candidatas em vez de uma chave so. */
 const CAMPOS_FILTRO = {
   fornecedor: ["razao_social", "fornecedor", "nome_fornece", "fornecedor_boleto"],
-  valor:      ["vlr_titulo", "valor_boleto", "valor_titulo_r", "valor_boleto_r"],
-  venc:       ["vencimento", "vencto_real", "vencimento_boleto"],
+  valor:      ["vlr_titulo", "valor_boleto", "valor_titulo_r", "valor_boleto_r", "valor_r"],
   titulo:     ["no_titulo"],
-  nf:         ["nf_doc_boleto"],
+  nf:         ["nf_doc_boleto", "nf_doc_original", "nf_normalizada"],
   uuid:       ["campo_uuid"],
 };
+// O vencimento tem filtro proprio (intervalo), entao sai da busca por texto.
+const COLUNAS_VENC = ["vencimento", "vencto_real", "vencimento_boleto"];
+
+/* A data vem em ISO no mapa de ordenacao (`o`); o `c` traz dd/mm/aaaa. */
+function dataISO(r, chave){
+  const bruto = r.o[chave];
+  if (bruto && /^\d{4}-\d{2}-\d{2}/.test(bruto)) return bruto.slice(0, 10);
+  const exibido = r.c[chave] || "";
+  const p = exibido.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return p ? `${p[3]}-${p[2]}-${p[1]}` : "";
+}
+
+/* "Mais recente" = a maior data que a linha tiver (emissao ou vencimento). */
+const COLUNAS_RECENTE = ["dt_emissao", "vencimento", "vencimento_boleto", "vencto_real"];
+function recente(r){
+  let maior = "";
+  for (const chave of COLUNAS_RECENTE){
+    const d = dataISO(r, chave);
+    if (d > maior) maior = d;
+  }
+  return maior;
+}
+
+function dentroDoPeriodo(r, de, ate){
+  return COLUNAS_VENC.some(chave => {
+    const d = dataISO(r, chave);
+    if (!d) return false;
+    return (!de || d >= de) && (!ate || d <= ate);
+  });
+}
 // Filtros numericos casam tambem so pelos digitos: "5427" acha "R$ 5.427,50"
 // e "082026" acha "01/08/2026".
 const SO_DIGITOS = new Set(["valor", "venc", "titulo", "nf"]);
@@ -519,8 +607,14 @@ function linhas(){
 
   for (const [campo, texto] of Object.entries(estado.filtros)){
     const alvo = (texto || "").trim();
-    if (alvo) itens = itens.filter(r => casaFiltro(r, campo, alvo));
+    if (alvo && CAMPOS_FILTRO[campo]) itens = itens.filter(r => casaFiltro(r, campo, alvo));
   }
+  const {vencDe, vencAte} = estado.filtros;
+  if (vencDe || vencAte) itens = itens.filter(r => dentroDoPeriodo(r, vencDe, vencAte));
+
+  // botao de fonte do boleto
+  const pills = A().pills;
+  if (estado.pill && pills) itens = itens.filter(r => r.c[pills.chave] === estado.pill);
   // o check move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
   itens = itens.filter(r => feitos.has(r.uuid) === tratado);
@@ -530,12 +624,22 @@ function linhas(){
     const ler = r => deDelta ? Math.abs(r.delta[deDelta] ?? 0) : r.o[chave];
     itens.sort((a, b) => {
       const va = ler(a), vb = ler(b);
-      if (va == null || va === "") return 1;
-      if (vb == null || vb === "") return -1;
-      const r = typeof va === "number" && typeof vb === "number"
-        ? va - vb : String(va).localeCompare(String(vb), "pt-BR");
+      // vazio vai sempre para o fim, independente do sentido -- senao inverter
+      // a ordem enchia a primeira tela de linha em branco
+      const vazioA = va == null || va === "", vazioB = vb == null || vb === "";
+      if (vazioA && vazioB) return 0;
+      if (vazioA) return 1;
+      if (vazioB) return -1;
+      // numero em texto ("1234,50") tem de comparar como numero
+      const na = Number(va), nb = Number(vb);
+      const r = (Number.isFinite(na) && Number.isFinite(nb) && va !== "" && vb !== "")
+        ? na - nb
+        : String(va).localeCompare(String(vb), "pt-BR", {numeric:true, sensitivity:"base"});
       return estado.desc ? -r : r;
     });
+  } else {
+    // Sem coluna escolhida: mais recente primeiro (pedido do usuario).
+    itens.sort((a, b) => (recente(b) || "").localeCompare(recente(a) || ""));
   }
   return itens;
 }
@@ -566,7 +670,9 @@ function celulaCompacta(r, col){
   }
   if (col.tipo === "quando"){
     const quando = tratadoEm[r.uuid] || r.tratado_em || "";
-    return `<td class="${zona} quando" title="${esc(r.quem || "")}">${esc(dataHora(quando)) || "—"}</td>`;
+    const quem = responsaveis[r.uuid] || r.tratado_por || r.quem || "";
+    return `<td class="${zona} quando" title="${esc(quem)}">${esc(dataHora(quando)) || "—"}${
+      quem ? `<span class="por">${esc(quem)}</span>` : ""}</td>`;
   }
   if (col.tipo === "tratativa"){
     const nota = tratativas[r.uuid] || "";
@@ -601,8 +707,12 @@ function celulaCompacta(r, col){
       class="selo ${classe}${temDrill ? " abre" : ""}" data-cartao="${esc(r.uuid)}"
       ${temDrill ? `data-drill="${esc(r.alerta.nf)}"` : ""}>${esc(r.alerta.tipo)}</span></td>`;
   }
-  if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"){
-    return `<td class="fornecedor ${zona}"><span class="nome" title="${esc(valor)}">${esc(valor)}</span></td>`;
+  if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"
+      || (col.chave === "fornecedor" && !col.copiavel)){
+    const marca = r.ocr
+      ? ` <span class="selo ocr" title="O OCR leu o fornecedor errado neste boleto do CENTRAL — confira pelo CNPJ/CPF ou pela linha digitável.">OCR</span>`
+      : "";
+    return `<td class="fornecedor ${zona}"><span class="nome" title="${esc(valor)}">${esc(valor)}</span>${marca}</td>`;
   }
 
   const classe = (col.tipo === "moeda" || col.tipo === "inteiro") ? "num" : "";
@@ -714,12 +824,60 @@ function abrirCartaoMatch(alvo, uuid){
 function abrirCartaoTratativa(alvo, uuid){
   const nota = tratativas[uuid];
   if (!nota) return;
+  const r = A().linhas.find(l => l.uuid === uuid) || {};
+  const quem = responsaveis[uuid] || r.tratado_por || "";
+  const quando = tratadoEm[uuid] || r.tratado_em || "";
+  const rodape = [quem && "por " + quem, quando && "em " + dataHora(quando)]
+    .filter(Boolean).join(" · ");
   cartao.className = "cartao nota";
   cartao.innerHTML = `<div class="topo-cartao">Tratativa</div>
     <div class="conteudo"><p class="frase">${esc(nota)}</p></div>
-    <div class="rodape-cartao">Clique para editar ou apagar</div>`;
+    <div class="rodape-cartao">${esc(rodape) || "Clique para editar ou apagar"}</div>`;
   posicionarCartao(alvo);
 }
+
+/* ---------- exportar ----------
+   Sai o que esta na tela (aba + sub-aba + filtros), com as marcacoes juntas.
+   CSV com BOM e ; para o Excel em portugues abrir sem perguntar nada. */
+function exportar(){
+  const cols = A().compacta.filter(c => !c.check && c.tipo !== "tratativa");
+  const cabecalho = [...cols.map(c => c.rotulo),
+                     "Tratado", "Tratado em", "Tratado por", "Tratativa"];
+
+  const celula = (r, c) => {
+    if (c.tipo === "delta"){
+      const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
+      return v == null ? "" : String(v).replace(".", ",");
+    }
+    // o valor cru quando existir: no Excel numero e data tem de ser numero e data
+    const cru = r.o[c.chave];
+    if ((c.tipo === "moeda" || c.tipo === "inteiro") && cru != null && cru !== "")
+      return String(cru).replace(".", ",");
+    return r.c[c.chave] ?? "";
+  };
+
+  const linhasCsv = linhas().map(r => [
+    ...cols.map(c => celula(r, c)),
+    feitos.has(r.uuid) ? "SIM" : "NAO",
+    dataHora(tratadoEm[r.uuid] || r.tratado_em || ""),
+    responsaveis[r.uuid] || r.tratado_por || "",
+    tratativas[r.uuid] || "",
+  ]);
+
+  // ; separa campos e " escapa aspas -- sem isso um historico com ponto e
+  // virgula quebraria a planilha inteira
+  const escapa = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = "﻿" + [cabecalho, ...linhasCsv].map(l => l.map(escapa).join(";")).join("\r\n");
+
+  const nome = `${A().id}_${estado.sub}_${new Date().toISOString().slice(0, 10)}.csv`;
+  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+  const link = document.createElement("a");
+  link.href = url; link.download = nome;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById("exportar").addEventListener("click", exportar);
 
 function fecharCartao(){ cartao.classList.remove("aberto"); }
 
@@ -800,11 +958,17 @@ function abrirNota(uuid){
     : "";
   const campo = document.getElementById("notaTexto");
   campo.value = texto;
+  const quem = document.getElementById("notaQuem");
+  quem.value = responsaveis[uuid] || ultimoResp;
+  // sugere os nomes ja usados
+  document.getElementById("pessoas").innerHTML =
+    [...new Set(Object.values(responsaveis).filter(Boolean))]
+      .map(n => `<option value="${esc(n)}">`).join("");
   document.getElementById("notaApagar").hidden = !texto;
   fecharCartao();
   document.getElementById("fundoNota").classList.add("aberto");
-  campo.focus();
-  campo.setSelectionRange(texto.length, texto.length);
+  (quem.value ? campo : quem).focus();
+  if (quem.value) campo.setSelectionRange(texto.length, texto.length);
 }
 
 function fecharNota(){
@@ -816,7 +980,14 @@ function salvarNota(texto){
   if (!notaAberta) return;
   const uuid = notaAberta;
   const limpo = (texto || "").trim();
+  const quem = (document.getElementById("notaQuem").value || "").trim();
+
   if (limpo) tratativas[uuid] = limpo; else delete tratativas[uuid];
+  if (limpo && quem) responsaveis[uuid] = quem; else delete responsaveis[uuid];
+  if (quem){
+    ultimoResp = quem;
+    try { localStorage.setItem(CHAVE_ULTIMO_RESP, quem); } catch (e) {}
+  }
   gravarTratativas(uuid);
   fecharNota();
   desenhar();
@@ -862,9 +1033,47 @@ document.getElementById("abasTopo").addEventListener("click", e => {
   estado.ordem = null;              // cada aba tem colunas proprias
   estado.sub = "tratar";
   try { sessionStorage.setItem("painel_boletos_aba", estado.aba); } catch (err) {}
+  estado.pill = "";
   desenharAbasTopo();
+  desenharPills();
+  desenharAviso();
   desenhar();
 });
+
+function desenharPills(){
+  const caixa = document.getElementById("pills");
+  const pills = A().pills;
+  if (!pills || !pills.valores.length){ caixa.innerHTML = ""; return; }
+  const conta = v => A().linhas.filter(r => r.c[pills.chave] === v).length;
+  caixa.innerHTML =
+    `<button type="button" data-pill="" class="${estado.pill ? "" : "ativa"}">
+       Todas<small>${num(A().linhas.length)}</small></button>` +
+    pills.valores.map(v => `<button type="button" data-pill="${esc(v)}"
+       class="${estado.pill === v ? "ativa" : ""}">${esc(v)}<small>${num(conta(v))}</small></button>`).join("");
+}
+
+document.getElementById("pills").addEventListener("click", e => {
+  const botao = e.target.closest("[data-pill]");
+  if (!botao) return;
+  estado.pill = botao.dataset.pill;
+  desenharPills();
+  desenhar();
+});
+
+/* Aviso proprio da aba. Hoje so um: boletos do CENTRAL que sairam com
+   "Fabio Costa Lima" no fornecedor sao leitura errada do OCR. */
+function desenharAviso(){
+  const caixa = document.getElementById("avisoAba");
+  const quantos = A().ocr || 0;
+  caixa.hidden = !quantos;
+  if (quantos){
+    caixa.innerHTML = `⚠ <b>${num(quantos)}</b> boleto${quantos === 1 ? "" : "s"} desta aba
+      ${quantos === 1 ? "está" : "estão"} com <b>FABIO COSTA LIMA</b> como fornecedor e vieram do
+      <b>CENTRAL</b>. Nesses casos o <b>OCR não leu o fornecedor corretamente</b> — o nome não é o
+      do fornecedor real. Confira pelo CNPJ/CPF ou pela linha digitável. Eles estão marcados com
+      <span class="selo ocr">OCR</span> na linha.`;
+  }
+}
 
 function atualizarSubabas(){
   const tratados = A().linhas.filter(r => feitos.has(r.uuid)).length;
@@ -1000,10 +1209,13 @@ function iniciar(dados){
     // com login, o banco manda sobre o que houver gravado no navegador
     if (r.tratativa) tratativas[r.uuid] = r.tratativa;
     if (r.tratado_em) tratadoEm[r.uuid] = r.tratado_em;
+    if (r.tratado_por) responsaveis[r.uuid] = r.tratado_por;
   }));
   if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharAbasTopo();
+  desenharPills();
+  desenharAviso();
   desenhar();
 }
 window.__INICIAR_PAINEL__ = iniciar;
