@@ -32,34 +32,42 @@ def enxugar(carga: dict) -> list[dict]:
 
     O `busca` e o `o` sao remontados no navegador a partir do `c`; levar os
     tres triplicaria o texto sem ganhar nada.
+
+    O cabecalho de CADA aba (colunas, parcelas, contagens) viaja no `_meta` do
+    primeiro titulo dela -- e pequeno e evita uma segunda tabela so para isso.
     """
-    usadas = {c["chave"] for c in carga["compacta"]} | {"alerta_fatura"}
     titulos = []
-    for r in carga["linhas"]:
-        titulos.append({
-            "uuid": r["uuid"],
-            "dados": {
-                "c": {k: v for k, v in r["c"].items() if k in usadas and v},
-                "copia": r["copia"],
-                "difere": r["difere"],
-                "delta": r["delta"],
-                "forte": r["forte"],
-                "feito": r["feito"],
-                "alerta": r["alerta"],
-                # o cabecalho da carteira viaja junto do 1o titulo lido; e
-                # pequeno e evita uma 2a tabela so para metadados
-                "_meta": {
-                    "gerado_em": carga["gerado_em"],
-                    "atualizado_em": carga["atualizado_em"],
-                    "sem_codigo": carga["sem_codigo"],
-                    "associados": carga["associados"],
-                    "com_alerta": carga["com_alerta"],
-                    "divergentes": carga["divergentes"],
-                    "compacta": carga["compacta"],
-                    "parcelas": carga["parcelas"],
-                } if not titulos else None,
-            },
-        })
+    for aba in carga["abas"]:
+        usadas = {c["chave"] for c in aba["compacta"]} | {"alerta_fatura"}
+        primeiro = True
+        for r in aba["linhas"]:
+            titulos.append({
+                "uuid": r["uuid"],
+                "dados": {
+                    "aba": aba["id"],
+                    "c": {k: v for k, v in r["c"].items() if k in usadas and v},
+                    "copia": r["copia"],
+                    "difere": r["difere"],
+                    "delta": r["delta"],
+                    "forte": r["forte"],
+                    "feito": r["feito"],
+                    "alerta": r["alerta"],
+                    "match": r["match"],
+                    "_meta": {
+                        "id": aba["id"],
+                        "nome": aba["nome"],
+                        "cor": aba["cor"],
+                        "gerado_em": carga["gerado_em"],
+                        "atualizado_em": carga["atualizado_em"],
+                        "sem_codigo": carga["sem_codigo"],
+                        "com_alerta": aba["com_alerta"],
+                        "divergentes": aba["divergentes"],
+                        "compacta": aba["compacta"],
+                        "parcelas": aba["parcelas"],
+                    } if primeiro else None,
+                },
+            })
+            primeiro = False
     return titulos
 
 

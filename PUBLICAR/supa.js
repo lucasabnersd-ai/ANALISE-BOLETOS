@@ -120,17 +120,20 @@
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
 
-    // O cabecalho (colunas, parcelas, contagens) viaja no _meta de um dos
-    // titulos; e pequeno e evita uma segunda tabela so para metadados.
-    var meta = null, linhas = [];
+    // O cabecalho de cada aba (colunas, parcelas, contagens) viaja no _meta do
+    // primeiro titulo dela; e pequeno e evita uma tabela so para metadados.
+    var metas = {}, porAba = {}, geral = null;
     t.data.forEach(function (row) {
       var d = row.dados || {};
-      if (d._meta) meta = d._meta;
+      var aba = d.aba || "associacoes";
+      if (d._meta) { metas[aba] = d._meta; geral = geral || d._meta; }
       var marca = porUuid[row.uuid] || {};
-      linhas.push({
+      (porAba[aba] = porAba[aba] || []).push({
         uuid: row.uuid,
         c: d.c || {}, copia: d.copia || {}, difere: d.difere || {},
-        delta: d.delta || {}, forte: !!d.forte, alerta: d.alerta || { tipo: "", nf: "" },
+        delta: d.delta || {}, forte: !!d.forte,
+        alerta: d.alerta || { tipo: "", nf: "" },
+        match: d.match || null,
         feito: marca.feito != null ? marca.feito : !!d.feito,
         tratativa: marca.tratativa || "",
         tratado_em: marca.tratado_em || "",
@@ -140,14 +143,21 @@
         busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),
       });
     });
-    if (!meta) throw new Error("carteira sem cabeçalho (_meta)");
+    if (!geral) throw new Error("carteira sem cabeçalho (_meta)");
+
+    var abas = Object.keys(porAba).map(function (id) {
+      var m = metas[id] || {};
+      return {
+        id: id, nome: m.nome || id, cor: m.cor || "azul",
+        compacta: m.compacta || [], parcelas: m.parcelas || {},
+        com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
+        linhas: porAba[id],
+      };
+    }).filter(function (a) { return a.compacta.length; });
 
     return {
-      gerado_em: meta.gerado_em, atualizado_em: meta.atualizado_em,
-      sem_codigo: meta.sem_codigo, associados: meta.associados,
-      com_alerta: meta.com_alerta, divergentes: meta.divergentes,
-      compacta: meta.compacta, parcelas: meta.parcelas || {},
-      linhas: linhas,
+      gerado_em: geral.gerado_em, atualizado_em: geral.atualizado_em,
+      sem_codigo: geral.sem_codigo, abas: abas,
     };
   }
 

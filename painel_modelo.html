@@ -51,6 +51,34 @@ button.leve{font:inherit; font-size:12.5px; color:var(--txt-2); background:var(-
   border:1px solid var(--line); border-radius:7px; padding:7px 11px; cursor:pointer}
 button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 
+/* ---------- abas do topo: uma por aba da base ----------
+   Cada uma tem sua cor; o painel inteiro segue a cor da aba ativa, via
+   --acento / --acento-bg, para nao confundir uma com a outra. */
+.abas-topo{display:flex; gap:0; border-bottom:2px solid var(--line-forte); margin:4px 0 12px}
+.abas-topo button{font:inherit; font-size:13px; font-weight:650; color:var(--txt-3); cursor:pointer;
+  background:transparent; border:0; border-bottom:3px solid transparent; margin-bottom:-2px;
+  padding:9px 18px; display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
+.abas-topo button small{font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px;
+  background:var(--surface-2); color:var(--txt-3)}
+.abas-topo button:hover{color:var(--txt)}
+.abas-topo button.ativa{color:var(--acento); border-bottom-color:var(--acento)}
+.abas-topo button.ativa small{background:var(--acento-bg); color:var(--acento)}
+
+/* cores por aba */
+body[data-aba="associacoes"]{--acento:var(--azul-2); --acento-bg:var(--sel)}
+body[data-aba="correspondencias"]{--acento:var(--roxo-linha); --acento-bg:var(--roxo-bg)}
+html[data-tema="escuro"] body[data-aba="correspondencias"]{--acento:var(--roxo-linha)}
+body[data-aba="correspondencias"] tr.titulos th{background:#4c1d95}
+body[data-aba="correspondencias"] tr.titulos th:hover,
+body[data-aba="correspondencias"] tr.titulos th.ativa{background:#6d28d9}
+body[data-aba="correspondencias"] th.canto,
+body[data-aba="correspondencias"] tr.titulos th.canto{background:#4c1d95}
+body[data-aba="correspondencias"] tr:hover td,
+body[data-aba="correspondencias"] tr:hover td.gutter,
+body[data-aba="correspondencias"] table.conferencia tr:hover td{background:var(--roxo-bg) !important}
+body[data-aba="correspondencias"] .subabas button.ativa{background:var(--roxo-linha);
+  border-color:var(--roxo-linha); color:#fff}
+
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
 .subabas button{font:inherit; font-size:12px; font-weight:600; color:var(--txt-2); cursor:pointer;
@@ -147,6 +175,15 @@ table.conferencia tr:hover td{background:var(--sel) !important}
 .cartao.parcela .topo-cartao{background:var(--roxo-bg); color:var(--roxo-txt)}
 .cartao.fatura  .topo-cartao{background:var(--ambar-bg); color:var(--ambar-txt)}
 .cartao.nota    .topo-cartao{background:var(--verde-bg); color:var(--verde-txt)}
+.cartao.match-forte .topo-cartao{background:var(--verde-bg); color:var(--verde-txt)}
+.cartao.match-fraco .topo-cartao{background:var(--ambar-bg); color:var(--ambar-txt)}
+.cartao ul.criterios{margin:0; padding:0 0 0 16px; list-style:none}
+.cartao ul.criterios li{position:relative; margin-bottom:4px; color:var(--txt-2)}
+.cartao ul.criterios li::before{content:"✓"; position:absolute; left:-16px; color:var(--verde-linha);
+  font-weight:700; font-size:10px}
+.cartao .revisao{margin:9px 0 0; padding:7px 9px; border-radius:6px;
+  background:var(--ambar-bg); color:var(--ambar-txt); font-size:11px}
+.cartao .revisao b{font-weight:800}
 .cartao .conteudo{padding:10px 11px}
 .cartao .frase{margin:0 0 9px; color:var(--txt)}
 .cartao dl{margin:0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px}
@@ -278,6 +315,8 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     </div>
   </div>
 
+  <div class="abas-topo" id="abasTopo"></div>
+
   <div class="resumo" id="resumo"></div>
 
   <div class="subabas" id="subabas">
@@ -343,7 +382,11 @@ const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const num = v => v.toLocaleString("pt-BR");
 const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
 
-const estado = {busca:"", ordem:null, desc:false, sub:"tratar"};
+const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:""};
+
+/* A aba ativa responde por linhas, colunas e parcelas. Cada aba da base vira
+   uma aba aqui, com colunas proprias -- elas nao tem os mesmos campos. */
+const A = () => DADOS.abas.find(a => a.id === estado.aba) || DADOS.abas[0];
 
 /* Quando foi tratado, por UUID. Vem do banco (coluna tratado_em); sem login,
    e gravado aqui no navegador junto com o check. */
@@ -397,14 +440,14 @@ function gravarTratativas(uuid){
 function mostrarResumo(){
   document.getElementById("resumo").innerHTML =
     `Base de <b>${DADOS.gerado_em}</b><span class="sep">·</span>` +
-    `<b>${num(DADOS.associados)}</b> títulos associados de ${num(DADOS.sem_codigo)} sem código de boleto` +
-    `<span class="sep">·</span><b>${DADOS.com_alerta}</b> com alerta` +
-    `<span class="sep">·</span><b>${DADOS.divergentes}</b> com boleto diferente do título` +
+    `<b>${num(A().linhas.length)}</b> títulos nesta aba` +
+    `<span class="sep">·</span><b>${A().com_alerta}</b> com alerta` +
+    `<span class="sep">·</span><b>${A().divergentes}</b> com boleto diferente do título` +
     `<span class="sep">·</span><b>${feitos.size}</b> tratado${feitos.size === 1 ? "" : "s"}`;
 }
 function linhas(){
   const termo = estado.busca.trim().toLowerCase();
-  let itens = termo ? DADOS.linhas.filter(r => r.busca.includes(termo)) : DADOS.linhas.slice();
+  let itens = termo ? A().linhas.filter(r => r.busca.includes(termo)) : A().linhas.slice();
   // o check move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
   itens = itens.filter(r => feitos.has(r.uuid) === tratado);
@@ -471,14 +514,15 @@ function celulaCompacta(r, col){
     return `<td class="acao ${zona}"><button class="botao-copia" type="button"
       data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
-  if (col.chave === "status"){
+  if (col.papel === "status"){
+    // sem title: quem explica o match agora e o quadro que abre no hover
     return `<td class="selo-cel ${zona}"><span class="selo ${r.forte ? "forte" : "provavel"}"
-      title="${esc(valor)}">${esc(valor)}</span></td>`;
+      data-match="${esc(r.uuid)}">${esc(valor) || "—"}</span></td>`;
   }
-  if (col.chave === "alerta_fatura"){
+  if (col.papel === "alerta"){
     if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
     const classe = {PARCELA:"parcela", FATURA:"fatura"}[r.alerta.tipo] || "outro";
-    const temDrill = r.alerta.tipo === "PARCELA" && (DADOS.parcelas || {})[r.alerta.nf];
+    const temDrill = r.alerta.tipo === "PARCELA" && (A().parcelas || {})[r.alerta.nf];
     // sem title: quem explica o alerta agora e o quadro que abre no hover
     return `<td class="selo-cel ${zona}"><span
       class="selo ${classe}${temDrill ? " abre" : ""}" data-cartao="${esc(r.uuid)}"
@@ -495,9 +539,9 @@ function celulaCompacta(r, col){
 function desenharConferencia(itens){
   // a coluna "Tratado em" so existe na sub-aba de tratados
   const cols = estado.sub === "tratados"
-    ? [...DADOS.compacta, {chave:"tratado_em", rotulo:"Tratado em", tipo:"quando",
+    ? [...A().compacta, {chave:"tratado_em", rotulo:"Tratado em", tipo:"quando",
                            lado:"", grupo:"", largura:8}]
-    : DADOS.compacta;
+    : A().compacta;
   const grupos = [];
   cols.forEach(c => {
     const ultimo = grupos[grupos.length - 1];
@@ -548,7 +592,7 @@ function posicionarCartao(alvo){
 }
 
 function abrirCartaoAlerta(alvo, uuid){
-  const r = DADOS.linhas.find(l => l.uuid === uuid);
+  const r = A().linhas.find(l => l.uuid === uuid);
   if (!r || !r.alerta.tipo) return;
   const a = r.alerta;
   const linhas = [
@@ -566,8 +610,30 @@ function abrirCartaoAlerta(alvo, uuid){
        <p class="frase">${esc(a.texto)}</p>
        <dl>${linhas.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("")}</dl>
      </div>` +
-    (a.tipo === "PARCELA" && (DADOS.parcelas || {})[a.nf]
-      ? `<div class="rodape-cartao">Clique para ver as ${DADOS.parcelas[a.nf].length} parcelas desta NF</div>`
+    (a.tipo === "PARCELA" && (A().parcelas || {})[a.nf]
+      ? `<div class="rodape-cartao">Clique para ver as ${A().parcelas[a.nf].length} parcelas desta NF</div>`
+      : "");
+  posicionarCartao(alvo);
+}
+
+/* Resumo do match: as evidencias que a base somou para casar boleto e titulo. */
+function abrirCartaoMatch(alvo, uuid){
+  const r = A().linhas.find(l => l.uuid === uuid);
+  if (!r || !r.match) return;
+  const m = r.match;
+  const placar = [m.score && `${m.score} pts`, m.score2 && `2º ${m.score2}`,
+                  m.margem && `margem ${m.margem}`].filter(Boolean).join(" · ");
+  cartao.className = "cartao " + (r.forte ? "match-forte" : "match-fraco");
+  cartao.innerHTML =
+    `<div class="topo-cartao">${esc(m.status) || "Critério do match"}</div>
+     <div class="conteudo">
+       ${m.itens.length
+          ? `<ul class="criterios">${m.itens.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
+          : `<p class="frase">Sem critério registrado na base.</p>`}
+       ${m.revisao ? `<p class="revisao"><b>Revisar:</b> ${esc(m.revisao)}</p>` : ""}
+     </div>` +
+    (placar || m.fonte
+      ? `<div class="rodape-cartao">${esc([placar, m.fonte].filter(Boolean).join(" · "))}</div>`
       : "");
   posicionarCartao(alvo);
 }
@@ -587,11 +653,14 @@ function fecharCartao(){ cartao.classList.remove("aberto"); }
 document.addEventListener("mouseover", e => {
   const selo = e.target.closest("[data-cartao]");
   if (selo) return abrirCartaoAlerta(selo, selo.dataset.cartao);
+  const match = e.target.closest("[data-match]");
+  if (match) return abrirCartaoMatch(match, match.dataset.match);
   const trat = e.target.closest("[data-trat]");
   if (trat) return abrirCartaoTratativa(trat, trat.dataset.trat);
 });
 document.addEventListener("mouseout", e => {
-  if (e.target.closest("[data-cartao]") || e.target.closest("[data-trat]")) fecharCartao();
+  if (e.target.closest("[data-cartao]") || e.target.closest("[data-match]")
+      || e.target.closest("[data-trat]")) fecharCartao();
 });
 addEventListener("scroll", fecharCartao, true);
 
@@ -599,9 +668,9 @@ addEventListener("scroll", fecharCartao, true);
    Fonte: aba "NFs Múltiplas Parcelas" da base. O alerta diz quantas parcelas
    o DDA achou; aqui o usuario ve uma por uma para decidir o que fazer. */
 function abrirDrill(nf){
-  const boletos = (DADOS.parcelas || {})[nf] || [];
+  const boletos = (A().parcelas || {})[nf] || [];
   const fundo = document.getElementById("fundoDrill");
-  const linhaDoAlerta = DADOS.linhas.find(r => r.alerta.nf === nf && r.alerta.tipo === "PARCELA");
+  const linhaDoAlerta = A().linhas.find(r => r.alerta.nf === nf && r.alerta.tipo === "PARCELA");
   const fornecedor = boletos.length ? boletos[0].fornecedor : "";
 
   document.getElementById("drillTitulo").textContent = `NF ${nf} · ${boletos.length} parcela${boletos.length === 1 ? "" : "s"} no DDA`;
@@ -650,7 +719,7 @@ function fecharDrill(){
 let notaAberta = null;
 
 function abrirNota(uuid){
-  const r = DADOS.linhas.find(l => l.uuid === uuid);
+  const r = A().linhas.find(l => l.uuid === uuid);
   const texto = tratativas[uuid] || "";
   notaAberta = uuid;
   document.getElementById("notaSub").textContent = r
@@ -704,9 +773,29 @@ document.addEventListener("keydown", e => {
   else fecharDrill();
 });
 
+function desenharAbasTopo(){
+  document.getElementById("abasTopo").innerHTML = DADOS.abas.map(a =>
+    `<button type="button" data-aba="${esc(a.id)}" class="${a.id === estado.aba ? "ativa" : ""}">
+       ${esc(a.nome)}<small>${num(a.linhas.length)}</small></button>`).join("");
+  document.body.dataset.aba = estado.aba;
+  document.querySelector(".topo h1").innerHTML =
+    `${esc(A().nome)} <span>· Análise de Boletos</span>`;
+}
+
+document.getElementById("abasTopo").addEventListener("click", e => {
+  const botao = e.target.closest("[data-aba]");
+  if (!botao || botao.dataset.aba === estado.aba) return;
+  estado.aba = botao.dataset.aba;
+  estado.ordem = null;              // cada aba tem colunas proprias
+  estado.sub = "tratar";
+  try { sessionStorage.setItem("painel_boletos_aba", estado.aba); } catch (err) {}
+  desenharAbasTopo();
+  desenhar();
+});
+
 function atualizarSubabas(){
-  const tratados = DADOS.linhas.filter(r => feitos.has(r.uuid)).length;
-  const contas = {tratar: DADOS.linhas.length - tratados, tratados: tratados};
+  const tratados = A().linhas.filter(r => feitos.has(r.uuid)).length;
+  const contas = {tratar: A().linhas.length - tratados, tratados: tratados};
   document.querySelectorAll("#subabas button").forEach(b => {
     b.classList.toggle("ativa", b.dataset.sub === estado.sub);
     b.querySelector("span").textContent = contas[b.dataset.sub];
@@ -733,6 +822,8 @@ document.getElementById("subabas").addEventListener("click", e => {
 try {
   const sub = sessionStorage.getItem("painel_boletos_sub");
   if (sub === "tratados") estado.sub = sub;
+  const aba = sessionStorage.getItem("painel_boletos_aba");
+  if (aba) estado.aba = aba;
 } catch (e) {}
 document.body.classList.add("amplo");
 
@@ -817,13 +908,15 @@ try {
    espera o supa.js resolver window.__DADOS_BOLETOS__ depois do login. */
 function iniciar(dados){
   DADOS = dados;
-  dados.linhas.forEach(r => {
+  dados.abas.forEach(aba => aba.linhas.forEach(r => {
     if (r.feito) feitos.add(r.uuid);
     // com login, o banco manda sobre o que houver gravado no navegador
     if (r.tratativa) tratativas[r.uuid] = r.tratativa;
     if (r.tratado_em) tratadoEm[r.uuid] = r.tratado_em;
-  });
+  }));
+  if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
+  desenharAbasTopo();
   desenhar();
 }
 window.__INICIAR_PAINEL__ = iniciar;

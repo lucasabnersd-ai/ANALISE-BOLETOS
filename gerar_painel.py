@@ -37,6 +37,7 @@ DADOS_JSON = PASTA / "DADOS" / "analise_boletos.json"
 DEV = PASTA / "dev.html"
 
 ABA_ASSOCIACOES = "Associações Encontradas"
+ABA_CORRESPONDENCIAS = "Tratar Correspondências"
 ABA_RESUMO = "Resumo"
 ABA_PARCELAS = "NFs Múltiplas Parcelas"
 
@@ -48,10 +49,12 @@ IGNORAR = {"Código de Barras"}
 COLUNA_CHECK = "CHECK (FEITO)"
 
 MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
-         "Correcao", "Val Liq Baix"}
+         "Correcao", "Val Liq Baix",
+         # nomes usados na aba Tratar Correspondencias
+         "Valor Título (R$)", "Valor Boleto (R$)", "Diferença (R$)"}
 DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         "DT Baixa", "DT Contab."}
-INTEIRO = {"Score Match", "2º Score", "Margem"}
+INTEIRO = {"Score Match", "2º Score", "Margem", "Score"}
 
 # Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
 # aparece nas que sao SO_BOTAO; nas outras o proprio valor e o botao.
@@ -105,6 +108,59 @@ COMPACTA = [
     ("Linha Digitável",   "",       "",           4),
 ]
 
+# Aba "Tratar Correspondencias": MESMAS funcoes, colunas adaptadas ao que ela
+# tem. Nao existe `Status` ali -- o que manda e o `Motivo Revisão`, e valor,
+# diferenca e vencimento vem em colunas proprias.
+COMPACTA_CORRESP = [
+    ("CHECK (FEITO)",       "",       "",           2.5),
+    ("Campo UUID",          "",       "",           4),
+    ("Filial",              "",       "",           3.5),
+    ("Prefixo",             "",       "",           3.5),
+    ("No. Titulo",          "titulo", "NF",         6.5),
+    ("NF/Doc Boleto",       "boleto", "NF",         6),
+    ("Parcela",             "titulo", "",           3),
+    ("Fornecedor",          "titulo", "",           5),
+    ("Razão Social",        "titulo", "",          12),
+    ("Fornecedor Boleto",   "boleto", "",          11),
+    ("Valor Título (R$)",   "titulo", "VALOR",      6.5),
+    ("Valor Boleto (R$)",   "boleto", "VALOR",      6.5),
+    ("@delta_valor",        "delta",  "VALOR",      5),
+    ("Vencimento",          "titulo", "VENCIMENTO", 5.5),
+    ("Vencto Real",         "titulo", "VENCIMENTO", 5.5),
+    ("Vencimento Boleto",   "boleto", "VENCIMENTO", 5.5),
+    ("@delta_dias",         "delta",  "VENCIMENTO", 3.5),
+    ("Motivo Revisão",      "",       "",           7),
+    ("Alerta Fatura",       "",       "",           5),
+    ("@tratativa",          "",       "",           4),
+    ("Linha Digitável",     "",       "",           4),
+]
+
+# Confrontos e nomes de coluna mudam entre as abas; o resto do gerador e igual.
+ABAS = {
+    "associacoes": {
+        "planilha": ABA_ASSOCIACOES,
+        "nome": "Associações Encontradas",
+        "cor": "azul",
+        "compacta": COMPACTA,
+        "confrontos": {"Valor Boleto": ("Vlr.Titulo", "moeda"),
+                       "Vencimento Boleto": ("Vencimento", "data")},
+        "col_status": "Status",
+        "col_criterio": "Critério Match",
+        "col_score": "Score Match",
+    },
+    "correspondencias": {
+        "planilha": ABA_CORRESPONDENCIAS,
+        "nome": "Tratar Correspondências",
+        "cor": "roxo",
+        "compacta": COMPACTA_CORRESP,
+        "confrontos": {"Valor Boleto (R$)": ("Valor Título (R$)", "moeda"),
+                       "Vencimento Boleto": ("Vencimento", "data")},
+        "col_status": "Motivo Revisão",
+        "col_criterio": "Critério",
+        "col_score": "Score",
+    },
+}
+
 # Cabecalho mais curto na Conferencia (o painel casa a coluna pela chave, nao
 # pelo rotulo -- renomear aqui e seguro).
 # Rotulos curtos: o cabecalho e uma linha so, entao nome comprido seria cortado.
@@ -116,7 +172,10 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Parcela": "Parc.", "Razão Social": "Razão social",
                     "Fornecedor": "Cód.", "Vlr.Titulo": "Vlr. título",
                     "Valor Boleto": "Vlr. boleto", "Vencimento": "Vencto",
-                    "Vencto Real": "Vencto real", "Vencimento Boleto": "Venc. boleto"}
+                    "Vencto Real": "Vencto real", "Vencimento Boleto": "Venc. boleto",
+                    # nomes da aba Tratar Correspondencias
+                    "Valor Título (R$)": "Vlr. título", "Valor Boleto (R$)": "Vlr. boleto",
+                    "Motivo Revisão": "Motivo", "Fornecedor Boleto": "Forn. boleto"}
 
 LARGURAS = {
     "Campo UUID": 296, "Razão Social": 250, "Fornecedor Boleto": 200,
@@ -222,9 +281,9 @@ def montar_colunas(cabecalho: list[str], usadas: set[str]) -> list[dict]:
     ]
 
 
-def delta_bruto(origem: dict, coluna_boleto: str):
+def delta_bruto(origem: dict, coluna_boleto: str, confrontos: dict):
     """Diferenca numerica boleto - titulo (reais ou dias); None se nao da para comparar."""
-    coluna_titulo, tipo = CONFRONTOS[coluna_boleto]
+    coluna_titulo, tipo = confrontos[coluna_boleto]
     if tipo == "moeda":
         valor_t, valor_b = numero(origem.get(coluna_titulo)), numero(origem.get(coluna_boleto))
         return None if None in (valor_t, valor_b) else round(valor_b - valor_t, 2)
@@ -235,22 +294,26 @@ def delta_bruto(origem: dict, coluna_boleto: str):
     return (dt.date.fromisoformat(data_b) - dt.date.fromisoformat(data_t)).days
 
 
-def diferenca(origem: dict, coluna_boleto: str) -> str:
+def diferenca(origem: dict, coluna_boleto: str, confrontos: dict) -> str:
     """Texto curto da divergencia entre o boleto e o titulo ('' se conferem)."""
-    delta = delta_bruto(origem, coluna_boleto)
+    delta = delta_bruto(origem, coluna_boleto, confrontos)
     if not delta:
         return ""
-    if CONFRONTOS[coluna_boleto][1] == "moeda":
+    if confrontos[coluna_boleto][1] == "moeda":
         return ("+" if delta > 0 else "−") + moeda_br(abs(delta))
     return f"{delta:+d} {'dia' if abs(delta) == 1 else 'dias'}"
 
 
-def ler_associacoes(wb):
-    ws = wb[ABA_ASSOCIACOES]
+def ler_aba(wb, cfg: dict):
+    """Le uma aba da base no formato do painel. As duas abas passam por aqui --
+    o que muda entre elas vem do cfg (colunas, confrontos, nomes de campo)."""
+    ws = wb[cfg["planilha"]]
     linhas = list(ws.iter_rows(values_only=True))
     cabecalho = [texto(c) for c in linhas[0]]
     brutas = [b for b in linhas[1:] if not all(v in (None, "") for v in b)]
-    compacta = montar_compacta(cabecalho)
+    compacta = montar_compacta(cabecalho, cfg["compacta"], cfg)
+    confrontos = cfg["confrontos"]
+    moeda_boleto = next(c for c, (_, t) in confrontos.items() if t == "moeda")
 
     # Uma coluna 100% vazia nas linhas associadas nao ajuda ninguem a conferir.
     usadas = {
@@ -289,27 +352,33 @@ def ler_associacoes(wb):
             "feito": bool(texto(origem.get(COLUNA_CHECK))),
             # valor que o botao copia (o exibido tem pontuacao de leitura)
             "copia": {chave_de("Linha Digitável"): re.sub(r"\D", "", texto(origem.get("Linha Digitável")))},
-            "difere": {chave_de(col): diferenca(origem, col) for col in CONFRONTOS
-                       if diferenca(origem, col)},
+            "difere": {chave_de(col): diferenca(origem, col, confrontos) for col in confrontos
+                       if diferenca(origem, col, confrontos)},
             # deltas numericos: alimentam a visao Conferencia e a ordenacao
-            "delta": {"valor": delta_bruto(origem, "Valor Boleto"),
-                      "dias": delta_bruto(origem, "Vencimento Boleto")},
-            "forte": "FORTE" in texto(origem.get("Status")).upper(),
-            "alerta": montar_alerta(origem),
+            "delta": {"valor": delta_bruto(origem, moeda_boleto, confrontos),
+                      "dias": delta_bruto(origem, "Vencimento Boleto", confrontos)},
+            # `forte` so existe nas Associacoes; em Tratar Correspondencias todo
+            # titulo esta em revisao, entao o selo nunca e verde.
+            "forte": "FORTE" in texto(origem.get(cfg["col_status"])).upper(),
+            "alerta": montar_alerta(origem, cfg),
+            "match": montar_match(origem, cfg),
             "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
         })
 
-    registros.sort(key=lambda r: -(numero(r["o"].get("score_match")) or 0))
+    chave_score = chave_de(cfg["col_score"])
+    registros.sort(key=lambda r: -(numero(r["o"].get(chave_score)) or 0))
     return colunas, compacta, registros
 
 
-def montar_compacta(cabecalho: list[str]) -> list[dict]:
+def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[dict]:
     """Colunas da visao Conferencia, respeitando a ordem em que estao na base."""
     ordem_base = {rotulo: i for i, rotulo in enumerate(cabecalho) if rotulo}
     colunas = []
-    for rotulo, lado, grupo, largura in COMPACTA:
+    for rotulo, lado, grupo, largura in definicao:
         virtual = rotulo.startswith("@")
-        if not virtual and rotulo not in ordem_base:
+        # O check e recurso do painel, nao coluna da base: entra mesmo onde a
+        # planilha nao tem "CHECK (FEITO)" -- e o caso de Tratar Correspondencias.
+        if not virtual and rotulo != COLUNA_CHECK and rotulo not in ordem_base:
             continue  # a base mudou de nome: melhor faltar a coluna do que errar
         colunas.append({
             "chave": rotulo.lstrip("@") if virtual else chave_de(rotulo),
@@ -319,6 +388,10 @@ def montar_compacta(cabecalho: list[str]) -> list[dict]:
             "lado": lado,
             "grupo": grupo,
             "largura": largura,
+            # o painel decide o desenho pelo PAPEL, nao pelo nome da coluna --
+            # em Tratar Correspondencias o "status" chama Motivo Revisão.
+            "papel": ("status" if rotulo == cfg["col_status"]
+                      else "alerta" if rotulo == "Alerta Fatura" else ""),
             "copiavel": rotulo in COPIAVEIS,
             "copiar": COPIAVEIS.get(rotulo, ""),
             "so_botao": rotulo in SO_BOTAO,
@@ -338,7 +411,33 @@ def tipo_alerta(valor) -> str:
     return "ALERTA"
 
 
-def montar_alerta(origem: dict) -> dict:
+def montar_match(origem: dict, cfg: dict) -> dict:
+    """Resumo do porque o boleto casou com o titulo -- vira o quadro que abre ao
+    passar o mouse na celula de Status.
+
+    O criterio da base e uma frase longa com as evidencias somadas por ' + ';
+    aqui ela e quebrada em itens para ler de bate-pronto. A parte depois de
+    'REVISAO:' (so em Tratar Correspondencias) vira o motivo em separado.
+    """
+    bruto = texto(origem.get(cfg["col_criterio"]))
+    evidencias, revisao = bruto, ""
+    if "REVISAO:" in bruto.upper():
+        corte = re.split(r"\|?\s*REVIS[ÃA]O:\s*", bruto, maxsplit=1, flags=re.IGNORECASE)
+        evidencias, revisao = corte[0].strip(" |"), (corte[1] if len(corte) > 1 else "").strip()
+
+    itens = [p.strip() for p in re.split(r"\s*\+\s*", evidencias) if p.strip()]
+    return {
+        "status": texto(origem.get(cfg["col_status"])),
+        "itens": itens,
+        "revisao": revisao or texto(origem.get("Motivo Revisão")),
+        "fonte": texto(origem.get("Fonte Boleto")),
+        "score": texto(origem.get(cfg["col_score"])),
+        "score2": texto(origem.get("2º Score")),
+        "margem": texto(origem.get("Margem")),
+    }
+
+
+def montar_alerta(origem: dict, cfg: dict) -> dict:
     """Tipo do alerta + a NF que o drill de parcelas abre.
 
     A NF vem do TEXTO do alerta ("... - NF 000013303: ...") e nao da coluna
@@ -357,9 +456,9 @@ def montar_alerta(origem: dict) -> dict:
         "tipo": tipo,
         "nf": nf,
         "texto": bruto,
-        "criterio": texto(origem.get("Critério Match")),
+        "criterio": texto(origem.get(cfg["col_criterio"])),
         "fonte": texto(origem.get("Fonte Boleto")),
-        "score": texto(origem.get("Score Match")),
+        "score": texto(origem.get(cfg["col_score"])),
         "score2": texto(origem.get("2º Score")),
         "margem": texto(origem.get("Margem")),
     }
@@ -432,7 +531,11 @@ def gerar(base: Path, saida: Path) -> dict:
 
     wb, temporaria = abrir_planilha(base)
     try:
-        colunas, compacta, registros = ler_associacoes(wb)
+        lidas = {}
+        for ident, cfg in ABAS.items():
+            if cfg["planilha"] not in wb.sheetnames:
+                continue  # aba renomeada na base: melhor faltar do que quebrar
+            lidas[ident] = ler_aba(wb, cfg)
         resumo = ler_resumo(wb)
         parcelas = ler_parcelas(wb)
     finally:
@@ -444,24 +547,34 @@ def gerar(base: Path, saida: Path) -> dict:
         valor = resumo.get(rotulo, 0)
         return int(valor) if isinstance(valor, (int, float)) else 0
 
+    abas = []
+    for ident, cfg in ABAS.items():
+        if ident not in lidas:
+            continue
+        # `colunas` nao vai para o HTML: o painel so desenha `compacta`. A lista
+        # continua servindo para montar as celulas de cada registro.
+        _colunas, compacta, registros = lidas[ident]
+        abas.append({
+            "id": ident,
+            "nome": cfg["nome"],
+            "cor": cfg["cor"],
+            "compacta": compacta,
+            "linhas": registros,
+            "com_alerta": sum(1 for r in registros if r["c"].get("alerta_fatura")),
+            "divergentes": sum(1 for r in registros if r["difere"]),
+            # So as NFs que algum alerta de parcela realmente abre -- nao adianta
+            # levar todas as NFs da aba se o painel so tem 3 alertas.
+            "parcelas": {nf: parcelas[nf] for nf in
+                         {r["alerta"]["nf"] for r in registros
+                          if r["alerta"]["tipo"] == "PARCELA" and r["alerta"]["nf"]}
+                         if nf in parcelas},
+        })
+
     dados = {
         "gerado_em": resumo.get("Gerado em") or dt.date.today().strftime("%d/%m/%Y"),
         "atualizado_em": dt.datetime.now().strftime("%d/%m/%Y às %H:%M"),
         "sem_codigo": do_resumo("Títulos sem código de barras"),
-        "associados": len(registros),
-        "com_alerta": sum(1 for r in registros if r["c"].get("alerta_fatura")),
-        "divergentes": sum(1 for r in registros if r["difere"]),
-        # `colunas` nao vai para o HTML: a visao Planilha saiu do painel e o
-        # painel so desenha `compacta`. A lista continua servindo para montar
-        # as celulas de cada registro.
-        "compacta": compacta,
-        "linhas": registros,
-        # So as NFs que algum alerta de parcela realmente abre -- nao adianta
-        # levar as 5 NFs da aba se o painel so tem 3 alertas.
-        "parcelas": {nf: parcelas[nf] for nf in
-                     {r["alerta"]["nf"] for r in registros
-                      if r["alerta"]["tipo"] == "PARCELA" and r["alerta"]["nf"]}
-                     if nf in parcelas},
+        "abas": abas,
     }
 
     carga = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
@@ -493,10 +606,11 @@ def gerar(base: Path, saida: Path) -> dict:
 def conferir_sem_dados(arquivo: Path, dados: dict) -> None:
     html = arquivo.read_text(encoding="utf-8")
     suspeitos = []
-    for registro in dados["linhas"]:
-        for valor in (registro["uuid"], registro["copia"].get(chave_de("Linha Digitável"), "")):
-            if valor and valor in html:
-                suspeitos.append(valor)
+    for aba in dados["abas"]:
+        for registro in aba["linhas"]:
+            for valor in (registro["uuid"], registro["copia"].get(chave_de("Linha Digitável"), "")):
+                if valor and valor in html:
+                    suspeitos.append(valor)
     if "/*__DADOS__*/null" not in html:
         suspeitos.append("marcador /*__DADOS__*/null ausente")
     if suspeitos:
@@ -519,8 +633,10 @@ def main() -> int:
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Linhas: {dados['associados']} | colunas: {len(dados['compacta'])}"
-          f" | com alerta: {dados['com_alerta']} | boleto difere do titulo: {dados['divergentes']}")
+    for aba in dados["abas"]:
+        print(f"{aba['nome']}: {len(aba['linhas'])} linhas | {len(aba['compacta'])} colunas"
+              f" | com alerta: {aba['com_alerta']} | boleto difere: {aba['divergentes']}"
+              f" | NFs com drill: {len(aba['parcelas'])}")
     print(f"Publicavel (sem dados): {args.saida}")
     print(f"Carteira para subir:    {DADOS_JSON}")
     print(f"Painel local (com dados): {DEV}")
