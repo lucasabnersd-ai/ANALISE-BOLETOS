@@ -79,6 +79,20 @@ body[data-aba="correspondencias"] table.conferencia tr:hover td{background:var(-
 body[data-aba="correspondencias"] .subabas button.ativa{background:var(--roxo-linha);
   border-color:var(--roxo-linha); color:#fff}
 
+body[data-aba="futuros"]{--acento:#c2410c; --acento-bg:var(--sobe-bg)}
+html[data-tema="escuro"] body[data-aba="futuros"]{--acento:#fb923c}
+body[data-aba="futuros"] tr.titulos th{background:#8c1d18}
+body[data-aba="futuros"] tr.titulos th:hover,
+body[data-aba="futuros"] tr.titulos th.ativa{background:#b3312a}
+body[data-aba="futuros"] th.canto,
+body[data-aba="futuros"] tr.titulos th.canto{background:#8c1d18}
+body[data-aba="futuros"] tr:hover td,
+body[data-aba="futuros"] tr:hover td.gutter,
+body[data-aba="futuros"] table.conferencia tr:hover td{background:var(--sobe-bg) !important}
+body[data-aba="futuros"] .subabas button.ativa{background:#b3312a; border-color:#b3312a; color:#fff}
+body[data-aba="futuros"] tr.grupos th.g-nf{background:var(--sobe-bg); color:var(--sobe-txt)}
+body[data-aba="futuros"] tr.grupos th.g-parte{background:var(--sobe-bg); color:var(--sobe-txt)}
+
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
 .subabas button{font:inherit; font-size:12px; font-weight:600; color:var(--txt-2); cursor:pointer;
@@ -229,6 +243,7 @@ td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margi
 .selo.provavel{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
 .selo.parcela{background:var(--roxo-bg); color:var(--roxo-txt); border-color:var(--roxo-linha)}
 .selo.fatura{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
+.selo.grave{background:var(--sobe-bg); color:var(--sobe-txt); border-color:var(--sobe-linha)}
 .selo.outro{background:var(--alerta-bg); color:var(--alerta); border-color:var(--alerta)}
 td.selo-cel{text-align:center; cursor:default}
 td.selo-cel[title]{cursor:help}
@@ -574,7 +589,7 @@ function celulaCompacta(r, col){
   }
   if (col.papel === "status"){
     // sem title: quem explica o match agora e o quadro que abre no hover
-    return `<td class="selo-cel ${zona}"><span class="selo ${r.forte ? "forte" : "provavel"}"
+    return `<td class="selo-cel ${zona}"><span class="selo ${r.selo || (r.forte ? "forte" : "provavel")}"
       data-match="${esc(r.uuid)}">${esc(valor) || "—"}</span></td>`;
   }
   if (col.papel === "alerta"){

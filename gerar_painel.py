@@ -38,6 +38,7 @@ DEV = PASTA / "dev.html"
 
 ABA_ASSOCIACOES = "Associações Encontradas"
 ABA_CORRESPONDENCIAS = "Tratar Correspondências"
+ABA_FUTUROS = "Futuros NF Não Associada"
 ABA_RESUMO = "Resumo"
 ABA_PARCELAS = "NFs Múltiplas Parcelas"
 
@@ -51,7 +52,9 @@ COLUNA_CHECK = "CHECK (FEITO)"
 MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
          "Correcao", "Val Liq Baix",
          # nomes usados na aba Tratar Correspondencias
-         "Valor Título (R$)", "Valor Boleto (R$)", "Diferença (R$)"}
+         "Valor Título (R$)", "Valor Boleto (R$)", "Diferença (R$)",
+         # aba Futuros NF Nao Associada
+         "Valor (R$)"}
 DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         "DT Baixa", "DT Contab."}
 INTEIRO = {"Score Match", "2º Score", "Margem", "Score"}
@@ -135,6 +138,27 @@ COMPACTA_CORRESP = [
     ("Linha Digitável",     "",       "",           4),
 ]
 
+# Aba "Futuros NF Nao Associada": e o outro lado da moeda -- boletos do DDA que
+# NAO acharam titulo. Nao ha o que confrontar (nao existe titulo), entao ela nao
+# tem Δ, nem par valor/vencimento, nem Campo UUID.
+COMPACTA_FUTUROS = [
+    ("CHECK (FEITO)",       "",       "",           3),
+    ("Situação",            "",       "",           9),
+    ("NF/Doc Original",     "boleto", "NF",         7),
+    ("NF Normalizada",      "boleto", "NF",         7),
+    ("Parcela",             "boleto", "NF",         4),
+    ("Total Parcelas",      "boleto", "NF",         4.5),
+    ("Fornecedor",          "boleto", "CONTRAPARTE", 15),
+    ("CNPJ/CPF",            "boleto", "CONTRAPARTE", 9),
+    ("Valor (R$)",          "boleto", "",           8),
+    ("Vencimento",          "boleto", "",           7),
+    ("Empresa/Origem",      "boleto", "",          12),
+    ("Fonte Boleto",        "boleto", "",           7),
+    ("Arquivo/Observação",  "boleto", "",          12),
+    ("@tratativa",          "",       "",           4.5),
+    ("Linha Digitável",     "",       "",           4.5),
+]
+
 # Confrontos e nomes de coluna mudam entre as abas; o resto do gerador e igual.
 ABAS = {
     "associacoes": {
@@ -147,6 +171,8 @@ ABAS = {
         "col_status": "Status",
         "col_criterio": "Critério Match",
         "col_score": "Score Match",
+        "col_uuid": "Campo UUID",
+        "prefixo_uuid": "",
     },
     "correspondencias": {
         "planilha": ABA_CORRESPONDENCIAS,
@@ -158,6 +184,25 @@ ABAS = {
         "col_status": "Motivo Revisão",
         "col_criterio": "Critério",
         "col_score": "Score",
+        "col_uuid": "Campo UUID",
+        "prefixo_uuid": "",
+    },
+    "futuros": {
+        "planilha": ABA_FUTUROS,
+        "nome": "Futuros NF Não Associada",
+        "cor": "vermelho",
+        "compacta": COMPACTA_FUTUROS,
+        "confrontos": {},          # nao ha titulo para confrontar
+        "col_status": "Situação",
+        "col_criterio": "Arquivo/Observação",
+        "col_score": "",
+        # Sem Campo UUID nesta aba. A linha digitavel serve de chave: conferido,
+        # sao 817 unicas, todas com 47 digitos. O prefixo evita colidir com os
+        # UUIDs de verdade das outras abas na tabela de marcacoes.
+        "col_uuid": "Linha Digitável",
+        "prefixo_uuid": "BOL:",
+        "rotulos": {"Fornecedor": "Fornecedor", "Parcela": "Parc."},
+        "nao_copiar": {"Fornecedor"},
     },
 }
 
@@ -175,7 +220,13 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Vencto Real": "Vencto real", "Vencimento Boleto": "Venc. boleto",
                     # nomes da aba Tratar Correspondencias
                     "Valor Título (R$)": "Vlr. título", "Valor Boleto (R$)": "Vlr. boleto",
-                    "Motivo Revisão": "Motivo", "Fornecedor Boleto": "Forn. boleto"}
+                    "Motivo Revisão": "Motivo", "Fornecedor Boleto": "Forn. boleto",
+                    # nomes da aba Futuros NF Nao Associada
+                    "NF/Doc Original": "NF original", "NF Normalizada": "NF norm.",
+                    "Total Parcelas": "de", "Valor (R$)": "Valor",
+                    "Empresa/Origem": "Empresa", "Arquivo/Observação": "Observação",
+                    "Fonte Boleto": "Fonte", "CNPJ/CPF": "CNPJ/CPF",
+                    "Situação": "Situação"}
 
 LARGURAS = {
     "Campo UUID": 296, "Razão Social": 250, "Fornecedor Boleto": 200,
@@ -313,7 +364,8 @@ def ler_aba(wb, cfg: dict):
     brutas = [b for b in linhas[1:] if not all(v in (None, "") for v in b)]
     compacta = montar_compacta(cabecalho, cfg["compacta"], cfg)
     confrontos = cfg["confrontos"]
-    moeda_boleto = next(c for c, (_, t) in confrontos.items() if t == "moeda")
+    # Futuros NF nao tem titulo para confrontar -- fica sem Δ.
+    moeda_boleto = next((c for c, (_, t) in confrontos.items() if t == "moeda"), None)
 
     # Uma coluna 100% vazia nas linhas associadas nao ajuda ninguem a conferir.
     usadas = {
@@ -348,25 +400,33 @@ def ler_aba(wb, cfg: dict):
         registros.append({
             "c": celulas,
             "o": ordem,
-            "uuid": texto(origem.get("Campo UUID")),
+            "uuid": chave_registro(origem, cfg),
             "feito": bool(texto(origem.get(COLUNA_CHECK))),
             # valor que o botao copia (o exibido tem pontuacao de leitura)
             "copia": {chave_de("Linha Digitável"): re.sub(r"\D", "", texto(origem.get("Linha Digitável")))},
             "difere": {chave_de(col): diferenca(origem, col, confrontos) for col in confrontos
                        if diferenca(origem, col, confrontos)},
             # deltas numericos: alimentam a visao Conferencia e a ordenacao
-            "delta": {"valor": delta_bruto(origem, moeda_boleto, confrontos),
-                      "dias": delta_bruto(origem, "Vencimento Boleto", confrontos)},
+            "delta": {
+                "valor": delta_bruto(origem, moeda_boleto, confrontos) if moeda_boleto else None,
+                "dias": (delta_bruto(origem, "Vencimento Boleto", confrontos)
+                         if "Vencimento Boleto" in confrontos else None),
+            },
             # `forte` so existe nas Associacoes; em Tratar Correspondencias todo
             # titulo esta em revisao, entao o selo nunca e verde.
             "forte": "FORTE" in texto(origem.get(cfg["col_status"])).upper(),
+            "selo": selo_status(origem, cfg),
             "alerta": montar_alerta(origem, cfg),
             "match": montar_match(origem, cfg),
             "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
         })
 
-    chave_score = chave_de(cfg["col_score"])
-    registros.sort(key=lambda r: -(numero(r["o"].get(chave_score)) or 0))
+    if cfg["col_score"]:
+        chave_score = chave_de(cfg["col_score"])
+        registros.sort(key=lambda r: -(numero(r["o"].get(chave_score)) or 0))
+    else:
+        # sem score: os que nao acharam par primeiro, depois por vencimento
+        registros.sort(key=lambda r: (r["selo"] != "grave", r["o"].get("vencimento") or ""))
     return colunas, compacta, registros
 
 
@@ -380,9 +440,13 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
         # planilha nao tem "CHECK (FEITO)" -- e o caso de Tratar Correspondencias.
         if not virtual and rotulo != COLUNA_CHECK and rotulo not in ordem_base:
             continue  # a base mudou de nome: melhor faltar a coluna do que errar
+        # Em Futuros NF a coluna "Fornecedor" e o NOME, nao o codigo: la ela nao
+        # vira botao de copiar e nem se chama "Cód.".
+        rotulos = {**ROTULOS_COMPACTA, **cfg.get("rotulos", {})}
+        copiavel = rotulo in COPIAVEIS and rotulo not in cfg.get("nao_copiar", ())
         colunas.append({
             "chave": rotulo.lstrip("@") if virtual else chave_de(rotulo),
-            "rotulo": ROTULOS_COMPACTA.get(rotulo, rotulo),
+            "rotulo": rotulos.get(rotulo, rotulo),
             "tipo": ("tratativa" if rotulo == "@tratativa" else "delta") if virtual
                     else tipo_da_coluna(rotulo),
             "lado": lado,
@@ -392,8 +456,8 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             # em Tratar Correspondencias o "status" chama Motivo Revisão.
             "papel": ("status" if rotulo == cfg["col_status"]
                       else "alerta" if rotulo == "Alerta Fatura" else ""),
-            "copiavel": rotulo in COPIAVEIS,
-            "copiar": COPIAVEIS.get(rotulo, ""),
+            "copiavel": copiavel,
+            "copiar": COPIAVEIS.get(rotulo, "") if copiavel else "",
             "so_botao": rotulo in SO_BOTAO,
             "check": rotulo == COLUNA_CHECK,
         })
@@ -409,6 +473,28 @@ def tipo_alerta(valor) -> str:
         if any(m in texto_alerta for m in marcadores):
             return rotulo
     return "ALERTA"
+
+
+def chave_registro(origem: dict, cfg: dict) -> str:
+    """Chave que amarra check e tratativa ao titulo, e sobrevive a regeracao.
+
+    Nas duas primeiras abas e o Campo UUID da base. Em Futuros NF nao existe
+    UUID, entao vale a linha digitavel (unica), com prefixo para nao colidir.
+    """
+    bruto = texto(origem.get(cfg["col_uuid"]))
+    if not cfg["prefixo_uuid"]:
+        return bruto
+    return cfg["prefixo_uuid"] + re.sub(r"\D", "", bruto)
+
+
+def selo_status(origem: dict, cfg: dict) -> str:
+    """forte (verde) / provavel (ambar) / grave (vermelho)."""
+    valor = texto(origem.get(cfg["col_status"])).upper()
+    if "FORTE" in valor:
+        return "forte"
+    if "SEM PAR" in valor:
+        return "grave"
+    return "provavel"
 
 
 def montar_match(origem: dict, cfg: dict) -> dict:
