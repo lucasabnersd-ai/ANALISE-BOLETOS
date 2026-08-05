@@ -114,7 +114,8 @@
     if (t.error) throw t.error;
     if (!t.data.length) throw new Error("a carteira está vazia no servidor");
 
-    var m = await sb.from("analise_boletos_marcacoes").select("uuid,feito,tratativa");
+    var m = await sb.from("analise_boletos_marcacoes")
+      .select("uuid,feito,tratativa,tratado_em,quem");
     if (m.error) throw m.error;
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
@@ -132,6 +133,8 @@
         delta: d.delta || {}, forte: !!d.forte, alerta: d.alerta || { tipo: "", nf: "" },
         feito: marca.feito != null ? marca.feito : !!d.feito,
         tratativa: marca.tratativa || "",
+        tratado_em: marca.tratado_em || "",
+        quem: marca.quem || "",
         // remontados aqui para nao trafegar duplicado
         o: d.c || {},
         busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),

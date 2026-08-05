@@ -82,9 +82,9 @@ CONFRONTOS = {
 # (o usuario corrigiu isso em 04/08/2026). A tabela principal segue enxuta.
 COMPACTA = [
     ("CHECK (FEITO)",     "",       "",           2.5),
-    ("Campo UUID",        "",       "",           3.5),
-    ("Filial",            "",       "",           3),
-    ("Prefixo",           "",       "",           3),
+    ("Campo UUID",        "",       "",           4),
+    ("Filial",            "",       "",           3.5),
+    ("Prefixo",           "",       "",           3.5),
     # A NF do boleto sai do lugar dela na base para ficar colada na do titulo
     # (pedido do usuario): e essa comparacao que ele faz o tempo todo.
     ("No. Titulo",        "titulo", "NF",         6.5),
@@ -101,19 +101,22 @@ COMPACTA = [
     ("@delta_dias",       "delta",  "VENCIMENTO", 3.5),
     ("Status",            "",       "",           7),
     ("Alerta Fatura",     "",       "",           5),
-    ("@tratativa",        "",       "",           3.5),
+    ("@tratativa",        "",       "",           4),
     ("Linha Digitável",   "",       "",           4),
 ]
 
 # Cabecalho mais curto na Conferencia (o painel casa a coluna pela chave, nao
 # pelo rotulo -- renomear aqui e seguro).
+# Rotulos curtos: o cabecalho e uma linha so, entao nome comprido seria cortado.
 ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Alerta Fatura": "Alerta", "Campo UUID": "UUID",
-                    "Linha Digitável": "Linha dig.", "@tratativa": "Tratativa",
-                    "No. Titulo": "Nº título", "NF/Doc Boleto": "NF boleto",
-                    "Razão Social": "Razão social", "Fornecedor": "Cód.",
-                    "Vlr.Titulo": "Vlr. título", "Vencto Real": "Vencto real",
-                    "Vencimento Boleto": "Venc. boleto"}
+                    "Linha Digitável": "Linha", "@tratativa": "Nota",
+                    "CHECK (FEITO)": "OK", "No. Titulo": "Nº título",
+                    "NF/Doc Boleto": "NF boleto", "Prefixo": "Pref.",
+                    "Parcela": "Parc.", "Razão Social": "Razão social",
+                    "Fornecedor": "Cód.", "Vlr.Titulo": "Vlr. título",
+                    "Valor Boleto": "Vlr. boleto", "Vencimento": "Vencto",
+                    "Vencto Real": "Vencto real", "Vencimento Boleto": "Venc. boleto"}
 
 LARGURAS = {
     "Campo UUID": 296, "Razão Social": 250, "Fornecedor Boleto": 200,
@@ -392,6 +395,9 @@ def ler_parcelas(wb) -> dict[str, list[dict]]:
             continue
         digitos = re.sub(r"\D", "", texto(origem.get("Linha Digitável")))
         por_nf.setdefault(chave, []).append({
+            # NF como a base mostra (9 digitos); quando a coluna vem vazia,
+            # cai para a chave resolvida pelo Nosso Numero.
+            "nf": texto(origem.get("NF (9 Dígitos)")) or chave,
             "parcela": texto(origem.get("Parcela")),
             "venc": texto(origem.get("Data Vencimento")),
             "emissao": texto(origem.get("Data Emissão")),
