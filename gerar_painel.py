@@ -209,6 +209,19 @@ ABAS = {
         "prefixo_uuid": "BOL:",
         "rotulos": {"Fornecedor": "Fornecedor", "Parcela": "Parc."},
         "nao_copiar": {"Fornecedor"},
+        # Esta aba se PARTE EM DUAS no painel, pela data de vencimento. O corte
+        # acontece no navegador, nao aqui: so assim a NF anda sozinha da visao
+        # futura para a visao passado quando o dia vira -- se o corte fosse
+        # feito na geracao, ela so mudaria de aba quando alguem regerasse.
+        # Regra (a mesma escrita no painel): vence hoje ou depois -> futura;
+        # venceu antes de hoje -> passado, A NAO SER que ja tenha sido tratada
+        # enquanto ainda estava a vencer, e ai fica na futura.
+        "particoes": [
+            {"id": "futuros", "modo": "futura", "cor": "vermelho",
+             "nome": "NFs (não associadas · visão futura)"},
+            {"id": "passado", "modo": "passado", "cor": "ambar",
+             "nome": "NFs (não associadas · visão passado · pendentes)"},
+        ],
     },
 }
 
@@ -668,6 +681,8 @@ def gerar(base: Path, saida: Path) -> dict:
             "cor": cfg["cor"],
             "compacta": compacta,
             "linhas": registros,
+            # quando existe, o painel abre esta aba em duas (ver ABAS)
+            "particoes": cfg.get("particoes"),
             # botoes de filtro (so onde a aba define uma coluna para isso)
             "pills": {
                 "chave": chave_de(cfg["pills"]),
@@ -722,10 +737,18 @@ def gerar(base: Path, saida: Path) -> dict:
 def conferir_sem_dados(arquivo: Path, dados: dict) -> None:
     html = arquivo.read_text(encoding="utf-8")
     suspeitos = []
+    # Nao basta olhar UUID e linha digitavel: ja escapou nome de fornecedor
+    # escrito a mao dentro de um aviso do proprio painel.
+    campos = ("razao_social", "fornecedor", "fornecedor_boleto", "nome_fornece",
+              "cnpj_boleto", "cnpj_cpf", "historico", "empresa_origem")
     for aba in dados["abas"]:
         for registro in aba["linhas"]:
-            for valor in (registro["uuid"], registro["copia"].get(chave_de("Linha Digitável"), "")):
-                if valor and valor in html:
+            valores = [registro["uuid"],
+                       registro["copia"].get(chave_de("Linha Digitável"), "")]
+            valores += [registro["c"].get(c, "") for c in campos]
+            for valor in valores:
+                # nomes curtos dariam falso positivo com palavra do proprio HTML
+                if valor and len(str(valor)) > 8 and str(valor) in html:
                     suspeitos.append(valor)
     if "/*__DADOS__*/null" not in html:
         suspeitos.append("marcador /*__DADOS__*/null ausente")

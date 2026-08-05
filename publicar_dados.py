@@ -27,19 +27,57 @@ TOKEN = PASTA / ".analise_boletos_token"
 FUNCAO = "https://pyrniqluywejmgzqkari.supabase.co/functions/v1/analise-boletos-carga"
 
 
+# Uuid reservado do cabecalho de cada aba. Nao colide com os titulos: eles sao
+# UUID hexadecimal ou "BOL:<digitos>".
+META = "#meta:"
+
+
+def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
+    """O cabecalho da aba (colunas, parcelas, contagens) numa LINHA PROPRIA.
+
+    Antes ele pegava carona no primeiro titulo da aba. Nao da mais: agora as NFs
+    nao associadas ficam no banco mesmo quando saem da base, entao uma linha
+    velha continuaria servindo um cabecalho antigo -- e o painel montaria as
+    colunas erradas. Com uuid fixo, cada carga sobrescreve o cabecalho.
+    """
+    return {
+        "uuid": META + aba["id"],
+        "dados": {
+            "aba": aba["id"],
+            "_meta": {
+                "id": aba["id"],
+                # o painel le os titulos ordenados por uuid, entao a ordem das
+                # abas tem de vir explicita -- senao quem aparece primeiro e
+                # quem tiver o menor uuid
+                "ordem": posicao,
+                "nome": aba["nome"],
+                "cor": aba["cor"],
+                # quando existe, o painel abre esta aba em duas (futura/passado)
+                "particoes": aba.get("particoes"),
+                "gerado_em": carga["gerado_em"],
+                "atualizado_em": carga["atualizado_em"],
+                "sem_codigo": carga["sem_codigo"],
+                "com_alerta": aba["com_alerta"],
+                "divergentes": aba["divergentes"],
+                "compacta": aba["compacta"],
+                "parcelas": aba["parcelas"],
+                "pills": aba["pills"],
+                "ocr": aba["ocr"],
+            },
+        },
+    }
+
+
 def enxugar(carga: dict) -> list[dict]:
     """Uma linha por titulo, so com o que a visao Conferencia usa.
 
     O `busca` e o `o` sao remontados no navegador a partir do `c`; levar os
     tres triplicaria o texto sem ganhar nada.
-
-    O cabecalho de CADA aba (colunas, parcelas, contagens) viaja no `_meta` do
-    primeiro titulo dela -- e pequeno e evita uma segunda tabela so para isso.
     """
     titulos = []
     for posicao, aba in enumerate(carga["abas"]):
         usadas = {c["chave"] for c in aba["compacta"]} | {"alerta_fatura"}
-        primeiro = True
+        titulos.append(cabecalho_da_aba(carga, aba, posicao))
         for r in aba["linhas"]:
             titulos.append({
                 "uuid": r["uuid"],
@@ -60,27 +98,8 @@ def enxugar(carga: dict) -> list[dict]:
                     "feito": r["feito"],
                     "alerta": r["alerta"],
                     "match": r["match"],
-                    "_meta": {
-                        "id": aba["id"],
-                        # o painel le os titulos ordenados por uuid, entao a
-                        # ordem das abas tem de vir explicita -- senao quem
-                        # aparece primeiro e quem tiver o menor uuid
-                        "ordem": posicao,
-                        "nome": aba["nome"],
-                        "cor": aba["cor"],
-                        "gerado_em": carga["gerado_em"],
-                        "atualizado_em": carga["atualizado_em"],
-                        "sem_codigo": carga["sem_codigo"],
-                        "com_alerta": aba["com_alerta"],
-                        "divergentes": aba["divergentes"],
-                        "compacta": aba["compacta"],
-                        "parcelas": aba["parcelas"],
-                        "pills": aba["pills"],
-                        "ocr": aba["ocr"],
-                    } if primeiro else None,
                 },
             })
-            primeiro = False
     return titulos
 
 

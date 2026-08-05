@@ -117,18 +117,24 @@
     if (!t.data.length) throw new Error("a carteira está vazia no servidor");
 
     var m = await sb.from("analise_boletos_marcacoes")
-      .select("uuid,feito,tratativa,tratado_em,tratado_por,quem").limit(20000);
+      .select("uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em").limit(20000);
     if (m.error) throw m.error;
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
 
-    // O cabecalho de cada aba (colunas, parcelas, contagens) viaja no _meta do
-    // primeiro titulo dela; e pequeno e evita uma tabela so para metadados.
-    var metas = {}, porAba = {}, geral = null;
+    // O cabecalho de cada aba (colunas, parcelas, contagens) vem numa linha
+    // propria, de uuid "#meta:<aba>". Titulos antigos podem ainda trazer o
+    // _meta embutido -- vale so enquanto nao houver a linha propria, senao uma
+    // NF que ficou no banco de uma carga velha serviria um cabecalho vencido.
+    var metas = {}, metasVelhas = {}, porAba = {};
     t.data.forEach(function (row) {
       var d = row.dados || {};
       var aba = d.aba || "associacoes";
-      if (d._meta) { metas[aba] = d._meta; geral = geral || d._meta; }
+      if (String(row.uuid).indexOf("#meta:") === 0) {
+        if (d._meta) { metas[aba] = d._meta; porAba[aba] = porAba[aba] || []; }
+        return;                                  // cabecalho nao e titulo
+      }
+      if (d._meta && !metasVelhas[aba]) metasVelhas[aba] = d._meta;
       var marca = porUuid[row.uuid] || {};
       (porAba[aba] = porAba[aba] || []).push({
         uuid: row.uuid,
@@ -142,25 +148,32 @@
         tratado_em: marca.tratado_em || "",
         tratado_por: marca.tratado_por || "",
         quem: marca.quem || "",
+        // sem check, a data da marcacao e o que diz QUANDO a NF foi tratada --
+        // o painel usa isso para decidir visao futura x visao passado
+        atualizado_em: marca.atualizado_em || "",
         // `o` so traz o que difere do exibido (numero cru, data ISO); o resto
         // cai no proprio `c`. Ordenar pelo texto formatado daria ordem errada.
         o: Object.assign({}, d.c || {}, d.o || {}),
         busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),
       });
     });
-    if (!geral) throw new Error("carteira sem cabeçalho (_meta)");
-
+    // "Gerado em" e afins valem para a carteira inteira: vem do cabecalho mais
+    // novo que existir, nunca de um que ficou para tras.
+    var geral = metas[Object.keys(metas)[0]] || null;
     var abas = Object.keys(porAba).map(function (id) {
-      var m = metas[id] || {};
+      var m = metas[id] || metasVelhas[id] || {};
+      if (m.compacta && m.compacta.length) geral = geral || m;
       return {
         id: id, nome: m.nome || id, cor: m.cor || "azul",
         ordem: m.ordem == null ? 99 : m.ordem,
         compacta: m.compacta || [], parcelas: m.parcelas || {},
         pills: m.pills || null, ocr: m.ocr || 0,
+        particoes: m.particoes || null,
         com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
         linhas: porAba[id],
       };
     }).filter(function (a) { return a.compacta.length; });
+    if (!geral) throw new Error("carteira sem cabeçalho (_meta)");
 
     // os titulos vem ordenados por uuid; a ordem das abas e a do gerador
     abas.sort(function (a, b) { return a.ordem - b.ordem; });

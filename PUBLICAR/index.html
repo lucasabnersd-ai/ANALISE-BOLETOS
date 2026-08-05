@@ -93,6 +93,21 @@ body[data-aba="futuros"] .subabas button.ativa{background:#b3312a; border-color:
 body[data-aba="futuros"] tr.grupos th.g-nf{background:var(--sobe-bg); color:var(--sobe-txt)}
 body[data-aba="futuros"] tr.grupos th.g-parte{background:var(--sobe-bg); color:var(--sobe-txt)}
 
+/* visao passado: as mesmas NFs nao associadas, ja vencidas e sem tratamento */
+body[data-aba="passado"]{--acento:#8a5806; --acento-bg:var(--ambar-bg)}
+html[data-tema="escuro"] body[data-aba="passado"]{--acento:#f0b429}
+body[data-aba="passado"] tr.titulos th{background:#6b4405}
+body[data-aba="passado"] tr.titulos th:hover,
+body[data-aba="passado"] tr.titulos th.ativa{background:#8a5806}
+body[data-aba="passado"] th.canto,
+body[data-aba="passado"] tr.titulos th.canto{background:#6b4405}
+body[data-aba="passado"] tr:hover td,
+body[data-aba="passado"] tr:hover td.gutter,
+body[data-aba="passado"] table.conferencia tr:hover td{background:var(--ambar-bg) !important}
+body[data-aba="passado"] .subabas button.ativa{background:#8a5806; border-color:#8a5806; color:#fff}
+body[data-aba="passado"] tr.grupos th.g-nf{background:var(--ambar-bg); color:var(--ambar-txt)}
+body[data-aba="passado"] tr.grupos th.g-parte{background:var(--ambar-bg); color:var(--ambar-txt)}
+
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
 .subabas button{font:inherit; font-size:12px; font-weight:600; color:var(--txt-2); cursor:pointer;
@@ -137,11 +152,15 @@ body[data-aba="futuros"] tr.grupos th.g-parte{background:var(--sobe-bg); color:v
   color:#fff}
 .pills button.ativa small{opacity:.9}
 
-/* aviso proprio da aba */
-.aviso-aba{margin:0 0 10px; padding:10px 13px; border-radius:9px; font-size:12.5px; line-height:1.5;
-  background:var(--ambar-bg); color:var(--ambar-txt); border:1px solid var(--ambar-linha)}
-.aviso-aba b{font-weight:800}
+/* avisos proprios da aba: um por assunto, empilhados */
+.aviso-aba{margin:0 0 10px; display:flex; flex-direction:column; gap:7px}
 .aviso-aba[hidden]{display:none}
+.linha-aviso{padding:10px 13px; border-radius:9px; font-size:12.5px; line-height:1.5;
+  background:var(--ambar-bg); color:var(--ambar-txt); border:1px solid var(--ambar-linha)}
+.linha-aviso b{font-weight:800}
+/* o aviso que so explica a aba nao e alarme: fica no tom neutro da pagina */
+.linha-aviso.calmo{background:var(--surface); color:var(--txt-2); border-color:var(--line)}
+.linha-aviso.calmo b{color:var(--txt)}
 /* marca na linha lida errado pelo OCR */
 .selo.ocr{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha);
   margin-left:5px; cursor:help}
@@ -259,7 +278,12 @@ td.trat{text-align:center; padding:3px}
   border-radius:999px; padding:3px 8px; white-space:nowrap}
 .btn-trat:hover{border-color:var(--azul-2); color:var(--azul-2); border-style:solid}
 .btn-trat.tem{background:var(--verde-bg); color:var(--verde-txt); border:1px solid var(--verde-linha)}
-td.fornecedor .nome{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+/* nome + selo OCR na MESMA linha: em bloco o selo caia para baixo e a linha
+   inteira ficava mais alta que as outras */
+td.fornecedor .linha-forn{display:flex; align-items:center; gap:5px; min-width:0}
+td.fornecedor .nome{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; font-weight:600}
+td.fornecedor .selo.ocr{flex:none; margin-left:0}
 td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margin-top:1px}
 
 /* selo de Status e de Alerta: fundo cheio e letra escura, para ler de longe */
@@ -453,7 +477,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   </div>
 </div>
 
-<script src="supa.js?v=202608050944"></script>
+<script src="supa.js?v=202608051206"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -576,6 +600,79 @@ function recente(r){
     if (d > maior) maior = d;
   }
   return maior;
+}
+
+/* ---------- visao futura x visao passado ----------
+   Sao a MESMA aba de NFs nao associadas, partida pela data de vencimento. O
+   corte e feito aqui, no navegador, e nao na geracao: assim a NF anda sozinha
+   de uma visao para a outra quando o dia vira, sem depender de alguem regerar
+   o painel.
+
+   Regra:
+     vence hoje ou depois ................ visao futura
+     venceu antes de hoje ................ visao passado (pendente de tratamento)
+     venceu, mas ja tinha sido tratada
+     enquanto ainda estava a vencer ...... continua na visao futura
+
+   Nada some: a NF nunca deixa as abas de nao associadas -- ela so sai quando
+   passa a ser associada, e ai aparece nas outras abas. */
+const hojeISO = () => {
+  const d = new Date();                       // data LOCAL, nao UTC
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${
+    String(d.getDate()).padStart(2, "0")}`;
+};
+
+/* Quando o titulo foi tratado (so a data). Com check, e a data do check; se
+   houver so a tratativa, vale a data em que ela foi gravada. */
+function quandoTratou(r){
+  const carimbo = tratadoEm[r.uuid] || r.tratado_em || "";
+  if (carimbo) return String(carimbo).slice(0, 10);
+  const nota = tratativas[r.uuid] || r.tratativa || "";
+  if (!nota) return "";
+  // nota sem data conhecida: vale como tratada a tempo, para nao mover sozinha
+  return String(r.atualizado_em || "").slice(0, 10) || "0000-00-00";
+}
+
+function naVisaoFutura(r, hoje){
+  const venc = dataISO(r, "vencimento");
+  if (!venc || venc >= hoje) return true;      // sem data tambem fica na futura
+  const tratou = quandoTratou(r);
+  return !!tratou && tratou <= venc;           // tratada antes de vencer: fica
+}
+
+/* Abre em duas as abas que declaram `particoes`; as demais passam direto. */
+function partirAbas(abas){
+  const hoje = hojeISO();
+  const saida = [];
+  abas.forEach(aba => {
+    const partes = aba.particoes || [];
+    if (!partes.length){ saida.push(aba); return; }
+    partes.forEach(p => {
+      const querFutura = p.modo === "futura";
+      saida.push(Object.assign({}, aba, {
+        id: p.id, nome: p.nome, cor: p.cor, particoes: null, modo: p.modo,
+        linhas: aba.linhas.filter(r => naVisaoFutura(r, hoje) === querFutura),
+      }));
+    });
+  });
+  return saida;
+}
+
+/* Contagens do resumo e valores dos botoes de fonte: recalculados a partir das
+   linhas de CADA aba -- depois do corte, os totais que vieram da geracao
+   valeriam para as duas visoes somadas. */
+function recontarAbas(abas){
+  abas.forEach(aba => {
+    aba.com_alerta = aba.linhas.filter(r => r.c.alerta_fatura).length;
+    aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
+    if (aba.pills){
+      aba.pills = Object.assign({}, aba.pills, {
+        valores: [...new Set(aba.linhas.map(r => r.c[aba.pills.chave]).filter(Boolean))]
+                   .sort((a, b) => a.localeCompare(b, "pt-BR")),
+      });
+    }
+  });
+  return abas;
 }
 
 function dentroDoPeriodo(r, de, ate){
@@ -712,7 +809,8 @@ function celulaCompacta(r, col){
     const marca = r.ocr
       ? ` <span class="selo ocr" title="O OCR leu o fornecedor errado neste boleto do CENTRAL — confira pelo CNPJ/CPF ou pela linha digitável.">OCR</span>`
       : "";
-    return `<td class="fornecedor ${zona}"><span class="nome" title="${esc(valor)}">${esc(valor)}</span>${marca}</td>`;
+    return `<td class="fornecedor ${zona}"><span class="linha-forn"><span class="nome"
+      title="${esc(valor)}">${esc(valor)}</span>${marca}</span></td>`;
   }
 
   const classe = (col.tipo === "moeda" || col.tipo === "inteiro") ? "num" : "";
@@ -1060,19 +1158,45 @@ document.getElementById("pills").addEventListener("click", e => {
   desenhar();
 });
 
-/* Aviso proprio da aba. Hoje so um: boletos do CENTRAL que sairam com
-   "Fabio Costa Lima" no fornecedor sao leitura errada do OCR. */
+/* Avisos proprios da aba. Podem ser mais de um; a caixa some quando nao ha
+   nenhum. Nenhum deles traz nome de fornecedor escrito no HTML -- o texto e
+   montado a partir dos dados, ja depois do login. */
+function avisoOcr(){
+  const marcados = A().linhas.filter(r => r.ocr);
+  if (!marcados.length) return "";
+  const nomes = [...new Set(marcados.map(r => r.c.fornecedor).filter(Boolean))];
+  const fontes = [...new Set(marcados.map(r => r.c.fonte_boleto).filter(Boolean))];
+  const quantos = marcados.length;
+  return `<div class="linha-aviso">⚠ <b>${num(quantos)}</b> boleto${quantos === 1 ? "" : "s"} desta aba
+    ${quantos === 1 ? "veio" : "vieram"} do <b>${esc(fontes.join(", "))}</b> com
+    <b>${esc(nomes.join(", "))}</b> no campo de fornecedor. Nesses casos o
+    <b>OCR não leu o fornecedor corretamente</b> — esse não é o fornecedor real.
+    Confira pelo CNPJ/CPF ou pela linha digitável.
+    ${quantos === 1 ? "Está" : "Estão"} com o selo <span class="selo ocr">OCR</span> na linha.</div>`;
+}
+
+/* Explica de onde saiu a divisao futura/passado -- senao a pessoa acha que
+   sumiu NF de uma aba para a outra. */
+function avisoVisao(){
+  const modo = A().modo;
+  if (modo === "passado")
+    return `<div class="linha-aviso calmo">📌 Estas NFs <b>já venceram</b> (vencimento anterior a hoje) e
+      <b>continuam sem tratamento</b>. Elas vieram sozinhas da <b>visão futura</b> quando a data
+      passou — nada foi apagado. Ao marcar o check ou registrar uma tratativa, a NF passa para
+      <b>Tratados</b> e continua aqui, com o histórico.</div>`;
+  if (modo === "futura")
+    return `<div class="linha-aviso calmo">📌 Aqui ficam as NFs que <b>vencem hoje ou depois</b>. Quando a
+      data passar sem tratamento, a NF vai sozinha para a <b>visão passado</b>. Se ela for
+      <b>tratada antes de vencer</b>, permanece nesta aba. A NF só deixa as abas de não associadas
+      quando passa a ter título associado.</div>`;
+  return "";
+}
+
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
-  const quantos = A().ocr || 0;
-  caixa.hidden = !quantos;
-  if (quantos){
-    caixa.innerHTML = `⚠ <b>${num(quantos)}</b> boleto${quantos === 1 ? "" : "s"} desta aba
-      ${quantos === 1 ? "está" : "estão"} com <b>FABIO COSTA LIMA</b> como fornecedor e vieram do
-      <b>CENTRAL</b>. Nesses casos o <b>OCR não leu o fornecedor corretamente</b> — o nome não é o
-      do fornecedor real. Confira pelo CNPJ/CPF ou pela linha digitável. Eles estão marcados com
-      <span class="selo ocr">OCR</span> na linha.`;
-  }
+  const corpo = avisoOcr() + avisoVisao();
+  caixa.hidden = !corpo;
+  caixa.innerHTML = corpo;
 }
 
 function atualizarSubabas(){
@@ -1211,6 +1335,8 @@ function iniciar(dados){
     if (r.tratado_em) tratadoEm[r.uuid] = r.tratado_em;
     if (r.tratado_por) responsaveis[r.uuid] = r.tratado_por;
   }));
+  // o corte futura/passado le o que foi tratado, entao vem depois do laco acima
+  dados.abas = recontarAbas(partirAbas(dados.abas));
   if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharAbasTopo();
