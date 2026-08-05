@@ -93,6 +93,20 @@ body[data-aba="correspondencias"] .subabas button.ativa{background:var(--roxo-li
   color:#04321f}
 .subabas button[data-sub="tratados"].ativa span{background:rgba(0,0,0,.16); color:#04321f}
 
+/* ---------- filtros ----------
+   Uma linha enxuta, nao um painel em cima da tabela. */
+.filtros{display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; margin:0 0 9px;
+  padding:9px 11px; background:var(--surface); border:1px solid var(--line); border-radius:9px}
+.filtros label{display:flex; flex-direction:column; gap:3px; font-size:9.5px; font-weight:700;
+  letter-spacing:.5px; text-transform:uppercase; color:var(--txt-3)}
+.filtros input{width:132px; font:inherit; font-size:12px; color:var(--txt); background:var(--surface-2);
+  border:1px solid var(--line); border-radius:6px; padding:5px 8px; outline:none}
+.filtros input:focus{border-color:var(--acento, var(--azul-2)); background:var(--surface)}
+.filtros input:not(:placeholder-shown){border-color:var(--acento, var(--azul-2)); font-weight:600}
+.filtros button{font:inherit; font-size:11.5px; font-weight:600; cursor:pointer; color:var(--txt-2);
+  background:var(--surface-2); border:1px solid var(--line-forte); border-radius:6px; padding:6px 12px}
+.filtros button:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
+
 /* ---------- planilha ---------- */
 .planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
   overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05)}
@@ -152,9 +166,11 @@ tr.zebrada td.z-boleto{background:color-mix(in srgb, var(--zebra) 78%, var(--txt
 tr.zebrada td.z-delta{background:var(--surface-2)}
 table.conferencia tr:hover td{background:var(--sel) !important}
 
-.marca{display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700;
-  font-variant-numeric:tabular-nums; padding:2px 7px; border-radius:999px; white-space:nowrap;
-  border:1px solid transparent; line-height:1.35}
+.marca{display:inline-flex; align-items:center; gap:2px; font-size:10px; font-weight:700;
+  font-variant-numeric:tabular-nums; padding:2px 6px; border-radius:999px; white-space:nowrap;
+  border:1px solid transparent; line-height:1.3; max-width:100%; overflow:hidden}
+/* a celula do Δ nunca quebra: valor grande encolhe a fonte em vez de virar duas linhas */
+td.z-delta{white-space:nowrap; overflow:hidden; padding:5px 3px}
 .marca.igual{color:var(--txt-3); font-weight:600; background:var(--surface-2);
   border-color:var(--line); font-size:10px; letter-spacing:.4px}
 .marca.difere{background:var(--alerta-bg); color:var(--alerta)}
@@ -324,6 +340,16 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <button type="button" data-sub="tratados">Tratados <span>0</span></button>
   </div>
 
+  <div class="filtros" id="filtros">
+    <label>Fornecedor<input type="search" data-filtro="fornecedor" placeholder="nome ou código" autocomplete="off"></label>
+    <label>Valor<input type="search" data-filtro="valor" placeholder="5.427 ou 5427" autocomplete="off"></label>
+    <label>Vencimento<input type="search" data-filtro="venc" placeholder="01/08 ou 08/2026" autocomplete="off"></label>
+    <label>Nº título<input type="search" data-filtro="titulo" placeholder="000050174" autocomplete="off"></label>
+    <label>NF<input type="search" data-filtro="nf" placeholder="50174" autocomplete="off"></label>
+    <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
+    <button type="button" id="limparFiltros" hidden>Limpar</button>
+  </div>
+
   <div class="planilha"><table id="grade"></table></div>
 
   <div class="rodape">
@@ -382,7 +408,8 @@ const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const num = v => v.toLocaleString("pt-BR");
 const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
 
-const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:""};
+const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"",
+                filtros:{fornecedor:"", valor:"", venc:"", titulo:"", nf:"", uuid:""}};
 
 /* A aba ativa responde por linhas, colunas e parcelas. Cada aba da base vira
    uma aba aqui, com colunas proprias -- elas nao tem os mesmos campos. */
@@ -445,9 +472,40 @@ function mostrarResumo(){
     `<span class="sep">·</span><b>${A().divergentes}</b> com boleto diferente do título` +
     `<span class="sep">·</span><b>${feitos.size}</b> tratado${feitos.size === 1 ? "" : "s"}`;
 }
+/* Cada filtro olha um punhado de colunas -- os nomes mudam entre as abas, por
+   isso a lista de candidatas em vez de uma chave so. */
+const CAMPOS_FILTRO = {
+  fornecedor: ["razao_social", "fornecedor", "nome_fornece", "fornecedor_boleto"],
+  valor:      ["vlr_titulo", "valor_boleto", "valor_titulo_r", "valor_boleto_r"],
+  venc:       ["vencimento", "vencto_real", "vencimento_boleto"],
+  titulo:     ["no_titulo"],
+  nf:         ["nf_doc_boleto"],
+  uuid:       ["campo_uuid"],
+};
+// Filtros numericos casam tambem so pelos digitos: "5427" acha "R$ 5.427,50"
+// e "082026" acha "01/08/2026".
+const SO_DIGITOS = new Set(["valor", "venc", "titulo", "nf"]);
+const digitos = t => String(t).replace(/\D/g, "");
+
+function casaFiltro(r, campo, termo){
+  const alvo = termo.toLowerCase();
+  const numerico = SO_DIGITOS.has(campo) && digitos(termo);
+  return CAMPOS_FILTRO[campo].some(chave => {
+    const valor = r.c[chave];
+    if (!valor) return false;
+    if (String(valor).toLowerCase().includes(alvo)) return true;
+    return numerico ? digitos(valor).includes(numerico) : false;
+  });
+}
+
 function linhas(){
   const termo = estado.busca.trim().toLowerCase();
   let itens = termo ? A().linhas.filter(r => r.busca.includes(termo)) : A().linhas.slice();
+
+  for (const [campo, texto] of Object.entries(estado.filtros)){
+    const alvo = (texto || "").trim();
+    if (alvo) itens = itens.filter(r => casaFiltro(r, campo, alvo));
+  }
   // o check move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
   itens = itens.filter(r => feitos.has(r.uuid) === tratado);
@@ -808,6 +866,8 @@ function desenhar(){
   grade.className = "conferencia";
   grade.innerHTML = desenharConferencia(linhas());
   atualizarSubabas();
+  document.getElementById("limparFiltros").hidden =
+    !Object.values(estado.filtros).some(v => (v || "").trim());
   mostrarResumo();
 }
 
@@ -837,6 +897,18 @@ document.getElementById("grade").addEventListener("change", e => {
 });
 
 document.getElementById("busca").addEventListener("input", e => { estado.busca = e.target.value; desenhar(); });
+
+document.getElementById("filtros").addEventListener("input", e => {
+  const campo = e.target.dataset.filtro;
+  if (!campo) return;
+  estado.filtros[campo] = e.target.value;
+  desenhar();
+});
+document.getElementById("limparFiltros").addEventListener("click", () => {
+  Object.keys(estado.filtros).forEach(k => estado.filtros[k] = "");
+  document.querySelectorAll("#filtros input").forEach(i => i.value = "");
+  desenhar();
+});
 
 /* navigator.clipboard falha quando a aba nao esta em foco ou fora de HTTPS;
    por isso o plano B com textarea + execCommand. */

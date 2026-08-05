@@ -37,7 +37,7 @@ def enxugar(carga: dict) -> list[dict]:
     primeiro titulo dela -- e pequeno e evita uma segunda tabela so para isso.
     """
     titulos = []
-    for aba in carga["abas"]:
+    for posicao, aba in enumerate(carga["abas"]):
         usadas = {c["chave"] for c in aba["compacta"]} | {"alerta_fatura"}
         primeiro = True
         for r in aba["linhas"]:
@@ -55,6 +55,10 @@ def enxugar(carga: dict) -> list[dict]:
                     "match": r["match"],
                     "_meta": {
                         "id": aba["id"],
+                        # o painel le os titulos ordenados por uuid, entao a
+                        # ordem das abas tem de vir explicita -- senao quem
+                        # aparece primeiro e quem tiver o menor uuid
+                        "ordem": posicao,
                         "nome": aba["nome"],
                         "cor": aba["cor"],
                         "gerado_em": carga["gerado_em"],

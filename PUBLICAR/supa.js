@@ -149,11 +149,15 @@
       var m = metas[id] || {};
       return {
         id: id, nome: m.nome || id, cor: m.cor || "azul",
+        ordem: m.ordem == null ? 99 : m.ordem,
         compacta: m.compacta || [], parcelas: m.parcelas || {},
         com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
         linhas: porAba[id],
       };
     }).filter(function (a) { return a.compacta.length; });
+
+    // os titulos vem ordenados por uuid; a ordem das abas e a do gerador
+    abas.sort(function (a, b) { return a.ordem - b.ordem; });
 
     return {
       gerado_em: geral.gerado_em, atualizado_em: geral.atualizado_em,
