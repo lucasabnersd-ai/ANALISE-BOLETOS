@@ -278,6 +278,10 @@ td.trat{text-align:center; padding:3px}
   border-radius:999px; padding:3px 8px; white-space:nowrap}
 .btn-trat:hover{border-color:var(--azul-2); color:var(--azul-2); border-style:solid}
 .btn-trat.tem{background:var(--verde-bg); color:var(--verde-txt); border:1px solid var(--verde-linha)}
+/* quem esta tratando, dentro do proprio botao: a coluna "Tratado em" so existe
+   na sub-aba Tratados, entao sem isto o nome nao apareceria em "A tratar" */
+.btn-trat .por-quem{display:block; font-size:9px; font-weight:600; opacity:.85;
+  max-width:76px; overflow:hidden; text-overflow:ellipsis; margin-top:1px}
 /* nome + selo OCR na MESMA linha: em bloco o selo caia para baixo e a linha
    inteira ficava mais alta que as outras */
 td.fornecedor .linha-forn{display:flex; align-items:center; gap:5px; min-width:0}
@@ -792,7 +796,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608051339"></script>
+<script src="supa.js?v=202608051350"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -804,6 +808,8 @@ let DADOS = null;
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const num = v => v.toLocaleString("pt-BR");
 const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
+// dentro do botao de nota cabe pouco: o nome inteiro fica no title
+const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
 
 const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:"",
                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"", titulo:"", nf:"", uuid:""}};
@@ -1103,8 +1109,16 @@ function celulaCompacta(r, col){
   }
   if (col.tipo === "tratativa"){
     const nota = tratativas[r.uuid] || "";
+    // A coluna "Tratado em / quem" so existe na sub-aba Tratados. Sem isto aqui,
+    // quem escreve a tratativa sem marcar o check some da tela: o nome fica
+    // gravado no banco e nao aparece em lugar nenhum.
+    const quem = responsaveis[r.uuid] || r.tratado_por || "";
+    const dica = nota
+      ? nota + (quem ? `\n— ${quem}` : "")
+      : (quem ? `Em tratamento por ${quem}` : "Registrar tratativa");
     return `<td class="trat ${zona}"><button class="btn-trat ${nota ? "tem" : ""}" type="button"
-      data-trat="${esc(r.uuid)}">${nota ? "✎ nota" : "+ nota"}</button></td>`;
+      data-trat="${esc(r.uuid)}" title="${esc(dica)}">${nota ? "✎ nota" : "+ nota"}${
+      quem ? `<span class="por-quem">${esc(primeiroNome(quem))}</span>` : ""}</button></td>`;
   }
 
   const valor = r.c[col.chave] ?? "";
@@ -1542,8 +1556,9 @@ function avisoVisao(){
   if (modo === "passado")
     return `<div class="linha-aviso calmo">📌 Estas NFs <b>já venceram</b> (vencimento anterior a hoje) e
       <b>continuam sem tratamento</b>. Elas vieram sozinhas da <b>visão futura</b> quando a data
-      passou — nada foi apagado. Ao marcar o check ou registrar uma tratativa, a NF passa para
-      <b>Tratados</b> e continua aqui, com o histórico.</div>`;
+      passou — nada foi apagado. Quem fecha o caso é o <b>check</b>: marcado, a NF passa para
+      <b>Tratados</b> e continua aqui, com o histórico. A tratativa e o nome de quem está
+      tratando ficam gravados na linha mesmo antes disso.</div>`;
   if (modo === "futura")
     return `<div class="linha-aviso calmo">📌 Aqui ficam as NFs que <b>vencem hoje ou depois</b>. Quando a
       data passar sem tratamento, a NF vai sozinha para a <b>visão passado</b>. Se ela for
