@@ -38,6 +38,27 @@ body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 .topo{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
 .topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px}
 .topo h1 span{color:var(--txt-3); font-weight:400}
+/* ---------- card de atualizacao ----------
+   Data E hora de cada etapa, para saber na hora se o que esta na tela e o
+   dado de hoje ou uma carga velha. */
+.cartao-atualizacao{display:flex; flex-wrap:wrap; gap:0; margin:0 0 10px;
+  background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
+  overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.cartao-atualizacao .item{display:flex; flex-direction:column; gap:3px; padding:9px 16px;
+  border-right:1px solid var(--line); min-width:150px}
+.cartao-atualizacao .item:last-child{border-right:0}
+.cartao-atualizacao .rot{font-size:9px; font-weight:800; letter-spacing:.7px;
+  text-transform:uppercase; color:var(--txt-3)}
+.cartao-atualizacao .val{font-size:13px; font-weight:700; color:var(--txt);
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+.cartao-atualizacao .item.destaque{background:var(--acento-bg, var(--sel))}
+.cartao-atualizacao .item.destaque .rot,
+.cartao-atualizacao .item.destaque .val{color:var(--acento, var(--azul-2))}
+.cartao-atualizacao .item.alerta{background:var(--ambar-bg)}
+.cartao-atualizacao .item.alerta .rot,
+.cartao-atualizacao .item.alerta .val{color:var(--ambar-txt)}
+.cartao-atualizacao .obs{font-size:10px; color:var(--ambar-txt); font-weight:600}
+
 .resumo{font-size:13px; color:var(--txt-2)}
 .resumo b{color:var(--txt); font-weight:640}
 .resumo .sep{color:var(--txt-3); margin:0 7px}
@@ -407,6 +428,8 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   </div>
 
   <div class="abas-topo" id="abasTopo"></div>
+
+  <div class="cartao-atualizacao" id="cartaoAtualizacao"></div>
 
   <div class="resumo" id="resumo"></div>
 
@@ -796,7 +819,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608051350"></script>
+<script src="supa.js?v=202608051441"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1489,6 +1512,37 @@ document.addEventListener("keydown", e => {
   else fecharDrill();
 });
 
+/* ---------- card de atualizacao ----------
+   Cada etapa com DATA E HORA. Se a planilha foi salva depois da carga, o card
+   avisa -- foi exatamente o caso que apareceu em 05/08. */
+const paraData = t => {
+  const m = String(t || "").match(/(\d{2})\/(\d{2})\/(\d{4})(?:\D+(\d{2}):(\d{2}))?/);
+  return m ? new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0)) : null;
+};
+
+function desenharCartaoAtualizacao(){
+  const caixa = document.getElementById("cartaoAtualizacao");
+  // no dev.html nao passa pelo supa.js, entao a hora da tela nasce aqui
+  if (!DADOS.carregado_em){
+    DADOS.carregado_em = new Date().toLocaleString("pt-BR", {day:"2-digit", month:"2-digit",
+      year:"numeric", hour:"2-digit", minute:"2-digit"}).replace(", ", " às ");
+  }
+  const carga = paraData(DADOS.atualizado_em), planilha = paraData(DADOS.salva_em);
+  const desatualizado = carga && planilha && planilha > carga;
+
+  const item = (rot, val, classe, obs) => !val ? "" :
+    `<div class="item ${classe || ""}"><span class="rot">${esc(rot)}</span>
+       <span class="val">${esc(val)}</span>${obs ? `<span class="obs">${esc(obs)}</span>` : ""}</div>`;
+
+  caixa.innerHTML =
+    item("Dados atualizados em", DADOS.atualizado_em, "destaque") +
+    item("Planilha salva em", DADOS.salva_em,
+         desatualizado ? "alerta" : "",
+         desatualizado ? "mais nova que a carga — atualize o painel" : "") +
+    item("Base de", DADOS.gerado_em) +
+    item("Tela aberta em", DADOS.carregado_em);
+}
+
 function desenharAbasTopo(){
   document.getElementById("abasTopo").innerHTML = DADOS.abas.map(a =>
     `<button type="button" data-aba="${esc(a.id)}" class="${a.id === estado.aba ? "ativa" : ""}">
@@ -1714,6 +1768,7 @@ function iniciar(dados){
   dados.abas = recontarAbas(partirAbas(dados.abas));
   if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
+  desenharCartaoAtualizacao();
   desenharAbasTopo();
   desenharPills();
   desenharAviso();

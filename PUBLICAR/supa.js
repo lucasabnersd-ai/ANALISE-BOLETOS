@@ -179,9 +179,15 @@
     // os titulos vem ordenados por uuid; a ordem das abas e a do gerador
     abas.sort(function (a, b) { return a.ordem - b.ordem; });
 
+    // carregado_em e a hora DESTA tela: diz se o que esta na frente da pessoa
+    // acabou de vir do banco ou esta aberto ha horas.
+    var agora = new Date();
     return {
       gerado_em: geral.gerado_em, atualizado_em: geral.atualizado_em,
-      sem_codigo: geral.sem_codigo, abas: abas,
+      salva_em: geral.salva_em || "", sem_codigo: geral.sem_codigo,
+      carregado_em: agora.toLocaleString("pt-BR", {day:"2-digit", month:"2-digit",
+        year:"numeric", hour:"2-digit", minute:"2-digit"}).replace(", ", " às "),
+      abas: abas,
     };
   }
 

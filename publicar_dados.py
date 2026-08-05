@@ -58,6 +58,7 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 "particoes": aba.get("particoes"),
                 "gerado_em": carga["gerado_em"],
                 "atualizado_em": carga["atualizado_em"],
+                "salva_em": carga.get("salva_em", ""),
                 "sem_codigo": carga["sem_codigo"],
                 "com_alerta": aba["com_alerta"],
                 "divergentes": aba["divergentes"],

@@ -734,6 +734,8 @@ def gerar(base: Path, saida: Path) -> dict:
     dados = {
         "gerado_em": resumo.get("Gerado em") or dt.date.today().strftime("%d/%m/%Y"),
         "atualizado_em": dt.datetime.now().strftime("%d/%m/%Y às %H:%M"),
+        # quando a PLANILHA foi salva: e o que diz se a carga esta velha ou nao
+        "salva_em": dt.datetime.fromtimestamp(base.stat().st_mtime).strftime("%d/%m/%Y às %H:%M"),
         "sem_codigo": do_resumo("Títulos sem código de barras"),
         "abas": abas,
     }
