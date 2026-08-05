@@ -25,6 +25,14 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import planilha_excel_js
+
+# Motor .xlsx do painel SE2, reaproveitado aqui (pedido do usuario: "use o
+# modelo de planilha que e gerado na base desse painel"). A FONTE e a copia do
+# SE2; esta aqui e vendorizada para o painel nao depender de uma pasta em
+# Downloads. `conferir_motor_planilha()` avisa quando as duas divergem.
+MOTOR_PLANILHA_FONTE = Path(r"C:\Users\lucas\Downloads\se2 - sistema\planilha_excel_js.py")
+
 BASE_PADRAO = Path(
     r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
     r"\LUCAS ABNER ARAUJO\TRATAMENTO PYTHON BOLETOS.xlsx"
@@ -216,11 +224,16 @@ ABAS = {
         # Regra (a mesma escrita no painel): vence hoje ou depois -> futura;
         # venceu antes de hoje -> passado, A NAO SER que ja tenha sido tratada
         # enquanto ainda estava a vencer, e ai fica na futura.
+        # `guia` e o nome da aba no .xlsx exportado -- o Excel corta em 31
+        # caracteres e o nome da aba do painel nao cabe. (Nao confundir com
+        # `planilha`, que aqui significa a aba da PLANILHA DE ORIGEM.)
         "particoes": [
             {"id": "futuros", "modo": "futura", "cor": "vermelho",
-             "nome": "NFs (não associadas · visão futura)"},
+             "nome": "NFs (não associadas · visão futura)",
+             "guia": "NFs nao assoc - futura"},
             {"id": "passado", "modo": "passado", "cor": "ambar",
-             "nome": "NFs (não associadas · visão passado · pendentes)"},
+             "nome": "NFs (não associadas · visão passado · pendentes)",
+             "guia": "NFs nao assoc - passado"},
         ],
     },
 }
@@ -246,6 +259,17 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Empresa/Origem": "Empresa", "Arquivo/Observação": "Observação",
                     "Fonte Boleto": "Fonte", "CNPJ/CPF": "CNPJ/CPF",
                     "Situação": "Situação"}
+
+# Cabecalho da planilha exportada: aqui vale o nome por extenso, nao a
+# abreviacao da tela. Sem entrada, sai o proprio nome da coluna da base.
+ROTULOS_PLANILHA = {"@delta_valor": "Diferença de Valor (Boleto - Título)",
+                    "@delta_dias": "Diferença de Dias (Boleto - Título)",
+                    "@tratativa": "Tratativa",
+                    "CHECK (FEITO)": "Tratado",
+                    "Campo UUID": "Campo UUID",
+                    "No. Titulo": "No. Título",
+                    "Vlr.Titulo": "Valor Título",
+                    "Situação": "Situação do Boleto"}
 
 LARGURAS = {
     "Campo UUID": 296, "Razão Social": 250, "Fornecedor Boleto": 200,
@@ -482,6 +506,10 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             "copiar": COPIAVEIS.get(rotulo, "") if copiavel else "",
             "so_botao": rotulo in SO_BOTAO,
             "check": rotulo == COLUNA_CHECK,
+            # Cabecalho da EXPORTACAO. Na tela o rotulo e abreviado porque o
+            # cabecalho e uma linha so; na planilha cabe o nome inteiro -- e o
+            # nome da base e o que a pessoa reconhece.
+            "planilha": ROTULOS_PLANILHA.get(rotulo, rotulo),
         })
     return colunas
 
@@ -678,6 +706,8 @@ def gerar(base: Path, saida: Path) -> dict:
         abas.append({
             "id": ident,
             "nome": cfg["nome"],
+            # aba do .xlsx exportado (o Excel corta em 31 caracteres)
+            "guia": cfg.get("guia", cfg["nome"])[:31],
             "cor": cfg["cor"],
             "compacta": compacta,
             "linhas": registros,
@@ -710,6 +740,14 @@ def gerar(base: Path, saida: Path) -> dict:
 
     carga = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
     modelo = MODELO.read_text(encoding="utf-8")
+
+    # O motor da planilha entra nos DOIS (dev e publicado): e so codigo, sem
+    # nenhum dado, e o botao Exportar depende dele.
+    if "<!--__PLANILHA__-->" not in modelo:
+        raise RuntimeError("falta o marcador <!--__PLANILHA__--> no painel_modelo.html")
+    modelo = modelo.replace(
+        "<!--__PLANILHA__-->",
+        planilha_excel_js.bloco_autonomo("PLANILHA XLSX (mesmo motor do painel SE2)"))
 
     # Publicacao: o HTML sai SEM a carteira (mesmo modelo dos outros paineis --
     # o Pages serve publicamente mesmo com o repo privado). A carteira vai para
@@ -760,6 +798,18 @@ def conferir_sem_dados(arquivo: Path, dados: dict) -> None:
         )
 
 
+def conferir_motor_planilha() -> str:
+    """Avisa se a copia local do motor .xlsx saiu de sincronia com a do SE2."""
+    if not MOTOR_PLANILHA_FONTE.exists():
+        return ""      # a pasta do SE2 nao esta aqui: segue com a copia local
+    local = (PASTA / "planilha_excel_js.py").read_bytes()
+    if local == MOTOR_PLANILHA_FONTE.read_bytes():
+        return ""
+    return ("AVISO: planilha_excel_js.py esta diferente do original do SE2\n"
+            f"       ({MOTOR_PLANILHA_FONTE}).\n"
+            "       A planilha exportada pode nao sair igual a do SE2.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", type=Path, default=BASE_PADRAO)
@@ -772,6 +822,11 @@ def main() -> int:
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
 
+    # a base lida vem primeiro: e a pergunta que mais aparece ("de onde saiu?")
+    salva = dt.datetime.fromtimestamp(args.base.stat().st_mtime)
+    print(f"Base lida: {args.base}")
+    print(f"           (planilha salva em {salva.strftime('%d/%m/%Y as %H:%M')})\n")
+
     for aba in dados["abas"]:
         print(f"{aba['nome']}: {len(aba['linhas'])} linhas | {len(aba['compacta'])} colunas"
               f" | com alerta: {aba['com_alerta']} | boleto difere: {aba['divergentes']}"
@@ -779,6 +834,9 @@ def main() -> int:
     print(f"Publicavel (sem dados): {args.saida}")
     print(f"Carteira para subir:    {DADOS_JSON}")
     print(f"Painel local (com dados): {DEV}")
+    aviso = conferir_motor_planilha()
+    if aviso:
+        print(f"\n{aviso}", file=sys.stderr)
     return 0
 
 

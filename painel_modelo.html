@@ -421,7 +421,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
     <button type="button" id="limparFiltros" hidden>Limpar</button>
     <span class="espaco"></span>
-    <button type="button" id="exportar" title="Baixa o que está na tela, com as marcações">⤓ Exportar</button>
+    <button type="button" id="exportar" title="Baixa em Excel (.xlsx) o que está na tela, com as marcações">⤓ Exportar Excel</button>
   </div>
 
   <div class="pills" id="pills"></div>
@@ -477,6 +477,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   </div>
 </div>
 
+<!--__PLANILHA__-->
 <!--__SUPA__-->
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
@@ -591,15 +592,27 @@ function dataISO(r, chave){
   return p ? `${p[3]}-${p[2]}-${p[1]}` : "";
 }
 
-/* "Mais recente" = a maior data que a linha tiver (emissao ou vencimento). */
-const COLUNAS_RECENTE = ["dt_emissao", "vencimento", "vencimento_boleto", "vencto_real"];
-function recente(r){
-  let maior = "";
+/* A data que representa a linha na ordem padrao: o vencimento do titulo, com
+   alternativas para as abas que nao tem essa coluna. */
+const COLUNAS_RECENTE = ["vencimento", "vencto_real", "vencimento_boleto", "dt_emissao"];
+function dataDaLinha(r){
   for (const chave of COLUNAS_RECENTE){
     const d = dataISO(r, chave);
-    if (d > maior) maior = d;
+    if (d) return d;
   }
-  return maior;
+  return "";
+}
+
+/* "Mais recente" = o mais PERTO de hoje -- nao a maior data. Ordenar pela maior
+   punha no topo o boleto que vence em 2030, o menos urgente de todos; nas abas
+   de datas passadas dava certo por acaso, porque la a maior data e mesmo a mais
+   proxima. Assim as quatro abas abrem pelo que interessa agora. */
+function distanciaDeHoje(r, hoje){
+  const d = dataDaLinha(r);
+  if (!d) return Infinity;                       // sem data, vai para o fim
+  const dias = (Date.parse(d + "T00:00:00") - Date.parse(hoje + "T00:00:00")) / 86400000;
+  // empate entre um vencido e um a vencer: o vencido vem primeiro
+  return Math.abs(dias) * 2 + (dias > 0 ? 1 : 0);
 }
 
 /* ---------- visao futura x visao passado ----------
@@ -651,6 +664,7 @@ function partirAbas(abas){
       const querFutura = p.modo === "futura";
       saida.push(Object.assign({}, aba, {
         id: p.id, nome: p.nome, cor: p.cor, particoes: null, modo: p.modo,
+        guia: p.guia || p.nome,
         linhas: aba.linhas.filter(r => naVisaoFutura(r, hoje) === querFutura),
       }));
     });
@@ -735,8 +749,10 @@ function linhas(){
       return estado.desc ? -r : r;
     });
   } else {
-    // Sem coluna escolhida: mais recente primeiro (pedido do usuario).
-    itens.sort((a, b) => (recente(b) || "").localeCompare(recente(a) || ""));
+    // Sem coluna escolhida: o mais perto de hoje primeiro (pedido do usuario).
+    const hoje = hojeISO();
+    itens.sort((a, b) => distanciaDeHoje(a, hoje) - distanciaDeHoje(b, hoje)
+                      || String(a.uuid).localeCompare(String(b.uuid)));
   }
   return itens;
 }
@@ -936,43 +952,73 @@ function abrirCartaoTratativa(alvo, uuid){
 
 /* ---------- exportar ----------
    Sai o que esta na tela (aba + sub-aba + filtros), com as marcacoes juntas.
-   CSV com BOM e ; para o Excel em portugues abrir sem perguntar nada. */
-function exportar(){
-  const cols = A().compacta.filter(c => !c.check && c.tipo !== "tratativa");
-  const cabecalho = [...cols.map(c => c.rotulo),
-                     "Tratado", "Tratado em", "Tratado por", "Tratativa"];
+   Formato: .xlsx no MESMO modelo do painel SE2 (window.PlanilhaSE2, injetado
+   pelo gerar_painel.py a partir do planilha_excel_js.py). Numero sai numero e
+   data sai data, para dar para somar e filtrar no Excel; texto sai em caixa
+   alta. Nada de biblioteca de CDN -- o painel e fechado por login. */
+const TIPO_PLANILHA = {moeda:"moeda", inteiro:"inteiro", data:"data"};
 
-  const celula = (r, c) => {
-    if (c.tipo === "delta"){
-      const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
-      return v == null ? "" : String(v).replace(".", ",");
-    }
-    // o valor cru quando existir: no Excel numero e data tem de ser numero e data
-    const cru = r.o[c.chave];
-    if ((c.tipo === "moeda" || c.tipo === "inteiro") && cru != null && cru !== "")
-      return String(cru).replace(".", ",");
-    return r.c[c.chave] ?? "";
-  };
-
-  const linhasCsv = linhas().map(r => [
-    ...cols.map(c => celula(r, c)),
-    feitos.has(r.uuid) ? "SIM" : "NAO",
-    dataHora(tratadoEm[r.uuid] || r.tratado_em || ""),
-    responsaveis[r.uuid] || r.tratado_por || "",
-    tratativas[r.uuid] || "",
+function colunasExportacao(){
+  const cols = A().compacta
+    .filter(c => !c.check && c.tipo !== "tratativa")
+    .map(c => ({
+      chave: c.chave,
+      tipoPainel: c.tipo,
+      titulo: c.planilha || c.rotulo,
+      // delta_valor e dinheiro; delta_dias e contagem de dias
+      tipo: c.tipo === "delta"
+        ? (c.chave === "delta_valor" ? "moeda" : "inteiro")
+        : (TIPO_PLANILHA[c.tipo] || "texto"),
+      // a largura da tela e percentual; na planilha vira caractere
+      largura: Math.max(10, Math.min(52, Math.round((c.largura || 8) * 2.2))),
+    }));
+  return cols.concat([
+    {chave:"@feito",     titulo:"Tratado",     tipo:"texto", largura:10},
+    {chave:"@quando",    titulo:"Tratado em",  tipo:"texto", largura:18},
+    {chave:"@quem",      titulo:"Tratado por", tipo:"texto", largura:24},
+    {chave:"@nota",      titulo:"Tratativa",   tipo:"texto", largura:60},
   ]);
+}
 
-  // ; separa campos e " escapa aspas -- sem isso um historico com ponto e
-  // virgula quebraria a planilha inteira
-  const escapa = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const csv = "﻿" + [cabecalho, ...linhasCsv].map(l => l.map(escapa).join(";")).join("\r\n");
+function valorExportacao(r, c){
+  if (c.chave === "@feito")  return feitos.has(r.uuid) ? "SIM" : "NAO";
+  if (c.chave === "@quando") return dataHora(tratadoEm[r.uuid] || r.tratado_em || "");
+  if (c.chave === "@quem")   return responsaveis[r.uuid] || r.tratado_por || "";
+  if (c.chave === "@nota")   return tratativas[r.uuid] || "";
+  if (c.tipoPainel === "delta"){
+    const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
+    return v == null ? "" : v;
+  }
+  // o valor CRU quando existir (numero, data ISO): so assim a celula vira
+  // numero/data no Excel em vez de "R$ 5.427,50" como texto
+  const cru = r.o[c.chave];
+  if ((c.tipo === "moeda" || c.tipo === "inteiro" || c.tipo === "data")
+      && cru != null && cru !== "") return cru;
+  return r.c[c.chave] ?? "";
+}
 
-  const nome = `${A().id}_${estado.sub}_${new Date().toISOString().slice(0, 10)}.csv`;
-  const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
-  const link = document.createElement("a");
-  link.href = url; link.download = nome;
-  document.body.appendChild(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+async function exportar(){
+  const botao = document.getElementById("exportar");
+  const antes = botao.textContent;
+  const cols = colunasExportacao();
+  const itens = linhas();
+  const nome = `analise-boletos_${A().id}_${estado.sub}_`
+    + `${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+  botao.disabled = true;
+  botao.textContent = "gerando…";
+  try {
+    const blob = await window.PlanilhaSE2.gerar(
+      A().guia || A().nome,
+      cols.map(c => ({titulo:c.titulo, tipo:c.tipo, largura:c.largura})),
+      itens.map(r => cols.map(c => valorExportacao(r, c))));
+    window.PlanilhaSE2.baixar(blob, nome);
+    botao.textContent = `✓ ${num(itens.length)} linhas`;
+  } catch (e) {
+    console.error("não consegui gerar a planilha:", e);
+    botao.textContent = "falhou";
+  }
+  setTimeout(() => { botao.textContent = antes; botao.disabled = false; }, 2200);
 }
 
 document.getElementById("exportar").addEventListener("click", exportar);

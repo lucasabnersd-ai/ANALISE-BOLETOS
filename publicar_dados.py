@@ -51,6 +51,8 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 # quem tiver o menor uuid
                 "ordem": posicao,
                 "nome": aba["nome"],
+                # nome da aba no .xlsx exportado
+                "guia": aba["guia"],
                 "cor": aba["cor"],
                 # quando existe, o painel abre esta aba em duas (futura/passado)
                 "particoes": aba.get("particoes"),

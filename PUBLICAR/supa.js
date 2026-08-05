@@ -165,6 +165,7 @@
       if (m.compacta && m.compacta.length) geral = geral || m;
       return {
         id: id, nome: m.nome || id, cor: m.cor || "azul",
+        guia: m.guia || m.nome || id,
         ordem: m.ordem == null ? 99 : m.ordem,
         compacta: m.compacta || [], parcelas: m.parcelas || {},
         pills: m.pills || null, ocr: m.ocr || 0,
