@@ -465,7 +465,13 @@ def gerar(base: Path, saida: Path) -> dict:
     # o Pages serve publicamente mesmo com o repo privado). A carteira vai para
     # um JSON a parte, que o supa.js entrega so depois do login.
     saida.parent.mkdir(parents=True, exist_ok=True)
-    saida.write_text(modelo, encoding="utf-8")
+    # O supa.js entra SO no publicado: no dev.html a carteira ja vem embutida e
+    # uma tela de login local so atrapalharia. O ?v= e cache-bust -- sem ele o
+    # navegador serve o supa.js velho depois de qualquer ajuste.
+    versao = dt.datetime.now().strftime("%Y%m%d%H%M")
+    saida.write_text(
+        modelo.replace("<!--__SUPA__-->", f'<script src="supa.js?v={versao}"></script>'),
+        encoding="utf-8")
     conferir_sem_dados(saida, dados)
 
     DADOS_JSON.parent.mkdir(parents=True, exist_ok=True)

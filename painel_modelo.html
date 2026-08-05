@@ -264,6 +264,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   </div>
 </div>
 
+<!--__SUPA__-->
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -286,7 +287,13 @@ try {
   JSON.parse(localStorage.getItem(CHAVE_FEITOS) || "[]").forEach(u => feitos.add(u));
 } catch (e) {}
 
-function gravarFeitos(){
+/* Com login, o registro e o banco (uma linha por titulo, para duas pessoas
+   marcarem sem uma apagar a marcacao da outra). Sem login -- o dev.html local
+   -- cai no proprio navegador. */
+const noBanco = () => typeof window.__SALVAR_MARCACAO__ === "function";
+
+function gravarFeitos(uuid){
+  if (noBanco()) { window.__SALVAR_MARCACAO__(uuid, {feito: feitos.has(uuid)}); return; }
   try { localStorage.setItem(CHAVE_FEITOS, JSON.stringify([...feitos])); } catch (e) {}
 }
 
@@ -296,7 +303,8 @@ const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
 let tratativas = {};
 try { tratativas = JSON.parse(localStorage.getItem(CHAVE_TRATATIVAS) || "{}") || {}; } catch (e) {}
 
-function gravarTratativas(){
+function gravarTratativas(uuid){
+  if (noBanco()) { window.__SALVAR_MARCACAO__(uuid, {tratativa: tratativas[uuid] || null}); return; }
   try { localStorage.setItem(CHAVE_TRATATIVAS, JSON.stringify(tratativas)); } catch (e) {}
 }
 
@@ -557,7 +565,7 @@ document.getElementById("grade").addEventListener("change", e => {
   const caixa = e.target.closest("[data-feito]");
   if (!caixa) return;
   caixa.checked ? feitos.add(caixa.dataset.feito) : feitos.delete(caixa.dataset.feito);
-  gravarFeitos();
+  gravarFeitos(caixa.dataset.feito);
   caixa.closest("tr").classList.toggle("feita", caixa.checked);
   mostrarResumo();
 });
@@ -610,7 +618,7 @@ document.getElementById("grade").addEventListener("click", e => {
     const texto = prompt("Tratativa deste título (deixe em branco para apagar):", antes);
     if (texto === null) return;                    // cancelou
     if (texto.trim()) tratativas[uuid] = texto.trim(); else delete tratativas[uuid];
-    gravarTratativas();
+    gravarTratativas(uuid);
     fecharCartao();
     desenhar();
     return;
@@ -644,7 +652,11 @@ try {
    espera o supa.js resolver window.__DADOS_BOLETOS__ depois do login. */
 function iniciar(dados){
   DADOS = dados;
-  dados.linhas.forEach(r => { if (r.feito) feitos.add(r.uuid); });
+  dados.linhas.forEach(r => {
+    if (r.feito) feitos.add(r.uuid);
+    // com login, a tratativa vem do banco e manda sobre o que houver local
+    if (r.tratativa) tratativas[r.uuid] = r.tratativa;
+  });
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenhar();
 }
