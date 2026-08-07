@@ -26,26 +26,40 @@ echo   PAINEL ANALISE DE BOLETOS
 echo ============================================================
 echo.
 
-echo [1/2] Lendo a planilha e montando o painel...
+echo [1/3] Lendo a planilha e montando o painel...
 echo.
 "%PYTHON%" %PYARGS% "%~dp0gerar_painel.py" %*
 set "CODIGO=%ERRORLEVEL%"
 if not "%CODIGO%"=="0" goto :erro
 
 echo.
-echo [2/2] Subindo a carteira para o painel publicado...
+echo [2/3] Subindo a carteira para o painel publicado...
 echo.
 rem Sem esta etapa o painel no ar continuaria com os dados da carga anterior:
 rem o gerar_painel.py so escreve os arquivos aqui na maquina.
 if not exist "%~dp0.analise_boletos_token" (
   echo   AVISO: falta o arquivo .analise_boletos_token nesta pasta.
-  echo   O painel LOCAL esta atualizado, mas o painel publicado continua
+  echo   O painel LOCAL esta atualizado, mas a carteira publicada continua
   echo   com os dados da carga anterior.
-  goto :abrir
+  goto :publicar_git
 )
 
 "%PYTHON%" %PYARGS% "%~dp0publicar_dados.py"
 set "CODIGO=%ERRORLEVEL%"
+if not "%CODIGO%"=="0" goto :erro
+
+:publicar_git
+echo.
+echo [3/3] Publicando PUBLICAR\ no GitHub Pages (commit e push)...
+echo.
+rem Sem esta etapa o layout gerado (PUBLICAR\index.html) fica so nesta maquina:
+rem o deploy.py faz git add/commit/push do que o .gitignore deixar passar.
+"%PYTHON%" %PYARGS% "%~dp0deploy.py"
+set "CODIGO=%ERRORLEVEL%"
+if "%CODIGO%"=="2" (
+  echo   Nada mudou no painel publicado desde o ultimo commit.
+  goto :abrir
+)
 if not "%CODIGO%"=="0" goto :erro
 
 :abrir
