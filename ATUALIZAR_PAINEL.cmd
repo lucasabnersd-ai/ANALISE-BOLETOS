@@ -58,16 +58,13 @@ rem o deploy.py faz git add/commit/push do que o .gitignore deixar passar.
 set "CODIGO=%ERRORLEVEL%"
 if "%CODIGO%"=="2" (
   echo   Nada mudou no painel publicado desde o ultimo commit.
-  goto :abrir
+  goto :fim
 )
 if not "%CODIGO%"=="0" goto :erro
 
-:abrir
+:fim
 echo.
-echo CONCLUIDO. Abrindo o painel local...
-rem dev.html e o painel COM os dados, so nesta maquina. O PUBLICAR\index.html
-rem nasce vazio de proposito -- e o que vai para o GitHub Pages.
-start "" "%~dp0dev.html"
+echo CONCLUIDO. Painel publicado em https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/
 echo.
 if not defined PAINEL_SEM_PAUSA pause
 exit /b 0
