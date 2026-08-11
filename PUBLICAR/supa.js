@@ -21,6 +21,7 @@
 
   var sb = null;
   var resolver, rejeitar;
+  var entregue = false;   // a carteira ja foi entregue ao painel uma vez?
   // O painel espera esta promessa; ela so resolve depois do login.
   window.__DADOS_BOLETOS__ = new Promise(function (res, rej) { resolver = res; rejeitar = rej; });
 
@@ -187,14 +188,39 @@
   }
 
   /* Check e tratativa vao para o banco -- uma linha por titulo, para duas
-     pessoas mexerem sem uma apagar a marcacao da outra. */
+     pessoas mexerem sem uma apagar a marcacao da outra.
+     Devolve {ok, erro, relogar} em vez de um booleano: quem chama e a fila do
+     painel, que precisa saber POR QUE falhou para decidir entre tentar de novo
+     e pedir login. O `.select()` no fim e de proposito -- so contamos como
+     gravado o que o Postgres devolveu; sem ele, "sem erro" nao prova escrita. */
   window.__SALVAR_MARCACAO__ = async function (uuid, campos) {
-    if (!sb) return false;
+    if (!sb) return { ok: false, erro: "ainda sem conexão com o servidor" };
     var linha = Object.assign({ uuid: uuid }, campos);
-    var r = await sb.from("analise_boletos_marcacoes").upsert(linha, { onConflict: "uuid" });
-    if (r.error) { console.error("não consegui gravar a marcação:", r.error.message); return false; }
-    return true;
+    var r;
+    try {
+      r = await sb.from("analise_boletos_marcacoes")
+        .upsert(linha, { onConflict: "uuid" }).select("uuid");
+    } catch (e) {
+      return { ok: false, erro: (e && e.message) || "falha de rede" };
+    }
+    if (r.error) {
+      var m = r.error.message || "";
+      console.error("não consegui gravar a marcação:", m);
+      // sessao expirada chega como JWT/401; nesse caso insistir nao resolve
+      return {
+        ok: false, erro: m,
+        relogar: /jwt|token|expired|401|not authenticated/i.test(m),
+      };
+    }
+    if (!r.data || !r.data.length) {
+      return { ok: false, erro: "o banco não confirmou a gravação" };
+    }
+    return { ok: true };
   };
+
+  /* O painel chama isto quando a fila detecta sessao expirada: a tela de login
+     volta por cima, e o que estava pendente sobe assim que a pessoa entrar. */
+  window.__PEDIR_LOGIN__ = function (msg) { mostrarLogin(msg || "", false); };
 
   async function entrar() {
     var email = (document.getElementById("ab-email").value || "").trim();
@@ -225,7 +251,11 @@
     try {
       var dados = await baixarCarteira();
       esconderLogin();
-      resolver(dados);
+      // A promessa so resolve uma vez; num segundo login (sessao que expirou no
+      // meio do trabalho) e preciso reentregar a carteira na mao, senao a tela
+      // fica com os dados velhos e a fila subiria por baixo do pano.
+      if (entregue && window.__INICIAR_PAINEL__) window.__INICIAR_PAINEL__(dados);
+      else { entregue = true; resolver(dados); }
     } catch (e) {
       // RLS negando aparece aqui: autenticou, mas nao esta autorizado.
       var m = (e && e.message) || "";

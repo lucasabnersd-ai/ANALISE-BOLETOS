@@ -182,6 +182,23 @@ body[data-aba="passado"] tr.grupos th.g-parte{background:var(--ambar-bg); color:
 /* o aviso que so explica a aba nao e alarme: fica no tom neutro da pagina */
 .linha-aviso.calmo{background:var(--surface); color:var(--txt-2); border-color:var(--line)}
 .linha-aviso.calmo b{color:var(--txt)}
+/* ---------- estado da gravacao ----------
+   Canto inferior direito, por cima de tudo: quem esta no fim da lista precisa
+   ver que algo nao subiu sem ter de rolar ate o topo. */
+.envio{position:fixed; right:16px; bottom:16px; z-index:60; max-width:min(380px,calc(100vw - 32px));
+  display:flex; flex-direction:column; gap:5px; padding:11px 13px; border-radius:10px;
+  font-size:12px; line-height:1.45; box-shadow:0 12px 30px rgba(0,0,0,.22)}
+.envio[hidden]{display:none}
+.envio b{font-weight:800}
+.envio i{font-style:normal; opacity:.8}
+.envio .bts{display:flex; gap:7px; margin-top:3px}
+.envio button{font:inherit; font-weight:700; cursor:pointer; padding:5px 10px; border-radius:6px;
+  border:1px solid currentColor; background:transparent; color:inherit}
+.envio button:hover{background:rgba(0,0,0,.07)}
+.envio.ruim{background:var(--alerta-bg); color:var(--alerta); border:1px solid var(--alerta)}
+.envio.indo{background:var(--surface); color:var(--txt-2); border:1px solid var(--line-forte)}
+.envio.bom{background:var(--verde-bg); color:var(--verde-txt); border:1px solid var(--verde-linha)}
+
 /* marca na linha lida errado pelo OCR */
 .selo.ocr{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha);
   margin-left:5px; cursor:help}
@@ -457,12 +474,15 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   <div class="planilha"><table id="grade"></table></div>
 
   <div class="rodape">
-    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. No Δ, <b>▲</b> = boleto acima do título e <b>▼</b> = abaixo. Selo <b>roxo PARCELA</b> abre as parcelas da NF (aba “NFs Múltiplas Parcelas”); selo <b>amarelo FATURA</b> é só aviso. Clique em qualquer campo com <b>⧉</b> para copiar. O <b>check</b> fica gravado neste navegador, por UUID — o registro definitivo é a coluna CHECK (FEITO) da planilha.</span>
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. No Δ, <b>▲</b> = boleto acima do título e <b>▼</b> = abaixo. Selo <b>roxo PARCELA</b> abre as parcelas da NF (aba “NFs Múltiplas Parcelas”); selo <b>amarelo FATURA</b> é só aviso. Clique em qualquer campo com <b>⧉</b> para copiar. O <b>check</b> e a <b>tratativa</b> são gravados no banco, por UUID, e todo mundo vê o mesmo. Se a conexão cair, ficam numa fila neste navegador e sobem sozinhos depois — enquanto isso o painel avisa no canto da tela.</span>
     <span id="atualizado"></span>
   </div>
 </div>
 
 <div class="cartao" id="cartao"></div>
+
+<!-- estado da gravacao: so aparece quando ha algo a dizer -->
+<div class="envio" id="envio" data-tinha="0" hidden></div>
 
 <div class="fundo-drill" id="fundoDrill">
   <div class="drill" role="dialog" aria-modal="true" aria-labelledby="drillTitulo">
@@ -540,57 +560,203 @@ const dataHora = iso => {
     {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"});
 };
 
-/* Marcacao "tratado": guardada por UUID do titulo, no proprio navegador.
-   O registro definitivo continua sendo a coluna CHECK (FEITO) da planilha. */
-const CHAVE_FEITOS = "painel_boletos_feitos";
-const feitos = new Set();
-try {
-  JSON.parse(localStorage.getItem(CHAVE_FEITOS) || "[]").forEach(u => feitos.add(u));
-} catch (e) {}
+/* ---------- marcacoes: nada se perde ----------
+   Check e tratativa moram no banco (uma linha por titulo, para duas pessoas
+   marcarem sem uma apagar a marcacao da outra). O caminho ate la passa por uma
+   FILA gravada no localStorage: a alteracao entra na fila ANTES de ir para o
+   Postgres e so sai de la quando o banco devolve a linha gravada. Se a rede
+   cair, a sessao expirar ou a aba fechar, a fila continua no navegador e sobe
+   sozinha na proxima chance -- e o painel avisa na tela enquanto houver
+   pendencia, em vez de mostrar o check marcado como se tivesse salvo.
 
-/* Com login, o registro e o banco (uma linha por titulo, para duas pessoas
-   marcarem sem uma apagar a marcacao da outra). Sem login -- o dev.html local
-   -- cai no proprio navegador. */
+   O espelho (feitos/tratativas/responsaveis) tambem fica no navegador, mas so
+   como copia de seguranca: quem manda na carga e o BANCO + a fila. Misturar o
+   espelho na carga ressuscitaria o que outra pessoa desmarcou -- foi
+   exatamente o problema que o painel de fluxo teve.
+
+   Sem login -- o dev.html local -- nao ha fila: o espelho e o registro. */
+const CHAVE_FEITOS = "painel_boletos_feitos";
+const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
+const CHAVE_RESP = "painel_boletos_responsaveis";
+const CHAVE_ULTIMO_RESP = "painel_boletos_ultimo_resp";
+const CHAVE_FILA = "painel_boletos_fila";
+
+const lerLS = (chave, padrao) => {
+  try { return JSON.parse(localStorage.getItem(chave) || padrao); }
+  catch (e) { return JSON.parse(padrao); }
+};
+const guardarLS = (chave, valor) => {
+  try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (e) {}
+};
+
+const feitos = new Set();
+lerLS(CHAVE_FEITOS, "[]").forEach(u => feitos.add(u));
+let tratativas = lerLS(CHAVE_TRATATIVAS, "{}") || {};
+let responsaveis = lerLS(CHAVE_RESP, "{}") || {};
+/* Quem esta tratando: digitado pela pessoa, por titulo. O ultimo nome usado
+   fica lembrado para nao ter de redigitar a cada linha. */
+let ultimoResp = "";
+try { ultimoResp = localStorage.getItem(CHAVE_ULTIMO_RESP) || ""; } catch (e) {}
+
 const noBanco = () => typeof window.__SALVAR_MARCACAO__ === "function";
+
+/* fila: uuid -> {campos:{...}, desde:iso} */
+let fila = lerLS(CHAVE_FILA, "{}") || {};
+let envio = {estado:"ok", erro:"", relogar:false};
+let drenando = false, tentativas = 0, agendado = null, sumirOk = null;
+const pendentes = () => Object.keys(fila).length;
+
+function espelhar(){
+  guardarLS(CHAVE_FEITOS, [...feitos]);
+  guardarLS(CHAVE_QUANDO, tratadoEm);
+  guardarLS(CHAVE_TRATATIVAS, tratativas);
+  guardarLS(CHAVE_RESP, responsaveis);
+}
+
+function enfileirar(uuid, campos){
+  const item = fila[uuid] || {campos:{}, desde:new Date().toISOString()};
+  item.campos = Object.assign(item.campos, campos);
+  fila[uuid] = item;
+  guardarLS(CHAVE_FILA, fila);
+  marcarTinha();
+  pintarEnvio();
+  drenar();
+}
+
+async function drenar(){
+  if (!noBanco() || drenando || !pendentes()) return;
+  clearTimeout(agendado);
+  drenando = true;
+  envio = {estado:"enviando", erro:"", relogar:false};
+  pintarEnvio();
+
+  let falha = null;
+  for (const uuid of Object.keys(fila)){
+    const enviado = JSON.stringify(fila[uuid].campos);
+    let r;
+    try { r = await window.__SALVAR_MARCACAO__(uuid, JSON.parse(enviado)); }
+    catch (e) { r = {ok:false, erro:(e && e.message) || "falha de rede"}; }
+    // compatibilidade: versao antiga do supa.js devolvia booleano
+    if (r === true) r = {ok:true};
+    if (r && r.ok){
+      // se a pessoa mexeu de novo durante o envio, o que chegou depois fica
+      // na fila -- so sai o que foi confirmado exatamente como estava
+      if (fila[uuid] && JSON.stringify(fila[uuid].campos) === enviado) delete fila[uuid];
+      guardarLS(CHAVE_FILA, fila);
+    } else {
+      falha = r || {erro:"falha desconhecida"};
+      break;                      // sem sentido insistir nos outros agora
+    }
+  }
+
+  drenando = false;
+  if (falha){
+    tentativas++;
+    envio = {estado:"pendente", erro:falha.erro || "", relogar:!!falha.relogar};
+    // 5s, 10s, 20s, 40s, depois de minuto em minuto -- sem desistir nunca
+    agendado = setTimeout(drenar, Math.min(60000, 5000 * Math.pow(2, Math.min(tentativas - 1, 4))));
+    if (falha.relogar && window.__PEDIR_LOGIN__){
+      window.__PEDIR_LOGIN__("Sua sessão expirou. Entre de novo — o que você marcou está guardado e sobe em seguida.");
+    }
+  } else {
+    tentativas = 0;
+    envio = {estado:"ok", erro:"", relogar:false};
+  }
+  pintarEnvio();
+}
+
+/* Aviso de gravacao. Fica quieto quando esta tudo salvo; vira alarme vermelho
+   -- com botao de tentar de novo e de baixar uma copia -- quando nao esta. */
+function pintarEnvio(){
+  const caixa = document.getElementById("envio");
+  if (!caixa) return;
+  clearTimeout(sumirOk);
+
+  if (envio.estado === "pendente"){
+    const n = pendentes();
+    caixa.className = "envio ruim";
+    caixa.hidden = false;
+    caixa.innerHTML =
+      `<b>⚠ ${num(n)} alteração${n === 1 ? "" : "ões"} ainda não gravada${n === 1 ? "" : "s"} no banco.</b>` +
+      `<span>Está guardada neste navegador e o painel segue tentando — não feche sem ver “tudo salvo”.` +
+      (envio.erro ? ` <i>(${esc(envio.erro)})</i>` : "") + `</span>` +
+      `<span class="bts"><button type="button" id="envioAgora">Tentar agora</button>` +
+      `<button type="button" id="envioCopia">Baixar cópia</button></span>`;
+    caixa.querySelector("#envioAgora").onclick = () => { tentativas = 0; drenar(); };
+    caixa.querySelector("#envioCopia").onclick = baixarCopiaMarcacoes;
+    return;
+  }
+  if (envio.estado === "enviando" && pendentes()){
+    caixa.className = "envio indo";
+    caixa.hidden = false;
+    caixa.innerHTML = `<span>salvando ${num(pendentes())} alteração${pendentes() === 1 ? "" : "ões"}…</span>`;
+    return;
+  }
+  if (pendentes()){                       // fila cheia e nada em curso ainda
+    caixa.className = "envio indo";
+    caixa.hidden = false;
+    caixa.innerHTML = `<span>${num(pendentes())} alteração(ões) na fila…</span>`;
+    return;
+  }
+  if (caixa.dataset.tinha === "1"){       // acabou de esvaziar: confirma e some
+    caixa.className = "envio bom";
+    caixa.hidden = false;
+    caixa.innerHTML = `<span>✓ tudo salvo no banco</span>`;
+    sumirOk = setTimeout(() => { caixa.hidden = true; }, 2500);
+  } else {
+    caixa.hidden = true;
+  }
+}
+// lembra se havia pendencia, para so mostrar o "tudo salvo" depois de algo
+const marcarTinha = () => {
+  const c = document.getElementById("envio");
+  if (c) c.dataset.tinha = pendentes() ? "1" : (c.dataset.tinha || "0");
+};
+
+/* Ultimo recurso: leva embora tudo o que esta no navegador, inclusive o que
+   nao subiu. Serve para recuperar na mao se o banco ficar fora do ar. */
+function baixarCopiaMarcacoes(){
+  const copia = {
+    baixado_em: new Date().toISOString(),
+    pendentes_no_banco: fila,
+    espelho: {feitos:[...feitos], tratativas, responsaveis, tratado_em: tratadoEm},
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(copia, null, 2)],
+    {type:"application/json"}));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `marcacoes_boletos_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 function gravarFeitos(uuid){
   // a data do tratamento acompanha o check nos dois modos
   if (feitos.has(uuid)) { if (!tratadoEm[uuid]) tratadoEm[uuid] = new Date().toISOString(); }
   else delete tratadoEm[uuid];
-
-  if (noBanco()) { window.__SALVAR_MARCACAO__(uuid, {feito: feitos.has(uuid)}); return; }
-  try {
-    localStorage.setItem(CHAVE_FEITOS, JSON.stringify([...feitos]));
-    localStorage.setItem(CHAVE_QUANDO, JSON.stringify(tratadoEm));
-  } catch (e) {}
+  espelhar();
+  if (noBanco()) enfileirar(uuid, {feito: feitos.has(uuid)});
 }
-
-/* Tratativa: anotacao livre por titulo, na mesma logica do check -- gravada
-   por UUID neste navegador, entao sobrevive a cada regeracao do painel. */
-const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
-let tratativas = {};
-try { tratativas = JSON.parse(localStorage.getItem(CHAVE_TRATATIVAS) || "{}") || {}; } catch (e) {}
-
-/* Quem esta tratando: digitado pela pessoa, por titulo. O ultimo nome usado
-   fica lembrado para nao ter de redigitar a cada linha. */
-const CHAVE_RESP = "painel_boletos_responsaveis";
-const CHAVE_ULTIMO_RESP = "painel_boletos_ultimo_resp";
-let responsaveis = {};
-try { responsaveis = JSON.parse(localStorage.getItem(CHAVE_RESP) || "{}") || {}; } catch (e) {}
-let ultimoResp = "";
-try { ultimoResp = localStorage.getItem(CHAVE_ULTIMO_RESP) || ""; } catch (e) {}
 
 function gravarTratativas(uuid){
-  if (noBanco()) {
-    window.__SALVAR_MARCACAO__(uuid, {tratativa: tratativas[uuid] || null,
-                                      tratado_por: responsaveis[uuid] || null});
-    return;
-  }
-  try {
-    localStorage.setItem(CHAVE_TRATATIVAS, JSON.stringify(tratativas));
-    localStorage.setItem(CHAVE_RESP, JSON.stringify(responsaveis));
-  } catch (e) {}
+  espelhar();
+  if (noBanco()) enfileirar(uuid, {tratativa: tratativas[uuid] || null,
+                                   tratado_por: responsaveis[uuid] || null});
 }
+
+/* A fila e reenviada em toda oportunidade: volta da internet, volta para a
+   aba, e de tempos em tempos enquanto sobrar alguma coisa. */
+window.addEventListener("online", () => { tentativas = 0; drenar(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) drenar(); });
+setInterval(() => { if (pendentes()) drenar(); }, 15000);
+
+/* Fechar a aba com marcacao pendente pede confirmacao -- o dado nao se perde
+   (fica no localStorage), mas so volta a subir quando o painel abrir de novo. */
+window.addEventListener("beforeunload", e => {
+  if (!pendentes()) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
 
 function mostrarResumo(){
   document.getElementById("resumo").innerHTML =
@@ -1432,11 +1598,38 @@ try {
   else if (matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.tema = "escuro";
 } catch (e) {}
 
+/* O que ainda nao foi confirmado pelo banco vale MAIS do que o que veio na
+   carga -- senao a tela desfaria na cara da pessoa a marcacao que ela acabou
+   de fazer offline. Depois de aplicar, tenta subir de novo. */
+function aplicarFila(){
+  Object.keys(fila).forEach(uuid => {
+    const c = fila[uuid].campos || {};
+    if ("feito" in c){
+      if (c.feito){ feitos.add(uuid); if (!tratadoEm[uuid]) tratadoEm[uuid] = fila[uuid].desde; }
+      else { feitos.delete(uuid); delete tratadoEm[uuid]; }
+    }
+    if ("tratativa" in c){
+      if (c.tratativa) tratativas[uuid] = c.tratativa; else delete tratativas[uuid];
+    }
+    if ("tratado_por" in c){
+      if (c.tratado_por) responsaveis[uuid] = c.tratado_por; else delete responsaveis[uuid];
+    }
+  });
+  espelhar();
+  marcarTinha();
+  pintarEnvio();
+  drenar();
+}
+
 /* ---------- entrada dos dados ----------
    O dev.html traz a carteira embutida; o index.html publicado nasce vazio e
    espera o supa.js resolver window.__DADOS_BOLETOS__ depois do login. */
 function iniciar(dados){
   DADOS = dados;
+  // Com login o banco e a fonte unica: zerar antes evita que um espelho velho
+  // deste navegador ressuscite o que outra pessoa desmarcou. O que ainda nao
+  // chegou la volta logo abaixo, pela fila.
+  if (noBanco()){ feitos.clear(); tratativas = {}; responsaveis = {}; tratadoEm = {}; }
   dados.abas.forEach(aba => aba.linhas.forEach(r => {
     if (r.feito) feitos.add(r.uuid);
     // com login, o banco manda sobre o que houver gravado no navegador
@@ -1444,6 +1637,7 @@ function iniciar(dados){
     if (r.tratado_em) tratadoEm[r.uuid] = r.tratado_em;
     if (r.tratado_por) responsaveis[r.uuid] = r.tratado_por;
   }));
+  if (noBanco()) aplicarFila();
   // o corte futura/passado le o que foi tratado, entao vem depois do laco acima
   dados.abas = recontarAbas(partirAbas(dados.abas));
   if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
