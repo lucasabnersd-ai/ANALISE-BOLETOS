@@ -109,17 +109,49 @@
   }
 
   /* ---------------- dados ---------------- */
+
+  /* Le a tabela inteira em blocos.
+   *
+   * ⚠ NAO troque isto por .limit(): o PostgREST do Supabase tem um TETO PROPRIO
+   * de linhas por resposta (1000). O .limit(20000) que existia aqui nao vence
+   * esse teto -- ele so pede menos, nunca mais. O resultado era a carteira
+   * chegando cortada SEM ERRO NENHUM: em 12/08/2026 a carteira passou de 1000
+   * ativos ao ganhar a aba da classificacao e 22 titulos sumiram da tela em
+   * silencio (os uuid "SF1:" ordenam por ultimo, entao o corte caiu todo neles).
+   * Paginar resolve para qualquer tamanho, hoje e depois.
+   *
+   * A ordem por uuid nao e enfeite: sem ordem estavel, dois blocos podem repetir
+   * ou pular linha.
+   */
+  var BLOCO = 1000;
+  var MAX_BLOCOS = 200;             // trava contra laco infinito (200k linhas)
+
+  async function lerTudo(tabela, colunas, filtrar) {
+    var tudo = [];
+    for (var pagina = 0; pagina < MAX_BLOCOS; pagina++) {
+      var q = sb.from(tabela).select(colunas);
+      if (filtrar) q = filtrar(q);
+      var r = await q.order("uuid", { ascending: true })
+                     .range(pagina * BLOCO, pagina * BLOCO + BLOCO - 1);
+      if (r.error) throw r.error;
+      var lote = r.data || [];
+      tudo = tudo.concat(lote);
+      // bloco incompleto = acabou. (O teto do servidor nunca devolve mais que
+      // BLOCO, entao um bloco cheio significa "pode haver mais".)
+      if (lote.length < BLOCO) return tudo;
+    }
+    throw new Error("carteira grande demais para carregar (" + tudo.length + " linhas)");
+  }
+
   async function baixarCarteira() {
     // so os ativos: os que sairam da base ficam no banco, mas fora do painel
-    var t = await sb.from("analise_boletos_titulos")
-      .select("uuid,dados").eq("ativo", true)
-      .order("uuid", { ascending: true }).limit(20000);
-    if (t.error) throw t.error;
-    if (!t.data.length) throw new Error("a carteira está vazia no servidor");
+    var titulos = await lerTudo("analise_boletos_titulos", "uuid,dados",
+      function (q) { return q.eq("ativo", true); });
+    if (!titulos.length) throw new Error("a carteira está vazia no servidor");
+    var t = { data: titulos };
 
-    var m = await sb.from("analise_boletos_marcacoes")
-      .select("uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em").limit(20000);
-    if (m.error) throw m.error;
+    var m = { data: await lerTudo("analise_boletos_marcacoes",
+      "uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em") };
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
 
