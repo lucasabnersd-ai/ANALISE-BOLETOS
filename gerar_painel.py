@@ -194,7 +194,7 @@ COMPACTA_FUTUROS = [
     ("Linha Digitável",     "",       "",           4.5),
 ]
 
-# Aba "NFs pendentes Itau": vem da planilha do DDA (copiar e colar), nao da base
+# Aba "Boletos em Aberto DDA": vem da planilha do DDA (copiar e colar), nao da base
 # do resto do painel. Nao ha titulo do TOTVS para confrontar; o que se compara e
 # o valor ATE o vencimento contra o valor A PAGAR hoje -- a diferenca e o
 # juros/multa que ja correu, e e isso que a coluna Δ mostra aqui.
@@ -299,7 +299,7 @@ ABAS = {
     },
     "futuros": {
         "planilha": ABA_FUTUROS,
-        "nome": "NFs (não associadas)",
+        "nome": "Boletos Não Associados a Vencer",
         "cor": "vermelho",
         # Botoes de filtro por fonte do boleto, so nesta aba.
         "pills": "Fonte Boleto",
@@ -341,8 +341,8 @@ ABAS = {
         # `planilha`, que aqui significa a aba da PLANILHA DE ORIGEM.)
         "particoes": [
             {"id": "futuros", "modo": "futura", "cor": "vermelho",
-             "nome": "NFs (não associadas)",
-             "guia": "NFs nao associadas"},
+             "nome": "Boletos Não Associados a Vencer",
+             "guia": "Boletos nao assoc a vencer"},
         ],
     },
     # Unica aba que NAO vem da base do painel: a planilha do DDA do Itau, lida
@@ -351,8 +351,8 @@ ABAS = {
     "pendentes_itau": {
         "planilha": None,                 # nao existe aba de origem: e outro arquivo
         "fonte": "pendentes_itau",
-        "nome": "NFs pendentes Itaú · conferência contas a pagar",
-        "guia": "NFs pendentes Itau - CAP",
+        "nome": "Boletos em Aberto DDA",
+        "guia": "Boletos em Aberto DDA",
         "cor": "verde",
         "compacta": COMPACTA_PENDENTES,
         # O unico confronto possivel aqui: quanto ja correu de juros/multa.

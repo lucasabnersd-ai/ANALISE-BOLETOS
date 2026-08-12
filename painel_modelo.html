@@ -843,7 +843,7 @@ function distanciaDeHoje(r, hoje){
   return Math.abs(dias) * 2 + (dias > 0 ? 1 : 0);
 }
 
-/* ---------- filtro de vencimento das NFs nao associadas ----------
+/* ---------- filtro de vencimento dos boletos nao associados ----------
    A aba e filtrada pela data de vencimento aqui, no navegador, e nao na
    geracao: assim a NF sai sozinha da lista quando o dia vira, sem depender de
    alguem regerar o painel.
@@ -1488,10 +1488,10 @@ function avisoOcr(){
    motivo. E o que sai daqui some MESMO da tela, entao precisa estar dito. */
 function avisoVisao(){
   if (A().modo !== "futura") return "";
-  return `<div class="linha-aviso calmo">📌 Aqui ficam as NFs que <b>vencem hoje ou depois</b>. Quando a
-    data passar sem tratamento, a NF <b>sai desta lista</b> — ela continua guardada no banco, mas
-    deixa de ser exibida. Se for <b>tratada antes de vencer</b>, permanece aqui mesmo depois do
-    vencimento. A NF também deixa esta aba quando passa a ter título associado.</div>`;
+  return `<div class="linha-aviso calmo">📌 Boletos que <b>não acharam título</b> e <b>vencem hoje ou
+    depois</b>. Quando a data passar sem tratamento, o boleto <b>sai desta lista</b> — ele continua
+    guardado no banco, mas deixa de ser exibido. Se for <b>tratado antes de vencer</b>, permanece aqui
+    mesmo depois do vencimento. O boleto também deixa esta aba quando passa a ter título associado.</div>`;
 }
 
 /* A aba de pendentes do Itau se comporta diferente das outras: ela acumula. Sem
