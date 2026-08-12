@@ -171,6 +171,8 @@
         compacta: m.compacta || [], parcelas: m.parcelas || {},
         pills: m.pills || null, ocr: m.ocr || 0,
         particoes: m.particoes || null,
+        // rotulos dos contadores do resumo; ausente = os rotulos padrao
+        resumo: m.resumo || null,
         com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
         linhas: porAba[id],
       };

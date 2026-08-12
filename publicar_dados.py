@@ -56,6 +56,8 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 "cor": aba["cor"],
                 # quando existe, o painel abre esta aba em duas (futura/passado)
                 "particoes": aba.get("particoes"),
+                # rotulos dos contadores da linha de resumo (mudam por aba)
+                "resumo": aba.get("resumo"),
                 "gerado_em": carga["gerado_em"],
                 "atualizado_em": carga["atualizado_em"],
                 "salva_em": carga.get("salva_em", ""),

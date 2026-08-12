@@ -25,6 +25,8 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
+import cruzamento_classificacao
+import pendentes_itau
 import planilha_excel_js
 
 # Motor .xlsx do painel SE2, reaproveitado aqui (pedido do usuario: "use o
@@ -44,6 +46,17 @@ MODELO = PASTA / "painel_modelo.html"
 DADOS_JSON = PASTA / "DADOS" / "analise_boletos.json"
 DEV = PASTA / "dev.html"
 
+# A aba de pendentes do Itau vem de OUTRA planilha (a do DDA, copiada e colada)
+# e de um historico proprio -- ver pendentes_itau.py. O historico e o que faz o
+# boleto entrar uma vez so; apagar esse arquivo faz todos voltarem como novos.
+HISTORICO_PENDENTES = PASTA / "DADOS" / "pendentes_itau_historico.json"
+
+# Aba "Titulos Associados na Classificacao": vem da SF1 (notas classificadas no
+# TOTVS) cruzada com os boletos que ainda nao acharam titulo. Mesmo desenho de
+# historico do Itau -- apagar este arquivo faz todos os titulos voltarem como
+# novos, e ele tambem guarda ate que DIA a SF1 ja foi lida.
+HISTORICO_CRUZAMENTO = PASTA / "DADOS" / "cruzamento_classificacao_historico.json"
+
 ABA_ASSOCIACOES = "Associações Encontradas"
 ABA_CORRESPONDENCIAS = "Tratar Correspondências"
 ABA_FUTUROS = "Futuros NF Não Associada"
@@ -62,9 +75,19 @@ MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
          # nomes usados na aba Tratar Correspondencias
          "Valor Título (R$)", "Valor Boleto (R$)", "Diferença (R$)",
          # aba Futuros NF Nao Associada
-         "Valor (R$)"}
+         "Valor (R$)",
+         # aba NFs pendentes Itau
+         "Até Venc.", "A Pagar",
+         # aba Titulos Associados na Classificacao. ⚠ "Vlr.Título" tem ACENTO e
+         # e outra chave: o "Vlr.Titulo" acima e o nome da coluna na base do
+         # painel. Faltando aqui, o valor sai cru ("29307.68") no lugar de R$.
+         "Vlr.Título"}
 DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
-        "DT Baixa", "DT Contab."}
+        "DT Baixa", "DT Contab.",
+        # aba NFs pendentes Itau
+        "Entrou em", "Visto em",
+        # aba Titulos Associados na Classificacao
+        "Classificado em", "Emissão"}
 INTEIRO = {"Score Match", "2º Score", "Margem", "Score"}
 
 # Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
@@ -78,8 +101,12 @@ SO_BOTAO = {"Campo UUID", "Linha Digitável"}
 
 # Tipos de alerta que ganham selo proprio na coluna Alerta. A ordem importa:
 # o texto de fatura tambem fala em "parcelas", entao FATURA e testado primeiro.
+# ALTERADO e o aviso do proprio banco na aba de pendentes do Itau ("este boleto
+# sofreu alteracao/instrucao por parte do beneficiario") -- sem ele o selo sairia
+# como "ALERTA" generico, que nao diz nada.
 ALERTAS = ((("FATURA",), "FATURA"),
-           (("MAIS DE UMA PARCELA", "OUTRAS PARCELAS", "PARCELA"), "PARCELA"))
+           (("MAIS DE UMA PARCELA", "OUTRAS PARCELAS", "PARCELA"), "PARCELA"),
+           (("ALTERAÇÃO", "ALTERACAO", "INSTRUÇÃO", "INSTRUCAO"), "ALTERADO"))
 
 # Confrontos que viram destaque na celula do boleto.
 #   coluna destacada -> (coluna do titulo, tipo)
@@ -167,11 +194,86 @@ COMPACTA_FUTUROS = [
     ("Linha Digitável",     "",       "",           4.5),
 ]
 
+# Aba "NFs pendentes Itau": vem da planilha do DDA (copiar e colar), nao da base
+# do resto do painel. Nao ha titulo do TOTVS para confrontar; o que se compara e
+# o valor ATE o vencimento contra o valor A PAGAR hoje -- a diferenca e o
+# juros/multa que ja correu, e e isso que a coluna Δ mostra aqui.
+COMPACTA_PENDENTES = [
+    ("CHECK (FEITO)",    "",       "",           3),
+    # As duas colunas de selo sao mais largas que nas outras abas de proposito:
+    # "SAIU DA BASE" e "ALTERADO" sao textos maiores que "MATCH FORTE"/"PARCELA"
+    # e, apertados, saiam como "SAIU D..." / "ALTE..." -- selo cortado nao serve
+    # para nada, que o ponto dele e ser lido de relance.
+    ("Situação",         "",       "",           9),
+    ("Entrou em",        "",       "",           5.5),
+    ("Pagador/Agregado", "titulo", "",          13),
+    ("Beneficiário",     "boleto", "CONTRAPARTE", 14),
+    ("CPF/CNPJ",         "boleto", "CONTRAPARTE", 9),
+    ("Nº Doc.",          "boleto", "",           7),
+    ("Vencimento",       "boleto", "",           6),
+    ("Até Venc.",        "titulo", "VALOR",      7),
+    ("A Pagar",          "boleto", "VALOR",      7),
+    ("@delta_valor",     "delta",  "VALOR",      7),
+    ("Tipo de Boleto",   "boleto", "",           9),
+    ("Alerta Fatura",    "",       "",           7),
+    ("@tratativa",       "",       "",           4.5),
+]
+
+# Cabecalho da EXPORTACAO desta aba. Aqui o Δ nao compara boleto com titulo --
+# compara o valor ate o vencimento com o valor a pagar hoje. Sem isto o .xlsx
+# sairia com um cabecalho que mente sobre a propria coluna.
+ROTULOS_PLANILHA_PENDENTES = {
+    "@delta_valor": "Juros/Multa já Acumulados (A Pagar - Até Venc.)",
+    "Alerta Fatura": "Observações do Banco",
+    "Situação": "Situação na Base do DDA",
+    "Entrou em": "Entrou no Painel em",
+}
+
+# Aba "Titulos Associados na Classificacao": a NF recem-classificada no TOTVS
+# (SF1) de um lado, o boleto que o cruzamento achou do outro. Segue o desenho
+# das abas de associacao -- titulo e boleto lado a lado, com o Δ logo depois do
+# par -- porque e a mesma conferencia que a pessoa ja faz nas outras.
+COMPACTA_CRUZAMENTO = [
+    ("CHECK (FEITO)",     "",       "",           3),
+    # larga: "MATCH PROVÁVEL" e "SEM BOLETO" sao textos longos e selo cortado
+    # nao serve para nada (a licao da aba do Itau)
+    ("Situação",          "",       "",          10),
+    # data por extenso + o Nº NF, que leva botao de copiar disputando a largura
+    ("Classificado em",   "",       "",           7),
+    ("Filial",            "",       "",           3.5),
+    ("Nº NF",             "titulo", "NF",         8),
+    ("NF/Doc Boleto",     "boleto", "NF",         6.5),
+    ("Razão Social",      "titulo", "CONTRAPARTE", 13),
+    ("Fornecedor Boleto", "boleto", "CONTRAPARTE", 12),
+    ("Vlr.Título",        "titulo", "VALOR",      6.5),
+    ("Valor Boleto",      "boleto", "VALOR",      6.5),
+    ("@delta_valor",      "delta",  "VALOR",      7.5),
+    ("Vencimento",        "titulo", "VENCIMENTO", 5.5),
+    ("Vencimento Boleto", "boleto", "VENCIMENTO", 5.5),
+    ("@delta_dias",       "delta",  "VENCIMENTO", 4.5),
+    ("Parcela",           "boleto", "",           4),
+    ("Critério",          "",       "",           9),
+    ("Fonte Boleto",      "",       "",           7),
+    ("@tratativa",        "",       "",           4.5),
+    ("Linha Digitável",   "",       "",           4),
+    ("Campo UUID",        "",       "",           4),
+]
+
+ROTULOS_PLANILHA_CRUZAMENTO = {
+    "Situação": "Resultado do Cruzamento",
+    "Classificado em": "Data de Classificação no TOTVS (Dt.Digitacao)",
+    "Critério": "O que bateu no cruzamento",
+    "Nº NF": "Nº da NF (SF1)",
+    "Entrou em": "Entrou no Painel em",
+}
+
 # Confrontos e nomes de coluna mudam entre as abas; o resto do gerador e igual.
 ABAS = {
     "associacoes": {
         "planilha": ABA_ASSOCIACOES,
-        "nome": "Associações Encontradas",
+        # O nome da ABA DE ORIGEM continua "Associações Encontradas" (e a
+        # planilha, nao muda); aqui e so como ela se chama no painel.
+        "nome": "Títulos Associados",
         "cor": "azul",
         "compacta": COMPACTA,
         "confrontos": {"Valor Boleto": ("Vlr.Titulo", "moeda"),
@@ -184,7 +286,7 @@ ABAS = {
     },
     "correspondencias": {
         "planilha": ABA_CORRESPONDENCIAS,
-        "nome": "Tratar Correspondências",
+        "nome": "Títulos Não Associados",
         "cor": "roxo",
         "compacta": COMPACTA_CORRESP,
         "confrontos": {"Valor Boleto (R$)": ("Valor Título (R$)", "moeda"),
@@ -197,7 +299,7 @@ ABAS = {
     },
     "futuros": {
         "planilha": ABA_FUTUROS,
-        "nome": "NFs (não associadas · visão futura)",
+        "nome": "NFs (não associadas)",
         "cor": "vermelho",
         # Botoes de filtro por fonte do boleto, so nesta aba.
         "pills": "Fonte Boleto",
@@ -220,24 +322,90 @@ ABAS = {
         # As duas NFs viram campo de copiar: e o que se cola no TOTVS para
         # procurar o titulo que ainda nao foi associado.
         "copiar_extra": {"NF Normalizada": "", "NF/Doc Original": ""},
-        # Esta aba se PARTE EM DUAS no painel, pela data de vencimento. O corte
-        # acontece no navegador, nao aqui: so assim a NF anda sozinha da visao
-        # futura para a visao passado quando o dia vira -- se o corte fosse
-        # feito na geracao, ela so mudaria de aba quando alguem regerasse.
-        # Regra (a mesma escrita no painel): vence hoje ou depois -> futura;
-        # venceu antes de hoje -> passado, A NAO SER que ja tenha sido tratada
-        # enquanto ainda estava a vencer, e ai fica na futura.
+        # Esta aba e FILTRADA pela data de vencimento no navegador, nao aqui: so
+        # assim a NF sai sozinha quando o dia vira -- se o corte fosse feito na
+        # geracao, ela so mudaria de estado quando alguem regerasse o painel.
+        # Regra (a mesma escrita no painel): vence hoje ou depois -> aparece;
+        # venceu antes de hoje -> NAO aparece, A NAO SER que ja tenha sido
+        # tratada enquanto ainda estava a vencer.
+        #
+        # ⚠ Ate 12/08/2026 havia uma SEGUNDA particao aqui ("visao passado"),
+        # com as vencidas sem tratamento. O usuario mandou apagar a aba e as
+        # vencidas saírem do painel. Restou UMA particao -- que continua
+        # existindo justamente porque e ela quem aplica o filtro: sem
+        # `particoes` a aba passaria inteira, vencidas incluidas.
+        # As linhas nao somem do banco, so deixam de ser exibidas; e o que
+        # torna a decisao reversivel (basta devolver a particao "passado").
         # `guia` e o nome da aba no .xlsx exportado -- o Excel corta em 31
         # caracteres e o nome da aba do painel nao cabe. (Nao confundir com
         # `planilha`, que aqui significa a aba da PLANILHA DE ORIGEM.)
         "particoes": [
             {"id": "futuros", "modo": "futura", "cor": "vermelho",
-             "nome": "NFs (não associadas · visão futura)",
-             "guia": "NFs nao assoc - futura"},
-            {"id": "passado", "modo": "passado", "cor": "ambar",
-             "nome": "NFs (não associadas · visão passado · pendentes)",
-             "guia": "NFs nao assoc - passado"},
+             "nome": "NFs (não associadas)",
+             "guia": "NFs nao associadas"},
         ],
+    },
+    # Unica aba que NAO vem da base do painel: a planilha do DDA do Itau, lida
+    # pelo pendentes_itau.py, que tambem guarda o historico. Aqui ela chega ja
+    # no formato das outras -- cabecalho + linhas -- e passa pelo mesmo codigo.
+    "pendentes_itau": {
+        "planilha": None,                 # nao existe aba de origem: e outro arquivo
+        "fonte": "pendentes_itau",
+        "nome": "NFs pendentes Itaú · conferência contas a pagar",
+        "guia": "NFs pendentes Itau - CAP",
+        "cor": "verde",
+        "compacta": COMPACTA_PENDENTES,
+        # O unico confronto possivel aqui: quanto ja correu de juros/multa.
+        "confrontos": {"A Pagar": ("Até Venc.", "moeda")},
+        "col_status": "Situação",
+        "col_criterio": "Tipo de Boleto",
+        "col_score": "",
+        # A chave e calculada pelo pendentes_itau (CNPJ + doc + venc + valor) e
+        # chega numa coluna propria; o prefixo "ITAU:" ja vem embutido nela.
+        "col_uuid": "Chave",
+        "prefixo_uuid": "",
+        "pills": "Pagador/Agregado",
+        "rotulos": {"Beneficiário": "Beneficiário"},
+        # Beneficiario e o NOME, nao codigo: nao vira botao de copiar (e o mesmo
+        # motivo pelo qual "Fornecedor" nao e copiavel na aba de nao associadas).
+        "nao_copiar": {"Beneficiário"},
+        # O que se cola no TOTVS para procurar o titulo deste boleto.
+        "copiar_extra": {"Nº Doc.": "", "CPF/CNPJ": ""},
+        # Os rotulos do resumo mudam: aqui nao ha titulo, entao "boleto diferente
+        # do titulo" nao quer dizer nada. `None` esconde o item.
+        "resumo": {"alerta": "com aviso do banco",
+                   "divergentes": "já com juros/multa"},
+        "rotulos_planilha": ROTULOS_PLANILHA_PENDENTES,
+    },
+    # Tambem nao vem da base do painel: sai da SF1 (BASES GENERICOS), cruzada
+    # pelo cruzamento_classificacao.py com os boletos que ainda nao acharam
+    # titulo -- os do DDA (aba "Futuros NF Nao Associada") e os do e-mail do
+    # Itau. Chega aqui no formato das outras e passa pelo mesmo codigo.
+    "cruzamento": {
+        "planilha": None,
+        "fonte": "cruzamento",
+        "nome": "Títulos Associados na Classificação",
+        "guia": "Titulos Assoc Classificacao",
+        # ambar: cor que ficou livre com a saida da "visao passado" (12/08/2026)
+        "cor": "ambar",
+        "compacta": COMPACTA_CRUZAMENTO,
+        "confrontos": {"Valor Boleto": ("Vlr.Título", "moeda"),
+                       "Vencimento Boleto": ("Vencimento", "data")},
+        "col_status": "Situação",
+        "col_criterio": "Critério",
+        "col_score": "",
+        # O prefixo "SF1:" ja vem embutido na chave montada pelo modulo.
+        "col_uuid": "Chave",
+        "prefixo_uuid": "",
+        "pills": "Fonte Boleto",
+        # Razao Social e nome, nao codigo -- nao vira botao de copiar (mesma
+        # regra do Fornecedor nas outras abas).
+        "nao_copiar": {"Razão Social", "Fornecedor Boleto"},
+        # O que se cola no TOTVS para achar a NF e o titulo dela.
+        "copiar_extra": {"Nº NF": "", "Campo UUID": ""},
+        "resumo": {"alerta": "com aviso do banco",
+                   "divergentes": "boleto difere do título"},
+        "rotulos_planilha": ROTULOS_PLANILHA_CRUZAMENTO,
     },
 }
 
@@ -261,7 +429,15 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Total Parcelas": "de", "Valor (R$)": "Valor",
                     "Empresa/Origem": "Empresa", "Arquivo/Observação": "Observação",
                     "Fonte Boleto": "Fonte", "CNPJ/CPF": "CNPJ/CPF",
-                    "Situação": "Situação"}
+                    "Situação": "Situação",
+                    # nomes da aba NFs pendentes Itau
+                    "Pagador/Agregado": "Empresa", "Nº Doc.": "Nº doc.",
+                    "Tipo de Boleto": "Tipo", "Até Venc.": "Até venc.",
+                    "A Pagar": "A pagar", "Entrou em": "Entrou",
+                    # nomes da aba Titulos Associados na Classificacao
+                    "Classificado em": "Classif.", "Nº NF": "Nº NF",
+                    "Vlr.Título": "Vlr. título", "Critério": "Critério",
+                    "Série": "Série", "Boletos": "Cand."}
 
 # Cabecalho da planilha exportada: aqui vale o nome por extenso, nao a
 # abreviacao da tela. Sem entrada, sai o proprio nome da coluna da base.
@@ -279,6 +455,11 @@ LARGURAS = {
     "Nome Fornece": 175, "Critério Match": 280, "Alerta Fatura": 280,
     "Linha Digitável": 290, "Historico": 300, "CNPJ Boleto": 145,
     "No. Titulo": 104, "Status": 122, "Fonte Boleto": 135,
+    "Beneficiário": 250, "Pagador/Agregado": 200, "Tipo de Boleto": 150,
+    # aba Titulos Associados na Classificacao: "Situação" cabe nos 122 herdados
+    # de Status, mas "MATCH PROVÁVEL" e "SEM BOLETO" sao selos longos e cortados
+    # nao servem de nada; "Critério" carrega frases como "NF + CNPJ + valor".
+    "Critério": 230, "Classificado em": 118,
 }
 LARGURA_PADRAO = 108
 
@@ -408,6 +589,34 @@ def ler_aba(wb, cfg: dict):
     linhas = list(ws.iter_rows(values_only=True))
     cabecalho = [texto(c) for c in linhas[0]]
     brutas = [b for b in linhas[1:] if not all(v in (None, "") for v in b)]
+    return montar_aba(cabecalho, brutas, cfg)
+
+
+def ler_cruas(wb, nome_aba: str) -> list[dict]:
+    """Uma aba da base como dicionarios CRUS ({coluna: valor}), sem passar pelo
+    tratamento do painel.
+
+    Serve ao cruzamento da classificacao, que precisa dos valores como estao na
+    planilha (numero, data, CNPJ) -- o registro montado para a tela ja vem
+    formatado em texto, e reconverter seria dar duas chances de errar.
+    """
+    if nome_aba not in wb.sheetnames:
+        return []
+    linhas = list(wb[nome_aba].iter_rows(values_only=True))
+    if not linhas:
+        return []
+    cabecalho = [texto(c) for c in linhas[0]]
+    return [dict(zip(cabecalho, b)) for b in linhas[1:]
+            if not all(v in (None, "") for v in b)]
+
+
+def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
+    """Cabecalho + linhas -> colunas, visao Conferencia e registros do painel.
+
+    Separado do `ler_aba` porque a aba de pendentes do Itau nao sai de uma aba
+    da planilha: ela vem do `pendentes_itau.py`, que junta a planilha do DDA com
+    o historico. Dali para frente o tratamento e exatamente o mesmo.
+    """
     compacta = montar_compacta(cabecalho, cfg["compacta"], cfg)
     confrontos = cfg["confrontos"]
     # Futuros NF nao tem titulo para confrontar -- fica sem Δ.
@@ -514,7 +723,8 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             # Cabecalho da EXPORTACAO. Na tela o rotulo e abreviado porque o
             # cabecalho e uma linha so; na planilha cabe o nome inteiro -- e o
             # nome da base e o que a pessoa reconhece.
-            "planilha": ROTULOS_PLANILHA.get(rotulo, rotulo),
+            "planilha": {**ROTULOS_PLANILHA,
+                         **cfg.get("rotulos_planilha", {})}.get(rotulo, rotulo),
         })
     return colunas
 
@@ -547,7 +757,14 @@ def selo_status(origem: dict, cfg: dict) -> str:
     valor = (cfg.get("forcar_status") or texto(origem.get(cfg["col_status"]))).upper()
     if "FORTE" in valor:
         return "forte"
-    if "SEM PAR" in valor:
+    # Pendentes do Itau: "SAIU DA BASE" e boa noticia (o boleto deixou de estar
+    # pendente no DDA -- na pratica, foi pago), entao entra em verde junto com o
+    # match forte. Nenhum status das outras abas contem "SAIU".
+    if "SAIU" in valor:
+        return "forte"
+    # "SEM PAR ENCONTRADO" (nao associadas) e "SEM BOLETO" (classificacao) sao a
+    # mesma noticia: nada casou, e e onde a pessoa precisa agir.
+    if "SEM PAR" in valor or "SEM BOLETO" in valor:
         return "grave"
     return "provavel"
 
@@ -677,7 +894,8 @@ def ler_resumo(wb) -> dict:
     return resumo
 
 
-def gerar(base: Path, saida: Path) -> dict:
+def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
+          base_sf1: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -687,15 +905,66 @@ def gerar(base: Path, saida: Path) -> dict:
     try:
         lidas = {}
         for ident, cfg in ABAS.items():
+            if cfg.get("fonte"):
+                continue  # nao sai desta planilha; e lida logo abaixo
             if cfg["planilha"] not in wb.sheetnames:
                 continue  # aba renomeada na base: melhor faltar do que quebrar
             lidas[ident] = ler_aba(wb, cfg)
         resumo = ler_resumo(wb)
         parcelas = ler_parcelas(wb)
+        # Linhas CRUAS dos boletos que nao acharam titulo: e o acervo contra o
+        # qual a aba de classificacao cruza. Tem de sair daqui, com a planilha
+        # ainda aberta -- o que `lidas` guarda ja e o registro montado para a
+        # tela, sem os campos crus de que o cruzamento precisa.
+        boletos_nao_associados = ler_cruas(wb, ABA_FUTUROS)
     finally:
         wb.close()
         if temporaria:
             shutil.rmtree(temporaria, ignore_errors=True)
+
+    # Aba de pendentes do Itau: outra planilha, outro arquivo de historico. Uma
+    # falha aqui NAO derruba o painel inteiro -- as outras tres abas continuam
+    # valendo -- mas tem de aparecer, senao a aba some em silencio e ninguem
+    # descobre que ela parou de atualizar.
+    pendentes_resumo = None
+    caminho_pendentes = base_pendentes or pendentes_itau.BASE_PADRAO
+    if caminho_pendentes.exists():
+        cfg = ABAS["pendentes_itau"]
+        cabecalho, brutas, pendentes_resumo = pendentes_itau.carregar(
+            caminho_pendentes, HISTORICO_PENDENTES)
+        if brutas:
+            lidas["pendentes_itau"] = montar_aba(cabecalho, brutas, cfg)
+        pendentes_resumo["base"] = str(caminho_pendentes)
+        pendentes_resumo["salva_em"] = dt.datetime.fromtimestamp(
+            caminho_pendentes.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
+    else:
+        print(f"AVISO: base de pendentes nao encontrada, aba nao atualizada:\n"
+              f"       {caminho_pendentes}", file=sys.stderr)
+
+    # Aba da classificacao: SF1 x boletos sem titulo (os do DDA lidos acima mais
+    # os do e-mail do Itau). Depende do historico do Itau, entao vem DEPOIS dele.
+    # Mesma regra das outras: falhar aqui nao derruba o painel, mas tem de
+    # aparecer -- aba que para de atualizar em silencio e pior do que aba que
+    # some.
+    cruzamento_resumo = None
+    caminho_sf1 = base_sf1 or cruzamento_classificacao.BASE_PADRAO
+    if caminho_sf1.exists():
+        cfg = ABAS["cruzamento"]
+        historico_itau = {}
+        if HISTORICO_PENDENTES.exists():
+            historico_itau = json.loads(HISTORICO_PENDENTES.read_text(encoding="utf-8"))
+        cabecalho, brutas, cruzamento_resumo = cruzamento_classificacao.carregar(
+            caminho_sf1, HISTORICO_CRUZAMENTO, boletos_nao_associados, historico_itau)
+        if brutas:
+            lidas["cruzamento"] = montar_aba(cabecalho, brutas, cfg)
+        cruzamento_resumo["base"] = str(caminho_sf1)
+        cruzamento_resumo["salva_em"] = dt.datetime.fromtimestamp(
+            caminho_sf1.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
+        cruzamento_resumo["acervo"] = len(boletos_nao_associados) + len(
+            (historico_itau or {}).get("boletos", {}))
+    else:
+        print(f"AVISO: base SF1 nao encontrada, aba de classificacao nao atualizada:\n"
+              f"       {caminho_sf1}", file=sys.stderr)
 
     def do_resumo(rotulo):
         valor = resumo.get(rotulo, 0)
@@ -718,6 +987,8 @@ def gerar(base: Path, saida: Path) -> dict:
             "linhas": registros,
             # quando existe, o painel abre esta aba em duas (ver ABAS)
             "particoes": cfg.get("particoes"),
+            # rotulos da linha de resumo; None em um deles esconde o item
+            "resumo": cfg.get("resumo"),
             # botoes de filtro (so onde a aba define uma coluna para isso)
             "pills": {
                 "chave": chave_de(cfg["pills"]),
@@ -744,7 +1015,6 @@ def gerar(base: Path, saida: Path) -> dict:
         "sem_codigo": do_resumo("Títulos sem código de barras"),
         "abas": abas,
     }
-
     carga = json.dumps(dados, ensure_ascii=False, separators=(",", ":"))
     modelo = MODELO.read_text(encoding="utf-8")
 
@@ -774,6 +1044,11 @@ def gerar(base: Path, saida: Path) -> dict:
 
     # Uso local: dev.html com tudo embutido, fora do repositorio (.gitignore).
     DEV.write_text(modelo.replace("/*__DADOS__*/null", carga), encoding="utf-8")
+
+    # So para o relatorio no terminal -- entra DEPOIS do json.dumps de proposito,
+    # para nao viajar no HTML nem na carga do banco.
+    dados["_pendentes_itau"] = pendentes_resumo
+    dados["_cruzamento"] = cruzamento_resumo
     return dados
 
 
@@ -785,7 +1060,10 @@ def conferir_sem_dados(arquivo: Path, dados: dict) -> None:
     # Nao basta olhar UUID e linha digitavel: ja escapou nome de fornecedor
     # escrito a mao dentro de um aviso do proprio painel.
     campos = ("razao_social", "fornecedor", "fornecedor_boleto", "nome_fornece",
-              "cnpj_boleto", "cnpj_cpf", "historico", "empresa_origem")
+              "cnpj_boleto", "cnpj_cpf", "historico", "empresa_origem",
+              # aba NFs pendentes Itau: nome do beneficiario, empresa pagadora e
+              # o CNPJ dele -- exatamente o tipo de dado que nao pode ir ao Pages
+              "beneficiario", "pagador_agregado", "cpf_cnpj")
     for aba in dados["abas"]:
         for registro in aba["linhas"]:
             valores = [registro["uuid"],
@@ -820,11 +1098,15 @@ def conferir_motor_planilha() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", type=Path, default=BASE_PADRAO)
+    parser.add_argument("--base-pendentes", type=Path, default=pendentes_itau.BASE_PADRAO,
+                        help="planilha do DDA do Itau (COPIAR E COLAR BOLETOS PENDENTES)")
+    parser.add_argument("--base-sf1", type=Path, default=cruzamento_classificacao.BASE_PADRAO,
+                        help="base SF1 (notas classificadas no TOTVS)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
-        dados = gerar(args.base, args.saida)
+        dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
@@ -832,7 +1114,29 @@ def main() -> int:
     # a base lida vem primeiro: e a pergunta que mais aparece ("de onde saiu?")
     salva = dt.datetime.fromtimestamp(args.base.stat().st_mtime)
     print(f"Base lida: {args.base}")
-    print(f"           (planilha salva em {salva.strftime('%d/%m/%Y as %H:%M')})\n")
+    print(f"           (planilha salva em {salva.strftime('%d/%m/%Y as %H:%M')})")
+
+    itau = dados.pop("_pendentes_itau", None)
+    if itau:
+        print(f"Base do Itau: {itau['base']}")
+        print(f"           (planilha salva em {itau['salva_em']})")
+        print(f"           {itau['na_planilha']} na planilha de hoje | "
+              f"{itau['novos']} NOVOS | {itau['sairam_hoje']} sairam | "
+              f"{itau['voltaram']} voltaram")
+        print(f"           historico: {itau['total']} boletos "
+              f"({itau['pendentes']} ainda pendentes) -> {HISTORICO_PENDENTES.name}")
+
+    cruz = dados.pop("_cruzamento", None)
+    if cruz:
+        dias = ", ".join(cruz["dias_lidos"]) or "nenhum dia novo"
+        print(f"Base SF1: {cruz['base']}")
+        print(f"           (planilha salva em {cruz['salva_em']})")
+        print(f"           classificacao lida: {dias} (limite: {cruz['limite']})")
+        print(f"           {cruz['novos']} NOVOS | cruzados contra {cruz['acervo']} boletos sem titulo")
+        print(f"           {cruz['com_boleto']} com boleto | {cruz['sem_boleto']} sem boleto"
+              f" | {cruz['selos']}")
+        print(f"           historico: {cruz['total']} titulos -> {HISTORICO_CRUZAMENTO.name}")
+    print()
 
     for aba in dados["abas"]:
         print(f"{aba['nome']}: {len(aba['linhas'])} linhas | {len(aba['compacta'])} colunas"

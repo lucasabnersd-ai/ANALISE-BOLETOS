@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Associações Encontradas — Análise de Boletos</title>
+<title>Análise de Boletos</title>
 <style>
 :root{
   --bg:#eef1f6; --surface:#ffffff; --surface-2:#f5f7fa; --line:#d8dfe8; --line-forte:#b6c2d1;
@@ -114,20 +114,39 @@ body[data-aba="futuros"] .subabas button.ativa{background:#b3312a; border-color:
 body[data-aba="futuros"] tr.grupos th.g-nf{background:var(--sobe-bg); color:var(--sobe-txt)}
 body[data-aba="futuros"] tr.grupos th.g-parte{background:var(--sobe-bg); color:var(--sobe-txt)}
 
-/* visao passado: as mesmas NFs nao associadas, ja vencidas e sem tratamento */
-body[data-aba="passado"]{--acento:#8a5806; --acento-bg:var(--ambar-bg)}
-html[data-tema="escuro"] body[data-aba="passado"]{--acento:#f0b429}
-body[data-aba="passado"] tr.titulos th{background:#6b4405}
-body[data-aba="passado"] tr.titulos th:hover,
-body[data-aba="passado"] tr.titulos th.ativa{background:#8a5806}
-body[data-aba="passado"] th.canto,
-body[data-aba="passado"] tr.titulos th.canto{background:#6b4405}
-body[data-aba="passado"] tr:hover td,
-body[data-aba="passado"] tr:hover td.gutter,
-body[data-aba="passado"] table.conferencia tr:hover td{background:var(--ambar-bg) !important}
-body[data-aba="passado"] .subabas button.ativa{background:#8a5806; border-color:#8a5806; color:#fff}
-body[data-aba="passado"] tr.grupos th.g-nf{background:var(--ambar-bg); color:var(--ambar-txt)}
-body[data-aba="passado"] tr.grupos th.g-parte{background:var(--ambar-bg); color:var(--ambar-txt)}
+/* cruzamento classificacao: titulos recem-classificados no TOTVS (SF1) x os
+   boletos que ainda nao acharam titulo. Herdou o ambar da antiga "visao
+   passado", apagada em 12/08/2026 -- a cor ficou livre. */
+body[data-aba="cruzamento"]{--acento:#8a5806; --acento-bg:var(--ambar-bg)}
+html[data-tema="escuro"] body[data-aba="cruzamento"]{--acento:#f0b429}
+body[data-aba="cruzamento"] tr.titulos th{background:#6b4405}
+body[data-aba="cruzamento"] tr.titulos th:hover,
+body[data-aba="cruzamento"] tr.titulos th.ativa{background:#8a5806}
+body[data-aba="cruzamento"] th.canto,
+body[data-aba="cruzamento"] tr.titulos th.canto{background:#6b4405}
+body[data-aba="cruzamento"] tr:hover td,
+body[data-aba="cruzamento"] tr:hover td.gutter,
+body[data-aba="cruzamento"] table.conferencia tr:hover td{background:var(--ambar-bg) !important}
+body[data-aba="cruzamento"] .subabas button.ativa{background:#8a5806; border-color:#8a5806; color:#fff}
+body[data-aba="cruzamento"] tr.grupos th.g-nf{background:var(--ambar-bg); color:var(--ambar-txt)}
+body[data-aba="cruzamento"] tr.grupos th.g-parte{background:var(--ambar-bg); color:var(--ambar-txt)}
+
+/* pendentes do Itau: boletos do DDA esperando conferencia no contas a pagar.
+   Verde e a unica cor livre -- as outras quatro abas ja usam azul, roxo,
+   vermelho e ambar, e duas abas da mesma cor se confundem na troca. */
+body[data-aba="pendentes_itau"]{--acento:#0f7b52; --acento-bg:var(--verde-bg)}
+html[data-tema="escuro"] body[data-aba="pendentes_itau"]{--acento:#34d399}
+body[data-aba="pendentes_itau"] tr.titulos th{background:#0b5c3d}
+body[data-aba="pendentes_itau"] tr.titulos th:hover,
+body[data-aba="pendentes_itau"] tr.titulos th.ativa{background:#0f7b52}
+body[data-aba="pendentes_itau"] th.canto,
+body[data-aba="pendentes_itau"] tr.titulos th.canto{background:#0b5c3d}
+body[data-aba="pendentes_itau"] tr:hover td,
+body[data-aba="pendentes_itau"] tr:hover td.gutter,
+body[data-aba="pendentes_itau"] table.conferencia tr:hover td{background:var(--verde-bg) !important}
+body[data-aba="pendentes_itau"] .subabas button.ativa{background:#0f7b52;
+  border-color:#0f7b52; color:#fff}
+body[data-aba="pendentes_itau"] tr.grupos th.g-parte{background:var(--verde-bg); color:var(--verde-txt)}
 
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
@@ -434,7 +453,9 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 <div class="envolucro">
 
   <div class="topo">
-    <h1>Associações Encontradas <span>· Análise de Boletos</span></h1>
+    <!-- generico de proposito: o painel tem varias abas, e o titulo da aba
+         ativa ja aparece na barra de abas logo abaixo -->
+    <h1>Análise de Boletos <span>· conferência</span></h1>
     <div class="acoes">
       <label class="busca">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -474,7 +495,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   <div class="planilha"><table id="grade"></table></div>
 
   <div class="rodape">
-    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> › aba “Associações Encontradas”. No Δ, <b>▲</b> = boleto acima do título e <b>▼</b> = abaixo. Selo <b>roxo PARCELA</b> abre as parcelas da NF (aba “NFs Múltiplas Parcelas”); selo <b>amarelo FATURA</b> é só aviso. Clique em qualquer campo com <b>⧉</b> para copiar. O <b>check</b> e a <b>tratativa</b> são gravados no banco, por UUID, e todo mundo vê o mesmo. Se a conexão cair, ficam numa fila neste navegador e sobem sozinhos depois — enquanto isso o painel avisa no canto da tela.</span>
+    <span>Origem: <b>TRATAMENTO PYTHON BOLETOS.xlsx</b> (cada aba explica a sua no aviso do topo). No Δ, <b>▲</b> = boleto acima do título e <b>▼</b> = abaixo. Selo <b>roxo PARCELA</b> abre as parcelas da NF (aba “NFs Múltiplas Parcelas”); selo <b>amarelo FATURA</b> é só aviso. Clique em qualquer campo com <b>⧉</b> para copiar. O <b>check</b> e a <b>tratativa</b> são gravados no banco, por UUID, e todo mundo vê o mesmo. Se a conexão cair, ficam numa fila neste navegador e sobem sozinhos depois — enquanto isso o painel avisa no canto da tela.</span>
     <span id="atualizado"></span>
   </div>
 </div>
@@ -758,21 +779,33 @@ window.addEventListener("beforeunload", e => {
   e.returnValue = "";
 });
 
+/* Os dois contadores do meio mudam de significado conforme a aba: onde nao ha
+   titulo do TOTVS, "boleto diferente do título" nao quer dizer nada. O rotulo
+   vem do gerador (ABAS[...]["resumo"]); null esconde o item. */
+const ROTULOS_RESUMO = {alerta:"com alerta", divergentes:"com boleto diferente do título"};
+
 function mostrarResumo(){
+  const rotulos = Object.assign({}, ROTULOS_RESUMO, A().resumo || {});
+  const item = (valor, rotulo) => rotulo
+    ? `<span class="sep">·</span><b>${num(valor)}</b> ${esc(rotulo)}` : "";
   document.getElementById("resumo").innerHTML =
     `Base de <b>${DADOS.gerado_em}</b><span class="sep">·</span>` +
     `<b>${num(A().linhas.length)}</b> títulos nesta aba` +
-    `<span class="sep">·</span><b>${A().com_alerta}</b> com alerta` +
-    `<span class="sep">·</span><b>${A().divergentes}</b> com boleto diferente do título` +
+    item(A().com_alerta, rotulos.alerta) +
+    item(A().divergentes, rotulos.divergentes) +
     `<span class="sep">·</span><b>${feitos.size}</b> tratado${feitos.size === 1 ? "" : "s"}`;
 }
 /* Cada filtro olha um punhado de colunas -- os nomes mudam entre as abas, por
    isso a lista de candidatas em vez de uma chave so. */
 const CAMPOS_FILTRO = {
-  fornecedor: ["razao_social", "fornecedor", "nome_fornece", "fornecedor_boleto"],
-  valor:      ["vlr_titulo", "valor_boleto", "valor_titulo_r", "valor_boleto_r", "valor_r"],
+  // beneficiario/pagador_agregado: nomes da aba de pendentes do Itau, onde nao
+  // existe "fornecedor" -- sem eles a barra de filtros ficaria morta nessa aba.
+  fornecedor: ["razao_social", "fornecedor", "nome_fornece", "fornecedor_boleto",
+               "beneficiario", "pagador_agregado"],
+  valor:      ["vlr_titulo", "valor_boleto", "valor_titulo_r", "valor_boleto_r", "valor_r",
+               "a_pagar", "ate_venc"],
   titulo:     ["no_titulo"],
-  nf:         ["nf_doc_boleto", "nf_doc_original", "nf_normalizada"],
+  nf:         ["nf_doc_boleto", "nf_doc_original", "nf_normalizada", "n_doc"],
   uuid:       ["campo_uuid"],
 };
 // O vencimento tem filtro proprio (intervalo), entao sai da busca por texto.
@@ -810,20 +843,22 @@ function distanciaDeHoje(r, hoje){
   return Math.abs(dias) * 2 + (dias > 0 ? 1 : 0);
 }
 
-/* ---------- visao futura x visao passado ----------
-   Sao a MESMA aba de NFs nao associadas, partida pela data de vencimento. O
-   corte e feito aqui, no navegador, e nao na geracao: assim a NF anda sozinha
-   de uma visao para a outra quando o dia vira, sem depender de alguem regerar
-   o painel.
+/* ---------- filtro de vencimento das NFs nao associadas ----------
+   A aba e filtrada pela data de vencimento aqui, no navegador, e nao na
+   geracao: assim a NF sai sozinha da lista quando o dia vira, sem depender de
+   alguem regerar o painel.
 
    Regra:
-     vence hoje ou depois ................ visao futura
-     venceu antes de hoje ................ visao passado (pendente de tratamento)
+     vence hoje ou depois ................ aparece
+     venceu antes de hoje ................ NAO aparece
      venceu, mas ja tinha sido tratada
-     enquanto ainda estava a vencer ...... continua na visao futura
+     enquanto ainda estava a vencer ...... continua aparecendo
 
-   Nada some: a NF nunca deixa as abas de nao associadas -- ela so sai quando
-   passa a ser associada, e ai aparece nas outras abas. */
+   ⚠ Ate 12/08/2026 as vencidas iam para uma segunda aba, a "visao passado".
+   O usuario mandou apagar essa aba e as vencidas saírem do painel. Elas
+   CONTINUAM no banco (nada foi apagado la) -- so deixaram de ser exibidas,
+   e por isso a decisao e reversivel: basta devolver a particao "passado" em
+   gerar_painel.py. */
 const hojeISO = () => {
   const d = new Date();                       // data LOCAL, nao UTC
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${
@@ -1449,27 +1484,51 @@ function avisoOcr(){
     ${quantos === 1 ? "Está" : "Estão"} com o selo <span class="selo ocr">OCR</span> na linha.</div>`;
 }
 
-/* Explica de onde saiu a divisao futura/passado -- senao a pessoa acha que
-   sumiu NF de uma aba para a outra. */
+/* Explica o filtro de vencimento -- senao a pessoa acha que sumiu NF sem
+   motivo. E o que sai daqui some MESMO da tela, entao precisa estar dito. */
 function avisoVisao(){
-  const modo = A().modo;
-  if (modo === "passado")
-    return `<div class="linha-aviso calmo">📌 Estas NFs <b>já venceram</b> (vencimento anterior a hoje) e
-      <b>continuam sem tratamento</b>. Elas vieram sozinhas da <b>visão futura</b> quando a data
-      passou — nada foi apagado. Quem fecha o caso é o <b>check</b>: marcado, a NF passa para
-      <b>Tratados</b> e continua aqui, com o histórico. A tratativa e o nome de quem está
-      tratando ficam gravados na linha mesmo antes disso.</div>`;
-  if (modo === "futura")
-    return `<div class="linha-aviso calmo">📌 Aqui ficam as NFs que <b>vencem hoje ou depois</b>. Quando a
-      data passar sem tratamento, a NF vai sozinha para a <b>visão passado</b>. Se ela for
-      <b>tratada antes de vencer</b>, permanece nesta aba. A NF só deixa as abas de não associadas
-      quando passa a ter título associado.</div>`;
-  return "";
+  if (A().modo !== "futura") return "";
+  return `<div class="linha-aviso calmo">📌 Aqui ficam as NFs que <b>vencem hoje ou depois</b>. Quando a
+    data passar sem tratamento, a NF <b>sai desta lista</b> — ela continua guardada no banco, mas
+    deixa de ser exibida. Se for <b>tratada antes de vencer</b>, permanece aqui mesmo depois do
+    vencimento. A NF também deixa esta aba quando passa a ter título associado.</div>`;
+}
+
+/* A aba de pendentes do Itau se comporta diferente das outras: ela acumula. Sem
+   dizer isso, "SAIU DA BASE" parece erro de carga. */
+function avisoPendentes(){
+  if (estado.aba !== "pendentes_itau") return "";
+  const saiu = A().linhas.filter(r => (r.c.situacao || "").indexOf("SAIU") === 0).length;
+  return `<div class="linha-aviso calmo">📌 Vem da planilha de <b>boletos pendentes do DDA do Itaú</b>,
+    lida a cada atualização do painel. Cada boleto entra <b>uma vez só</b>: quem já apareceu antes
+    não vira linha nova, e a coluna <b>Entrou</b> mostra desde quando ele está aqui.
+    ${saiu ? `<b>${num(saiu)}</b> já <b>não estão mais</b> na planilha do banco (selo
+    <span class="selo forte">SAIU DA BASE</span>) — normalmente porque foram pagos; ficam no painel
+    para conferência e nada é apagado.` : "Nada saiu da planilha do banco até agora."}
+    O <b>Δ</b> aqui não compara com título nenhum: é o quanto de <b>juros/multa</b> já correu
+    entre o valor até o vencimento e o valor a pagar hoje.</div>`;
+}
+
+/* A aba da classificacao tambem acumula, e o selo SEM BOLETO e o normal dela --
+   sem explicar, a aba parece um cruzamento que falhou. */
+function avisoCruzamento(){
+  if (estado.aba !== "cruzamento") return "";
+  const linhas = A().linhas;
+  const sem = linhas.filter(r => (r.c.situacao || "").indexOf("SEM BOLETO") === 0).length;
+  return `<div class="linha-aviso calmo">📌 Títulos <b>classificados no TOTVS</b> (base SF1, Status “A”),
+    lidos por <b>dia de digitação</b> a partir do último dia útil — se o painel ficar dias sem rodar,
+    os dias do meio entram junto. Cada título entra <b>uma vez só</b>, e a coluna <b>Classif.</b>
+    mostra o dia em que foi classificado. Para cada um, o painel procura o boleto entre os que
+    <b>ainda não acharam título</b> (DDA + e-mail do Itaú). O <b>Critério</b> diz exatamente o que
+    bateu — NF, CNPJ, valor, vencimento.
+    ${sem ? `<b>${num(sem)}</b> ainda estão <span class="selo grave">SEM BOLETO</span>: é o esperado
+    para serviço e nota sem cobrança, e o cruzamento é <b>refeito a cada atualização</b> — se o boleto
+    chegar amanhã, a linha muda sozinha.` : "Todos acharam boleto."}</div>`;
 }
 
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
-  const corpo = avisoOcr() + avisoVisao();
+  const corpo = avisoOcr() + avisoVisao() + avisoPendentes() + avisoCruzamento();
   caixa.hidden = !corpo;
   caixa.innerHTML = corpo;
 }
