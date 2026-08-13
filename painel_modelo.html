@@ -578,8 +578,49 @@ const moeda = v => v.toLocaleString("pt-BR", {style:"currency", currency:"BRL"})
 // dentro do botao de nota cabe pouco: o nome inteiro fica no title
 const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
 
+/* `estado` e SEMPRE o que esta na tela, ou seja, o da ABA ATIVA. O que cada uma
+   das outras tinha fica guardado em `porAba` -- ver trocarAba(). */
 const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:"",
                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"", titulo:"", nf:"", uuid:""}};
+
+/* ---------- os filtros sao de cada aba, nao do painel ----------
+   Ate 13/08/2026 havia um estado so para todas: o que se digitava numa aba
+   continuava valendo na seguinte -- e as abas nem tem as mesmas colunas, entao
+   o mesmo texto que aqui achava o fornecedor, la escondia a aba inteira. Ao
+   mesmo tempo, trocar de aba ZERAVA o botao de fonte, a ordenacao e a sub-aba,
+   entao ir consultar outra coisa custava remontar tudo na volta.
+   Agora cada aba guarda o que e dela (busca, os 7 campos, o botao de fonte, a
+   ordenacao e a sub-aba): trocar de aba GUARDA o que estava na tela e DEVOLVE o
+   que aquela aba tinha.
+   ⚠ Vive na memoria da pagina, de proposito: recarregar comeca limpo. Filtro
+   sobrevivente de outro dia faria a aba parecer vazia sem motivo visivel. */
+const porAba = {};
+
+const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:"",
+                          filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
+                                   titulo:"", nf:"", uuid:""}});
+
+// copia, nunca a referencia: `filtros` e mutado in loco a cada tecla digitada
+const copiaVista = v => ({busca:v.busca, ordem:v.ordem, desc:v.desc, sub:v.sub,
+                          pill:v.pill, filtros:Object.assign({}, v.filtros)});
+
+function trocarAba(id){
+  if (estado.aba) porAba[estado.aba] = copiaVista(estado);
+  const guardada = porAba[id];
+  Object.assign(estado, guardada ? copiaVista(guardada) : semFiltro());
+  estado.aba = id;
+  refletirFiltros();
+}
+
+/* Os campos da barra sao os MESMOS elementos em todas as abas. Sem reescrever o
+   valor deles, a tela mostraria o filtro da aba anterior enquanto filtra por
+   outro -- pior do que perder o filtro. */
+function refletirFiltros(){
+  document.getElementById("busca").value = estado.busca;
+  document.querySelectorAll("#filtros input").forEach(campo => {
+    campo.value = estado.filtros[campo.dataset.filtro] ?? "";
+  });
+}
 
 /* A aba ativa responde por linhas, colunas e parcelas. Cada aba da base vira
    uma aba aqui, com colunas proprias -- elas nao tem os mesmos campos. */
@@ -1519,11 +1560,9 @@ function desenharAbasTopo(){
 document.getElementById("abasTopo").addEventListener("click", e => {
   const botao = e.target.closest("[data-aba]");
   if (!botao || botao.dataset.aba === estado.aba) return;
-  estado.aba = botao.dataset.aba;
-  estado.ordem = null;              // cada aba tem colunas proprias
-  estado.sub = "tratar";
+  // guarda os filtros da aba que sai e devolve os da que entra (nada e zerado)
+  trocarAba(botao.dataset.aba);
   try { sessionStorage.setItem("painel_boletos_aba", estado.aba); } catch (err) {}
-  estado.pill = "";
   desenharAbasTopo();
   desenharPills();
   desenharAviso();
@@ -1534,6 +1573,9 @@ function desenharPills(){
   const caixa = document.getElementById("pills");
   const pills = A().pills;
   if (!pills || !pills.valores.length){ caixa.innerHTML = ""; return; }
+  // O botao guardado pode ter sumido da carga nova (empresa sem boleto hoje).
+  // Sem isto a aba abriria vazia com nenhum botao aceso -- filtro invisivel.
+  if (estado.pill && !pills.valores.includes(estado.pill)) estado.pill = "";
   const conta = v => A().linhas.filter(r => r.c[pills.chave] === v).length;
   caixa.innerHTML =
     `<button type="button" data-pill="" class="${estado.pill ? "" : "ativa"}">
@@ -1805,7 +1847,9 @@ function iniciar(dados){
   // os dois cortes leem o que foi tratado, entao vem depois do laco acima:
   // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento
   dados.abas = recontarAbas(partirAbas(filtrarSE2(dados.abas)));
-  if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
+  // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
+  // os filtros dela ligados na aba que assume o lugar.
+  if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharCartaoAtualizacao();
   desenharAbasTopo();
