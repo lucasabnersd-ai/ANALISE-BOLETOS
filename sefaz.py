@@ -68,6 +68,11 @@ NUM_NF = "Nº NF"
 EMISSAO = "Emissão"
 SAIDA = "Saída/Entrada"
 TIPO_OP = "Tipo Operação"
+# ⚠ NAO e o "Tipo Operação" acima: aquele diz entrada/saida, este e a natureza
+# escrita na nota ("COMPRA PARA COMERCIALIZACAO", "PRESTACAO DE SERVICO"...). As
+# duas abas trazem, com NOMES DIFERENTES -- "Nat. Operação" na NF-e (F) e
+# "Natureza Operação" na NFS-e (P) --, e por isso a trava de nome e por aba.
+NAT_OP = "Nat. Operação"
 CFOP = "CFOP"
 VLR_ITEM = "Vlr Item"
 VLR_TOTAL = "Vlr Total"
@@ -82,7 +87,7 @@ NOME_DEST = "Destinatário"
 
 ALERTA = "Alerta"
 
-CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, SAIDA, TIPO_OP, CFOP,
+CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, SAIDA, TIPO_OP, NAT_OP, CFOP,
              NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              VLR_ITEM, VLR_TOTAL, VENC_DUP, VLR_DUP, INFO, CHAVE_NFE]
 
@@ -196,6 +201,7 @@ COLUNAS_NFE = [
     ("J",  "Data Emissão",       EMISSAO),
     ("K",  "Data Saída/Entrada", SAIDA),
     ("L",  "Tipo Operação",      TIPO_OP),
+    ("F",  "Nat. Operação",      NAT_OP),
     ("W",  "CFOP",               CFOP),
     ("AA", "Vlr Total Item",     VLR_ITEM),
     ("LM", "Venc Duplicata",     VENC_DUP),
@@ -213,6 +219,7 @@ COLUNAS_NFS = [
     ("A",  "Chave NFS-e",             CHAVE_NFE),
     ("I",  "Número NFSe",             NUM_NF),
     ("H",  "Data de Emissão NFSe",    EMISSAO),
+    ("P",  "Natureza Operação",       NAT_OP),
     ("Y",  "Descrição do Serviço",    INFO),
     ("BJ", "Valor dos Serviços",      VLR_TOTAL),
     ("EB", "CNPJ Prestador",          CNPJ_EMIT),

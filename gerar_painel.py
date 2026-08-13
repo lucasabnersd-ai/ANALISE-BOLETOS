@@ -27,8 +27,10 @@ from openpyxl import load_workbook
 
 import cruzamento_classificacao
 import cruzamento_sefaz_sf1
+import pedidos_sefaz
 import pendentes_itau
 import planilha_excel_js
+import sc7
 import sefaz
 import verificacao_se2
 
@@ -100,7 +102,9 @@ MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
          # painel. Faltando aqui, o valor sai cru ("29307.68") no lugar de R$.
          "Vlr.Título",
          # abas da SEFAZ
-         "Vlr Item", "Vlr Total", "Vlr Duplicata", "Vlr SEFAZ"}
+         "Vlr Item", "Vlr Total", "Vlr Duplicata", "Vlr SEFAZ",
+         # aba NF x Pedido de Compra: o total do PC (soma dos itens dele)
+         "Vlr Pedido"}
 DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         "DT Baixa", "DT Contab.",
         # aba NFs pendentes Itau
@@ -108,8 +112,14 @@ DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         # aba Titulos Associados na Classificacao
         "Classificado em", "Emissão",
         # abas da SEFAZ
-        "Saída/Entrada", "Venc Duplicata", "Emissão SF1"}
-INTEIRO = {"Score Match", "2º Score", "Margem", "Score"}
+        "Saída/Entrada", "Venc Duplicata", "Emissão SF1",
+        # aba NF x Pedido de Compra: datas do PEDIDO (a menor de cada uma)
+        "Dt. Entrega", "1° Venc"}
+INTEIRO = {"Score Match", "2º Score", "Margem", "Score",
+           # aba SEFAZ x SF1: quantas duplicatas a nota tem (vazio = uma so)
+           "Duplicatas",
+           # aba NF x Pedido de Compra
+           "Itens do PC", "Qtd.a Classi"}
 
 # Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
 # aparece nas que sao SO_BOTAO; nas outras o proprio valor e o botao.
@@ -348,6 +358,10 @@ ROTULOS_PLANILHA_SEFAZ = {
 # Aba "SEFAZ x SF1": a nota da SEFAZ de um lado, o titulo que o cruzamento achou
 # na SF1 do outro -- mesmo desenho das outras abas de par. Ver
 # cruzamento_sefaz_sf1.py. ⚠ Nada aqui encosta na SE2 (pedido do usuario).
+# ⚠ 13/08/2026: entraram 8 colunas da nota (duplicata, fantasia, CFOP, tipo e
+# natureza da operacao, destinatario) e sairam 3 (Emissão SF1, Campo UUID e a
+# gutter "#"). As colunas da nota estavam sendo LIDAS e jogadas fora pela visao
+# por nota -- ver `notas_da_sefaz`, que agora agrega cada uma do seu jeito.
 COMPACTA_SEFAZ_SF1 = [
     ("CHECK (FEITO)",     "",       "",           3),
     ("Situação",          "",       "",           9.5),
@@ -355,14 +369,29 @@ COMPACTA_SEFAZ_SF1 = [
     ("Origem",            "",       "",           4.5),
     ("Nº NF",             "titulo", "NF",         5),
     ("Nº NF SF1",         "boleto", "NF",         5.5),
-    ("Emissão",           "titulo", "EMISSÃO",    5.5),
-    ("Emissão SF1",       "boleto", "EMISSÃO",    5.5),
+    ("Emissão",           "titulo", "",           5.5),
     ("Emitente",          "titulo", "CONTRAPARTE", 12),
     ("Razão Social",      "boleto", "CONTRAPARTE", 12),
-    ("CNPJ Emitente",     "titulo", "",           7),
+    ("CNPJ Emitente",     "titulo", "CONTRAPARTE", 7),
+    ("Nome Fantasia",     "titulo", "CONTRAPARTE", 8.5),
+    # O destinatario e a NOSSA empresa: e por ele que se sabe de qual filial a
+    # nota e. Nome e CNPJ copiaveis em 1 clique (pedido do usuario).
+    ("Destinatário",      "boleto", "DESTINATÁRIO", 10),
+    ("CNPJ Destinatário", "boleto", "DESTINATÁRIO", 7),
+    ("Tipo Operação",     "titulo", "OPERAÇÃO",   4.5),
+    ("Nat. Operação",     "titulo", "OPERAÇÃO",   9),
+    ("Saída/Entrada",     "titulo", "OPERAÇÃO",   5),
+    # ⚠ CFOP e do ITEM e varia em 40 das 155 notas de NF-e: a celula traz TODOS
+    # os CFOPs da nota juntos por " · ", nao o do primeiro item.
+    ("CFOP",              "titulo", "OPERAÇÃO",   5),
     ("Vlr SEFAZ",         "titulo", "VALOR",      6),
     ("Vlr.Título",        "boleto", "VALOR",      6),
     ("@delta_valor",      "delta",  "VALOR",      6),
+    # A duplicata que vence ANTES; `Duplicatas` so mostra numero quando ha mais
+    # de uma -- senao a linha prometeria parcela unica onde ha 3.
+    ("Venc Duplicata",    "titulo", "DUPLICATA",  5),
+    ("Vlr Duplicata",     "boleto", "DUPLICATA",  5.5),
+    ("Duplicatas",        "delta",  "DUPLICATA",  3.5),
     ("Série",             "boleto", "",           3.5),
     ("Classificado em",   "boleto", "",           5.5),
     ("Títulos",           "",       "",           3.5),
@@ -371,7 +400,6 @@ COMPACTA_SEFAZ_SF1 = [
     # coluna custava 78 KB de carteira para mostrar duas vezes a mesma frase.
     ("@tratativa",        "",       "",           4),
     ("Chave NF-e",        "",       "",           3.5),
-    ("Campo UUID",        "",       "",           3.5),
 ]
 
 ROTULOS_PLANILHA_SEFAZ_SF1 = {
@@ -379,13 +407,113 @@ ROTULOS_PLANILHA_SEFAZ_SF1 = {
     "Nº NF": "Nº da NF (SEFAZ)",
     "Nº NF SF1": "Nº da NF (SF1/TOTVS)",
     "Emissão": "Emissão (SEFAZ)",
-    "Emissão SF1": "Emissão (SF1, DT Emissao)",
     "Emitente": "Emitente/Prestador (SEFAZ)",
+    "Nome Fantasia": "Nome Fantasia do Emitente",
     "Razão Social": "Razão Social do Fornecedor (SF1)",
+    "Destinatário": "Destinatário/Tomador (a nossa empresa)",
+    "CNPJ Destinatário": "CNPJ do Destinatário/Tomador",
+    "Tipo Operação": "Tipo de Operação (entrada/saída)",
+    "Nat. Operação": "Natureza da Operação (só NF-e)",
+    "Saída/Entrada": "Data de Saída/Entrada",
+    "CFOP": "CFOP dos itens da nota",
     "Vlr SEFAZ": "Valor Total da Nota (SEFAZ)",
+    "Venc Duplicata": "Vencimento da 1ª Duplicata",
+    "Vlr Duplicata": "Valor da 1ª Duplicata",
+    "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
     "Títulos": "Quantos títulos da SF1 têm este mesmo nº de NF",
     "Critério": "O que bateu no cruzamento",
     "Classificado em": "Data de Classificação no TOTVS (Dt.Digitacao)",
+}
+
+# Aba "NF x Pedido de Compra" (13/08/2026): a nota da SEFAZ, o lancamento dela no
+# TOTVS e o PEDIDO que a originou, tudo na mesma linha. E um superconjunto da
+# SEFAZ x SF1 -- as duas convivem de proposito: aquela responde "ja foi
+# lancada?", esta responde "de qual pedido veio?". Ver pedidos_sefaz.py.
+COMPACTA_PEDIDOS = [
+    ("CHECK (FEITO)",     "",       "",             3),
+    ("Situação",          "",       "",            10),
+    ("Alerta",            "",       "",             6.5),
+    # o veredito da OUTRA aba, de proposito: "achei o pedido MAS a nota nunca
+    # foi lancada" e justamente o caso que esta aba serve para achar
+    ("Lançada na SF1",    "",       "",             6.5),
+    ("Origem",            "",       "",             4),
+    ("Nº NF",             "titulo", "NF",           4.5),
+    # a NF com zeros a frente ate 9 digitos: e o que se cola no TOTVS
+    ("NF no TOTVS",       "titulo", "NF",           5.5),
+    ("Emissão",           "titulo", "",             5),
+    ("Emitente",          "titulo", "EMITENTE",    11),
+    ("CNPJ Emitente",     "titulo", "EMITENTE",     7),
+    ("Nome Fantasia",     "titulo", "EMITENTE",     8),
+    ("Destinatário",      "boleto", "DESTINATÁRIO", 9.5),
+    ("CNPJ Destinatário", "boleto", "DESTINATÁRIO", 7),
+    ("Tipo Operação",     "titulo", "OPERAÇÃO",     4.5),
+    ("Nat. Operação",     "titulo", "OPERAÇÃO",     8.5),
+    ("Saída/Entrada",     "titulo", "OPERAÇÃO",     5),
+    ("CFOP",              "titulo", "OPERAÇÃO",     5),
+    ("Vlr SEFAZ",         "titulo", "VALOR",        6),
+    ("Vlr Pedido",        "boleto", "VALOR",        6),
+    ("@delta_valor",      "delta",  "VALOR",        6),
+    ("Venc Duplicata",    "titulo", "DUPLICATA",    5),
+    ("Vlr Duplicata",     "boleto", "DUPLICATA",    5.5),
+    ("Duplicatas",        "delta",  "DUPLICATA",    3.5),
+    # --- o pedido de compra (SC7) e quem o pediu (SC1) ---
+    ("Numero PC",         "boleto", "PEDIDO",       5),
+    ("Numero da SC",      "boleto", "PEDIDO",       5.5),
+    ("Solicitante",       "boleto", "PEDIDO",       8),
+    ("Comprador",         "boleto", "PEDIDO",       8),
+    # ⚠ Nasce VAZIA: `Usuário SC` esta preenchida em 83 das 24.401 linhas da SC7
+    # e em ZERO dos pedidos que casam com nota. Fica porque o usuario pediu e
+    # porque passa a funcionar sozinha se a exportacao mudar.
+    ("Usuário SC",        "boleto", "PEDIDO",       6),
+    ("Qtd.a Classi",      "boleto", "PEDIDO",       4),
+    ("Controle Ap.",      "boleto", "PEDIDO",       4),
+    ("Ped. Encerr.",      "boleto", "PEDIDO",       4),
+    ("Dt. Entrega",       "boleto", "PEDIDO",       5),
+    ("1° Venc",           "boleto", "PEDIDO",       5),
+    # a razao social do fornecedor NO PEDIDO: quando ela nao parece com o
+    # emitente da nota, o cruzamento provavelmente errou -- e da para ver isso
+    # sem abrir planilha nenhuma
+    ("Fornecedor do PC",  "boleto", "PEDIDO",      10),
+    ("Itens do PC",       "boleto", "PEDIDO",       4),
+    # o texto de onde o numero do pedido foi lido; abre no quadro
+    ("Informações",       "",       "",             3.5),
+    ("@tratativa",        "",       "",             4),
+    ("Chave NF-e",        "",       "",             3.5),
+]
+
+ROTULOS_PLANILHA_PEDIDOS = {
+    "Situação": "O pedido de compra desta nota foi encontrado?",
+    "Lançada na SF1": "A nota está lançada no TOTVS (SF1)?",
+    "Nº NF": "Nº da NF (SEFAZ)",
+    "NF no TOTVS": "Nº da NF no padrão TOTVS (9 dígitos)",
+    "Emissão": "Emissão (SEFAZ)",
+    "Emitente": "Emitente/Prestador (SEFAZ)",
+    "Nome Fantasia": "Nome Fantasia do Emitente",
+    "Destinatário": "Destinatário/Tomador (a nossa empresa)",
+    "CNPJ Destinatário": "CNPJ do Destinatário/Tomador",
+    "Tipo Operação": "Tipo de Operação (entrada/saída)",
+    "Nat. Operação": "Natureza da Operação (só NF-e)",
+    "Saída/Entrada": "Data de Saída/Entrada",
+    "CFOP": "CFOP dos itens da nota",
+    "Vlr SEFAZ": "Valor Total da Nota (SEFAZ)",
+    "Vlr Pedido": "Valor Total do Pedido (soma dos itens, SC7)",
+    "Venc Duplicata": "Vencimento da 1ª Duplicata",
+    "Vlr Duplicata": "Valor da 1ª Duplicata",
+    "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
+    "Numero PC": "Nº do Pedido de Compra (SC7)",
+    "Numero da SC": "Nº da Solicitação de Compra (SC7)",
+    "Solicitante": "Solicitante da SC (SC1)",
+    "Comprador": "Comprador do Pedido (SC7)",
+    "Usuário SC": "Usuário da SC (SC7 — quase sempre vazio na base)",
+    "Qtd.a Classi": "Quantidade a Classificar (soma dos itens do PC)",
+    "Controle Ap.": "Controle de Aprovação (SC7)",
+    "Ped. Encerr.": "Pedido Encerrado (SC7)",
+    "Dt. Entrega": "Data de Entrega do Pedido (a mais próxima)",
+    "1° Venc": "1º Vencimento do Pedido (o mais próximo)",
+    "Fornecedor do PC": "Razão Social do Fornecedor no Pedido",
+    "Itens do PC": "Quantos itens o Pedido tem",
+    "Informações": "Informações Complementares / Descrição do Serviço",
+    "Critério": "O que sustentou (ou não) o pedido encontrado",
 }
 
 ROTULOS_PLANILHA_CRUZAMENTO = {
@@ -600,11 +728,51 @@ ABAS = {
         "pills": "Origem",
         "selos": {"ACHADA NA SF1": "forte", "CONFERIR": "provavel",
                   "NÃO ACHADA": "grave"},
-        "nao_copiar": {"Emitente", "Razão Social"},
-        "copiar_extra": {"Nº NF": "", "Campo UUID": ""},
+        # Nome de gente/empresa nao vira botao de copiar -- MENOS o destinatario,
+        # que o usuario pediu explicitamente copiavel em 1 clique junto do CNPJ.
+        "nao_copiar": {"Emitente", "Razão Social", "Nome Fantasia"},
+        "copiar_extra": {"Nº NF": "", "Destinatário": "", "CNPJ Destinatário": ""},
         "col_alerta": "Alerta",
         "resumo": {"alerta": "com alerta", "divergentes": "valor difere da SF1"},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ_SF1,
+    },
+    # De qual PEDIDO DE COMPRA veio esta nota? Junta SEFAZ + SF1 + SC7/SC1.
+    # Ver pedidos_sefaz.py -- inclusive por que o veredito tem cinco degraus.
+    "pedidos": {
+        "planilha": None,
+        "fonte": "pedidos",
+        "nome": "NF x Pedido de Compra",
+        "guia": "NF x Pedido de Compra",
+        "cor": "indigo",
+        "compacta": COMPACTA_PEDIDOS,
+        # Δ = pedido - nota. Positivo quer dizer pedido maior que a nota, que e
+        # o normal na entrega parcial; negativo pede explicacao.
+        "confrontos": {"Vlr Pedido": ("Vlr SEFAZ", "moeda")},
+        "col_status": "Situação",
+        "col_criterio": "Critério",
+        "col_score": "",
+        "col_uuid": "Chave",
+        "prefixo_uuid": "",
+        # ⚠ LISTA de colunas (o resto do painel declara uma so). "Comprador" e
+        # "Ped. Encerr." so viram botao se tiverem de 2 a 8 valores na base do
+        # dia -- a guarda de sempre; com 19 compradores a barra viraria parede.
+        "pills": ["Lançada na SF1", "Ped. Encerr."],
+        "selos": {pedidos_sefaz.CONFIRMADO: "forte",
+                  pedidos_sefaz.PROVAVEL: "provavel",
+                  pedidos_sefaz.CONFERIR: "provavel",
+                  pedidos_sefaz.FORA: "grave",
+                  pedidos_sefaz.SEM: "grave"},
+        "texto_longo": {"Informações"},
+        # nome de gente/empresa nao vira botao de copiar; o destinatario e a
+        # excecao pedida pelo usuario, e o PC/NF sao o que se cola no TOTVS
+        "nao_copiar": {"Emitente", "Nome Fantasia", "Fornecedor do PC",
+                       "Solicitante", "Comprador"},
+        "copiar_extra": {"Nº NF": "", "NF no TOTVS": "", "Numero PC": "",
+                         "Numero da SC": "", "Destinatário": "",
+                         "CNPJ Destinatário": ""},
+        "col_alerta": "Alerta",
+        "resumo": {"alerta": "com alerta", "divergentes": "valor difere do pedido"},
+        "rotulos_planilha": ROTULOS_PLANILHA_PEDIDOS,
     },
 }
 
@@ -638,7 +806,13 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     # nomes da aba Titulos Associados na Classificacao
                     "Classificado em": "Classif.", "Nº NF": "Nº NF",
                     "Vlr.Título": "Vlr. título", "Critério": "Critério",
-                    "Série": "Série", "Boletos": "Cand."}
+                    "Série": "Série", "Boletos": "Cand.",
+                    # abas da SEFAZ (o cabecalho e uma linha so)
+                    "Venc Duplicata": "Venc. dupl.", "Vlr Duplicata": "Vlr. dupl.",
+                    "Duplicatas": "Qtd.", "CNPJ Destinatário": "CNPJ dest.",
+                    "Nome Fantasia": "Fantasia",
+                    "Tipo Operação": "Tipo op.", "Nat. Operação": "Natureza",
+                    "Saída/Entrada": "Saída/ent."}
 
 # Cabecalho da planilha exportada: aqui vale o nome por extenso, nao a
 # abreviacao da tela. Sem entrada, sai o proprio nome da coluna da base.
@@ -1202,8 +1376,14 @@ def grupos_de_pills(cfg: dict, compacta: list[dict],
     """
     grupos: list[dict] = []
     candidatos = []
-    if cfg.get("pills"):
-        candidatos.append((chave_de(cfg["pills"]), cfg["pills"]))
+    # `pills` aceita uma coluna ou uma LISTA delas (a aba de pedidos declara
+    # duas). A guarda de 2 a 8 valores continua valendo para cada uma: grupo que
+    # nao passa simplesmente nao vira barra.
+    declaradas = cfg.get("pills") or []
+    if isinstance(declaradas, str):
+        declaradas = [declaradas]
+    for coluna in declaradas:
+        candidatos.append((chave_de(coluna), coluna))
     status = next((c for c in compacta if c.get("papel") == "status"), None)
     if status:
         candidatos.append((status["chave"], status.get("rotulo") or "Situação"))
@@ -1294,7 +1474,7 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     # Abas da SEFAZ: a base como ela e (so as colunas marcadas) e o cruzamento
     # dela com a SF1. Mesma regra das outras bases de fora -- falhar aqui nao
     # derruba o painel, mas tem de aparecer na tela do .cmd.
-    sefaz_resumo = cruz_sefaz_resumo = None
+    sefaz_resumo = cruz_sefaz_resumo = pedidos_resumo = None
     caminho_sefaz = base_sefaz or sefaz.BASE_PADRAO
     if not caminho_sefaz.exists():
         print(f"AVISO: base SEFAZ nao encontrada, abas nao atualizadas:\n"
@@ -1311,12 +1491,33 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # mentira -- ninguem procurou).
         nao_lancadas = None
         if caminho_sf1.exists():
+            # ⚠ `preparar()` le SEFAZ + SF1 UMA vez e as duas abas que dependem
+            # do cruzamento reusam o resultado. Sem isso, a aba de pedidos releria
+            # os 8.011 titulos da SF1 so para mostrar o mesmo veredito ao lado.
+            pronto = cruzamento_sefaz_sf1.preparar(caminho_sefaz, caminho_sf1)
             cabecalho, brutas, cruz_sefaz_resumo = cruzamento_sefaz_sf1.carregar(
-                caminho_sefaz, caminho_sf1)
+                caminho_sefaz, caminho_sf1, pronto=pronto)
             if brutas:
                 lidas["sefaz_sf1"] = montar_aba(cabecalho, brutas, ABAS["sefaz_sf1"])
             # `pop`: e um set, e o resumo vai para JSON -- set nao serializa.
             nao_lancadas = cruz_sefaz_resumo.pop("nao_lancadas", None)
+
+            # Aba dos pedidos de compra: precisa do cruzamento acima (leva o
+            # veredito da SF1 e os alertas) MAIS a SC7/SC1. Mesma regra das
+            # outras bases de fora: falhar aqui nao derruba o painel, mas tem de
+            # aparecer -- aba que para de atualizar calada e o pior dos casos.
+            if sc7.BASE_SC7.exists():
+                try:
+                    cabecalho, brutas, pedidos_resumo = pedidos_sefaz.carregar(
+                        caminho_sefaz, caminho_sf1, pronto=pronto)
+                    if brutas:
+                        lidas["pedidos"] = montar_aba(cabecalho, brutas, ABAS["pedidos"])
+                except Exception as exc:  # noqa: BLE001 - planilha aberta, coluna movida...
+                    print(f"AVISO: aba de pedidos de compra nao atualizada: {exc}",
+                          file=sys.stderr)
+            else:
+                print(f"AVISO: SC7 nao encontrada, aba de pedidos nao criada:\n"
+                      f"       {sc7.BASE_SC7}", file=sys.stderr)
 
         cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas)
         if brutas:
@@ -1434,6 +1635,7 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     dados["_cruzamento"] = cruzamento_resumo
     dados["_sefaz"] = sefaz_resumo
     dados["_sefaz_sf1"] = cruz_sefaz_resumo
+    dados["_pedidos"] = pedidos_resumo
     dados["_se2"] = ({"base": str(caminho_se2), "salva_em": conferencia_se2.lido_em,
                       "total": conferencia_se2.total, "dias": conferencia_se2.dias}
                      if conferencia_se2 else None)

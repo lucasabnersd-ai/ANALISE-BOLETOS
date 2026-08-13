@@ -45,6 +45,23 @@ NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 VLR_SEFAZ = "Vlr SEFAZ"
 CHAVE_NFE = "Chave NF-e"
+# 13/08/2026, pedido do usuario: colunas da nota que a visao por NOTA descartava.
+FANTASIA = "Nome Fantasia"
+CFOP = "CFOP"
+TIPO_OP = "Tipo Operação"
+# ⚠ Vazia nas NFS-e: a coluna existe na aba `NFS` da SEFAZ.xlsx mas a exportacao
+# nao a preenche (medido: 0 de 462). So as NF-e tem natureza.
+NAT_OP = "Nat. Operação"
+SAIDA = "Saída/Entrada"
+NOME_DEST = "Destinatário"
+CNPJ_DEST = "CNPJ Destinatário"
+VENC_DUP = "Venc Duplicata"
+VLR_DUP = "Vlr Duplicata"
+# Quantas duplicatas a nota tem. So aparece quando ha MAIS DE UMA: as colunas
+# acima levam a PRIMEIRA (a que vence antes), e sem este aviso a linha diria
+# "vence em 10/09" para uma nota que na verdade tem 3 parcelas. Medido: 33 das
+# 617 notas tem mais de uma duplicata.
+QTD_DUP = "Duplicatas"
 # lado da SF1
 FILIAL = "Filial"
 NF_SF1 = "Nº NF SF1"
@@ -53,16 +70,20 @@ RAZAO = "Razão Social"
 VLR_TITULO = "Vlr.Título"
 EMISSAO_SF1 = "Emissão SF1"
 CLASSIFICADO = "Classificado em"
-UUID_NF = "Campo UUID"
 CRITERIO = "Critério"
 CANDIDATOS = "Títulos"
 
 ALERTA = "Alerta"
 
-CABECALHO = [CHAVE, SITUACAO, ALERTA, ORIGEM, NUM_NF, NF_SF1, EMISSAO, EMISSAO_SF1,
-             NOME_EMIT, RAZAO, CNPJ_EMIT, VLR_SEFAZ, VLR_TITULO,
-             FILIAL, SERIE, CLASSIFICADO, CANDIDATOS, CRITERIO,
-             CHAVE_NFE, UUID_NF]
+# ⚠ `Emissão SF1` e `Campo UUID` (o UUID do titulo na SF1) SAIRAM em 13/08/2026,
+# a pedido do usuario. A emissao da SF1 continua sendo lida e continua valendo
+# ponto no cruzamento (`_nota_do_par`) -- ela so nao vira coluna. Tirar daqui
+# tambem tira da carteira que viaja para o navegador, que e o ponto.
+CABECALHO = [CHAVE, SITUACAO, ALERTA, ORIGEM, NUM_NF, NF_SF1, EMISSAO,
+             NOME_EMIT, RAZAO, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
+             TIPO_OP, NAT_OP, SAIDA, CFOP, VLR_SEFAZ, VLR_TITULO,
+             VENC_DUP, VLR_DUP, QTD_DUP,
+             FILIAL, SERIE, CLASSIFICADO, CANDIDATOS, CRITERIO, CHAVE_NFE]
 
 ACHADA = "ACHADA NA SF1"
 CONFERIR = "CONFERIR"
@@ -100,6 +121,9 @@ def ler_sf1(base: Path) -> list[dict]:
         next(brutas, None)                       # cabecalho
         titulos = []
         for linha in brutas:
+            # ⚠ Continua sendo o SF1_UUID que mede a linha, mesmo depois de a
+            # coluna do UUID ter saido do painel (13/08/2026): e o maior indice
+            # usado por este modulo, entao e ele que diz "a linha veio inteira".
             if len(linha) <= cc.SF1_UUID:
                 continue
             numero = cc._texto(linha[cc.SF1_NUMERO])
@@ -117,7 +141,6 @@ def ler_sf1(base: Path) -> list[dict]:
                 CLASSIFICADO: cc._data(linha[cc.SF1_DIGITACAO]),
                 "status": cc._texto(linha[cc.SF1_STATUS]),
                 "chave_nfe": _digitos(cc._texto(linha[cc.SF1_CHAVE_NFE])),
-                UUID_NF: cc._texto(linha[cc.SF1_UUID]),
             })
         return titulos
     finally:
@@ -126,28 +149,69 @@ def ler_sf1(base: Path) -> list[dict]:
             shutil.rmtree(temporaria, ignore_errors=True)
 
 
+# Campos que NAO variam dentro da nota: medido em 13/08/2026 nas 617 notas --
+# Tipo Operação, Saída/Entrada, Nome Fantasia, Destinatário, CNPJ Destinatário e
+# Nat. Operação sao iguais em todas as linhas da mesma nota, entao a PRIMEIRA
+# linha basta. ⚠ O CFOP NAO entra aqui: ele e do ITEM e varia em 40 das 155
+# notas de NF-e -- por isso e juntado, e nao pego da primeira linha.
+DA_PRIMEIRA_LINHA = (
+    (NOME_EMIT, sefaz.NOME_EMIT), (CNPJ_EMIT, sefaz.CNPJ_EMIT),
+    (FANTASIA, sefaz.FANTASIA), (NOME_DEST, sefaz.NOME_DEST),
+    (CNPJ_DEST, sefaz.CNPJ_DEST), (TIPO_OP, sefaz.TIPO_OP), (SAIDA, sefaz.SAIDA),
+    (NAT_OP, sefaz.NAT_OP),
+)
+
+
 def notas_da_sefaz(linhas: list[dict]) -> list[dict]:
     """Uma linha por NOTA. A base de NF-e vem por item x duplicata, entao o
     cruzamento tem de subir um nivel -- senao uma nota de 51 itens viraria 51
-    vezes a mesma pergunta na tela."""
-    porchave = {}
+    vezes a mesma pergunta na tela.
+
+    ⚠ Subir de nivel PERDE dado se a agregacao for descuidada, e e por isso que
+    cada campo tem um jeito proprio: o que se repete vem da primeira linha, o
+    CFOP (que e do item) vem junto e a duplicata vem a que VENCE ANTES, com a
+    contagem do lado para a linha nao mentir sobre as outras parcelas.
+    """
+    porchave: dict[str, dict] = {}
     for l in linhas:
         chave = l[sefaz.CHAVE_NFE]
         nota = porchave.get(chave)
         if nota is None:
-            porchave[chave] = {
+            nota = porchave[chave] = {
                 ORIGEM: l[sefaz.ORIGEM],
                 CHAVE_NFE: chave,
                 NUM_NF: l[sefaz.NUM_NF],
                 EMISSAO: l[sefaz.EMISSAO],
-                NOME_EMIT: l[sefaz.NOME_EMIT],
-                CNPJ_EMIT: l[sefaz.CNPJ_EMIT],
                 # o total da nota se repete em toda linha dela; a primeira basta
                 VLR_SEFAZ: l[sefaz.VLR_TOTAL],
-                "itens": 1,
+                "itens": 0,
+                "cfops": [],
+                "duplicatas": [],
             }
-        else:
-            nota["itens"] += 1
+            for destino, origem in DA_PRIMEIRA_LINHA:
+                nota[destino] = l.get(origem, "")
+        nota["itens"] += 1
+
+        cfop = str(l.get(sefaz.CFOP) or "").strip()
+        if cfop and cfop not in nota["cfops"]:
+            nota["cfops"].append(cfop)
+
+        # (vencimento, valor) -- a mesma duplicata se repete em cada ITEM da nota,
+        # entao o que identifica a parcela e o par, nao a linha.
+        venc, valor = l.get(sefaz.VENC_DUP), l.get(sefaz.VLR_DUP)
+        if (venc or valor) and (venc, valor) not in nota["duplicatas"]:
+            nota["duplicatas"].append((venc, valor))
+
+    for nota in porchave.values():
+        nota[CFOP] = " · ".join(nota.pop("cfops"))
+        # a que chega ANTES: e a que decide o alerta de vencimento e a que a
+        # pessoa precisa ver primeiro. Sem data vai para o fim.
+        parcelas = sorted(nota.pop("duplicatas"),
+                          key=lambda d: (d[0] is None, d[0] or dt.date.min))
+        nota[VENC_DUP] = parcelas[0][0] if parcelas else None
+        nota[VLR_DUP] = parcelas[0][1] if parcelas else None
+        # 1 duplicata nao e aviso de nada -- so o "tem mais de uma" informa
+        nota[QTD_DUP] = len(parcelas) if len(parcelas) > 1 else None
     return list(porchave.values())
 
 
@@ -227,9 +291,12 @@ def cruzar(notas: list[dict], titulos: list[dict]) -> list[dict]:
         linha[SERIE] = melhor[SERIE]
         linha[RAZAO] = melhor[RAZAO]
         linha[VLR_TITULO] = melhor[VLR_TITULO]
+        # ⚠ `Emissão SF1` nao e mais coluna (saiu do CABECALHO em 13/08/2026),
+        # mas continua sendo gravada: e um `max` de pontos que decide o melhor
+        # titulo, e a emissao e um dos pontos. Para devolver a coluna a tela,
+        # basta reinserir EMISSAO_SF1 no CABECALHO -- nada mais muda.
         linha[EMISSAO_SF1] = melhor[EMISSAO_SF1]
         linha[CLASSIFICADO] = melhor[CLASSIFICADO]
-        linha[UUID_NF] = melhor[UUID_NF]
         if not confirmado:
             porque.append("Emitente NÃO confirmado — pode ser outro fornecedor com o mesmo número")
         if melhor["status"] and melhor["status"].upper() != "A":
@@ -256,14 +323,29 @@ def montar_linhas(cruzadas: list[dict]) -> list[tuple]:
     return saida
 
 
-def carregar(base_sefaz: Path, base_sf1: Path,
-             hoje=None) -> tuple[list[str], list[tuple], dict]:
-    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador.
+class Cruzamento:
+    """O resultado do cruzamento antes de virar tabela.
 
-    ⚠ O resumo leva `nao_lancadas` (as chaves em NÃO ACHADA). E este cruzamento
-    quem sabe o que falta lancar, e a aba da base SEFAZ precisa disso para poder
-    mostrar os mesmos alertas -- por isso o gerador roda o cruzamento ANTES dela.
+    Existe porque TRES abas precisam da mesma coisa e ler a SF1 (8.011 titulos)
+    tres vezes seria desperdicio: esta aba, a `Análise Base SEFAZ` (que precisa
+    do `nao_lancadas` para os alertas) e a `NF x Pedido de Compra`, que mostra o
+    mesmo veredito de lancamento ao lado do pedido.
     """
+
+    def __init__(self, linhas, cruzadas, nao_lancadas, alertas, hoje, titulos_sf1):
+        self.linhas = linhas              # SEFAZ crua (por item x duplicata)
+        self.cruzadas = cruzadas          # uma por NOTA, ja com o veredito
+        self.nao_lancadas = nao_lancadas  # chaves NF-e que a SF1 nao tem
+        self.alertas = alertas            # {chave NF-e: [avisos]}
+        self.hoje = hoje
+        self.titulos_sf1 = titulos_sf1    # quantos titulos a SF1 tinha
+
+    def por_chave(self) -> dict[str, dict]:
+        return {l[CHAVE_NFE]: l for l in self.cruzadas}
+
+
+def preparar(base_sefaz: Path, base_sf1: Path, hoje=None) -> Cruzamento:
+    """Le as duas bases e cruza. Nao monta tabela nenhuma -- ver `carregar`."""
     hoje = hoje or dt.date.today()
     # as linhas cruas ficam: e delas que sai o vencimento das duplicatas, que a
     # visao por nota (`notas_da_sefaz`) nao carrega
@@ -277,6 +359,23 @@ def carregar(base_sefaz: Path, base_sf1: Path,
     alertas = sefaz.alertas_por_nota(linhas, nao_lancadas, hoje)
     for l in cruzadas:
         l[ALERTA] = " · ".join(alertas.get(l[CHAVE_NFE], []))
+    return Cruzamento(linhas, cruzadas, nao_lancadas, alertas, hoje, len(titulos))
+
+
+def carregar(base_sefaz: Path, base_sf1: Path, hoje=None,
+             pronto: "Cruzamento | None" = None) -> tuple[list[str], list[tuple], dict]:
+    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador.
+
+    ⚠ O resumo leva `nao_lancadas` (as chaves em NÃO ACHADA). E este cruzamento
+    quem sabe o que falta lancar, e a aba da base SEFAZ precisa disso para poder
+    mostrar os mesmos alertas -- por isso o gerador roda o cruzamento ANTES dela.
+
+    `pronto` evita reler as bases quando o gerador ja chamou `preparar()`.
+    """
+    c = pronto or preparar(base_sefaz, base_sf1, hoje)
+    # ⚠ `cruzadas` e uma linha por NOTA -- e por isso serve tambem de contagem de
+    # notas: `cruzar()` devolve exatamente uma saida por entrada.
+    cruzadas, alertas, nao_lancadas = c.cruzadas, c.alertas, c.nao_lancadas
 
     contagem = {ACHADA: 0, CONFERIR: 0, NAO_ACHADA: 0}
     for l in cruzadas:
@@ -284,12 +383,12 @@ def carregar(base_sefaz: Path, base_sf1: Path,
     resumo = {
         **sefaz.contar_alertas(alertas),
         "nao_lancadas": nao_lancadas,
-        "notas": len(notas),
-        "sf1": len(titulos),
+        "notas": len(cruzadas),
+        "sf1": c.titulos_sf1,
         "achadas": contagem[ACHADA],
         "conferir": contagem[CONFERIR],
         "nao_achadas": contagem[NAO_ACHADA],
-        "nfe": sum(1 for n in notas if n[ORIGEM] == sefaz.NFE),
-        "nfs": sum(1 for n in notas if n[ORIGEM] == sefaz.NFSE),
+        "nfe": sum(1 for n in cruzadas if n[ORIGEM] == sefaz.NFE),
+        "nfs": sum(1 for n in cruzadas if n[ORIGEM] == sefaz.NFSE),
     }
     return list(CABECALHO), montar_linhas(cruzadas), resumo

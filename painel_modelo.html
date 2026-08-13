@@ -101,10 +101,7 @@ html[data-tema="escuro"] body[data-aba="correspondencias"]{--acento:var(--roxo-l
 body[data-aba="correspondencias"] tr.titulos th{background:#4c1d95}
 body[data-aba="correspondencias"] tr.titulos th:hover,
 body[data-aba="correspondencias"] tr.titulos th.ativa{background:#6d28d9}
-body[data-aba="correspondencias"] th.canto,
-body[data-aba="correspondencias"] tr.titulos th.canto{background:#4c1d95}
 body[data-aba="correspondencias"] tr:hover td,
-body[data-aba="correspondencias"] tr:hover td.gutter,
 body[data-aba="correspondencias"] table.conferencia tr:hover td{background:var(--roxo-bg) !important}
 body[data-aba="correspondencias"] .subabas button.ativa{background:var(--roxo-linha);
   border-color:var(--roxo-linha); color:#fff}
@@ -114,10 +111,7 @@ html[data-tema="escuro"] body[data-aba="futuros"]{--acento:#fb923c}
 body[data-aba="futuros"] tr.titulos th{background:#8c1d18}
 body[data-aba="futuros"] tr.titulos th:hover,
 body[data-aba="futuros"] tr.titulos th.ativa{background:#b3312a}
-body[data-aba="futuros"] th.canto,
-body[data-aba="futuros"] tr.titulos th.canto{background:#8c1d18}
 body[data-aba="futuros"] tr:hover td,
-body[data-aba="futuros"] tr:hover td.gutter,
 body[data-aba="futuros"] table.conferencia tr:hover td{background:var(--sobe-bg) !important}
 body[data-aba="futuros"] .subabas button.ativa{background:#b3312a; border-color:#b3312a; color:#fff}
 body[data-aba="futuros"] tr.grupos th.g-nf{background:var(--sobe-bg); color:var(--sobe-txt)}
@@ -131,10 +125,7 @@ html[data-tema="escuro"] body[data-aba="cruzamento"]{--acento:#f0b429}
 body[data-aba="cruzamento"] tr.titulos th{background:#6b4405}
 body[data-aba="cruzamento"] tr.titulos th:hover,
 body[data-aba="cruzamento"] tr.titulos th.ativa{background:#8a5806}
-body[data-aba="cruzamento"] th.canto,
-body[data-aba="cruzamento"] tr.titulos th.canto{background:#6b4405}
 body[data-aba="cruzamento"] tr:hover td,
-body[data-aba="cruzamento"] tr:hover td.gutter,
 body[data-aba="cruzamento"] table.conferencia tr:hover td{background:var(--ambar-bg) !important}
 body[data-aba="cruzamento"] .subabas button.ativa{background:#8a5806; border-color:#8a5806; color:#fff}
 body[data-aba="cruzamento"] tr.grupos th.g-nf{background:var(--ambar-bg); color:var(--ambar-txt)}
@@ -148,10 +139,7 @@ html[data-tema="escuro"] body[data-aba="pendentes_itau"]{--acento:#34d399}
 body[data-aba="pendentes_itau"] tr.titulos th{background:#0b5c3d}
 body[data-aba="pendentes_itau"] tr.titulos th:hover,
 body[data-aba="pendentes_itau"] tr.titulos th.ativa{background:#0f7b52}
-body[data-aba="pendentes_itau"] th.canto,
-body[data-aba="pendentes_itau"] tr.titulos th.canto{background:#0b5c3d}
 body[data-aba="pendentes_itau"] tr:hover td,
-body[data-aba="pendentes_itau"] tr:hover td.gutter,
 body[data-aba="pendentes_itau"] table.conferencia tr:hover td{background:var(--verde-bg) !important}
 body[data-aba="pendentes_itau"] .subabas button.ativa{background:#0f7b52;
   border-color:#0f7b52; color:#fff}
@@ -165,13 +153,24 @@ html[data-tema="escuro"] body[data-aba="sefaz_sf1"]{--acento:#22d3ee; --acento-b
 body[data-aba="sefaz_sf1"] tr.titulos th{background:#0a5661}
 body[data-aba="sefaz_sf1"] tr.titulos th:hover,
 body[data-aba="sefaz_sf1"] tr.titulos th.ativa{background:#0d6d78}
-body[data-aba="sefaz_sf1"] th.canto,
-body[data-aba="sefaz_sf1"] tr.titulos th.canto{background:#0a5661}
 body[data-aba="sefaz_sf1"] tr:hover td,
-body[data-aba="sefaz_sf1"] tr:hover td.gutter,
 body[data-aba="sefaz_sf1"] table.conferencia tr:hover td{background:var(--acento-bg) !important}
 body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
   border-color:#0d6d78; color:#fff}
+
+/* NF x Pedido de Compra: ardosia. As outras seis abas ja gastaram azul, roxo,
+   vermelho, ambar, verde e verde-agua -- e duas abas da mesma cor se confundem
+   na troca, que e o unico motivo de cada uma ter a sua. */
+body[data-aba="pedidos"]{--acento:#475569; --acento-bg:#e2e8f0}
+html[data-tema="escuro"] body[data-aba="pedidos"]{--acento:#94a3b8; --acento-bg:#1e293b}
+body[data-aba="pedidos"] tr.titulos th{background:#334155}
+body[data-aba="pedidos"] tr.titulos th:hover,
+body[data-aba="pedidos"] tr.titulos th.ativa{background:#475569}
+body[data-aba="pedidos"] tr:hover td,
+body[data-aba="pedidos"] table.conferencia tr:hover td{background:var(--acento-bg) !important}
+body[data-aba="pedidos"] .subabas button.ativa{background:#475569;
+  border-color:#475569; color:#fff}
+body[data-aba="pedidos"] tr.grupos th.g-pedido{background:var(--acento-bg); color:var(--acento)}
 
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
@@ -300,6 +299,10 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
 .planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
   overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05)}
 html[data-tema="escuro"] .planilha{box-shadow:0 8px 26px rgba(0,0,0,.35)}
+/* Enquanto a mao esta puxando a grade. `user-select:none` e o que impede o
+   arrasto de sair pintando o texto das celulas de azul. */
+.planilha.arrastando{cursor:grabbing; user-select:none}
+.planilha.arrastando *{cursor:grabbing !important}
 table{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
 th, td{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; text-align:left}
 
@@ -314,15 +317,23 @@ tr.titulos th:hover{background:var(--azul-2)}
 tr.titulos th.ativa{background:var(--azul-2); box-shadow:inset 0 -3px 0 rgba(255,255,255,.55)}
 tr.titulos th .ord{opacity:0; margin-left:3px; font-size:8px}
 tr.titulos th:hover .ord, tr.titulos th.ativa .ord{opacity:.9}
-th.canto{position:sticky; left:0; z-index:8; background:var(--surface-2); width:40px; min-width:40px}
-tr.titulos th.canto{background:var(--azul); z-index:9; cursor:default}
-td.gutter{position:sticky; left:0; z-index:4; width:40px; min-width:40px; background:var(--surface-2);
-  color:var(--txt-3); text-align:center; font-size:10.5px; padding:5px 3px;
-  border-right:1px solid var(--line-forte); user-select:none}
+/* A PRIMEIRA COLUNA fica parada na rolagem horizontal.
+   Ate 13/08/2026 quem fazia isso era a gutter do contador `#` (`th.canto` /
+   `td.gutter`, `position:sticky; left:0`). O usuario mandou tirar o contador —
+   e sem migrar o sticky a tabela passaria a rolar inteira, levando o check
+   embora justo quando a linha esta larga, que e quando ele faz falta.
+   ⚠ `:first-child` so funciona porque a coluna do check nunca tem grupo: em
+   `desenharConferencia` coluna sem grupo vira um `<th colspan="1">` proprio, e
+   um grupo largo grudado na esquerda ficaria por cima das colunas seguintes.
+   ⚠ A linha "Nenhuma linha encontrada" fica DE FORA: ela e um `<td>` com
+   colspan da tabela toda, e gruda-lo na esquerda o arrastaria na rolagem. */
+tr.grupos th:first-child, tr.titulos th:first-child{position:sticky; left:0; z-index:9}
+tbody td:first-child:not(.vazio){position:sticky; left:0; z-index:4;
+  border-right:1px solid var(--line-forte)}
 
 td{padding:5px 8px; background:var(--surface); vertical-align:top}
-tr.zebrada td, tr.zebrada td.gutter{background:var(--zebra)}
-tr:hover td, tr:hover td.gutter{background:var(--sel)}
+tr.zebrada td{background:var(--zebra)}
+tr:hover td{background:var(--sel)}
 td .txt{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 td.num{text-align:right; font-variant-numeric:tabular-nums}
 
@@ -334,7 +345,10 @@ tr.feita td.check{box-shadow:inset 3px 0 0 var(--ok)}
 tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3)}
 
 /* ---------- visao Conferencia ---------- */
-table.conferencia{table-layout:fixed; width:100%; font-size:12px}
+/* `width:max-content` = a tabela vale a SOMA das colunas (em px, ver PX_POR_PONTO)
+   e transborda quando precisa; `min-width:100%` estica quando sobra espaco. Com
+   `width:100%` ela cabia sempre -- e coluna nova espremia as vizinhas. */
+table.conferencia{table-layout:fixed; width:max-content; min-width:100%; font-size:12px}
 table.conferencia th, table.conferencia td{border-right:1px solid var(--line)}
 tr.grupos th{position:sticky; top:0; z-index:7; background:var(--surface-2); color:var(--txt-2);
   font:700 9.5px/1 "Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:1.1px;
@@ -344,6 +358,10 @@ tr.grupos th.g-delta{background:var(--alerta-bg); color:var(--alerta)}
 tr.grupos th.g-boleto{background:var(--zebra); color:var(--azul-2)}
 tr.grupos th.g-parte{background:var(--roxo-bg); color:var(--roxo-txt)}
 tr.grupos th.g-nf{background:var(--verde-bg); color:var(--verde-txt)}
+/* bloco do pedido de compra: e o unico grupo que nao vem da nota, e destacar
+   deixa claro onde a nota acaba e o PC comeca */
+tr.grupos th.g-pedido{background:#e2e8f0; color:#334155}
+html[data-tema="escuro"] tr.grupos th.g-pedido{background:#1e293b; color:#94a3b8}
 html[data-tema="escuro"] tr.grupos th.g-boleto{color:var(--azul-2)}
 table.conferencia tr.titulos th{top:24px}
 
@@ -1528,12 +1546,37 @@ function celulaCompacta(r, col){
   return `<td class="${classe} ${zona}"><span class="txt" title="${esc(valor)}">${esc(valor)}</span></td>`;
 }
 
-function desenharConferencia(itens){
-  // a coluna "Tratado em" so existe na sub-aba de tratados
-  const cols = estado.sub === "tratados"
+/* As colunas da aba na tela. A "Tratado em" so existe na sub-aba de tratados. */
+function colunasDaAba(){
+  return estado.sub === "tratados"
     ? [...A().compacta, {chave:"tratado_em", rotulo:"Tratado em", tipo:"quando",
                            lado:"", grupo:"", largura:8}]
     : A().compacta;
+}
+
+/* ---------- larguras em PIXELS, nunca em porcentagem ----------
+   ⚠ Ate 13/08/2026 o `<col>` saia em `%`, e `table-layout:fixed` NORMALIZA
+   porcentagem: a tabela sempre cabia na tela e cada coluna nova espremia todas
+   as outras. Medido no dia: a aba de pedidos, com 38 colunas, dava **41px por
+   coluna** (a menor com 21px) e a rolagem horizontal nunca aparecia, porque nao
+   havia nada para rolar. O usuario foi direto ao ponto: "nao esprema nada".
+   Agora cada coluna vale um numero de pixels e a tabela transborda quando
+   precisa -- que e, alias, o que da sentido ao arraste com o mouse.
+   `min-width:100%` continua esticando quando SOBRA espaco, entao aba estreita
+   nao fica com um vazio a direita.
+   ⚠ Os 12,5 px por ponto saem da medida de hoje (Títulos Associados soma 125,5
+   pontos e ocupava 1.570px), mas a tabela sai MAIOR do que essa conta: `td` e
+   `th` sao `content-box`, entao os 16px de padding e a borda entram por cima da
+   largura de cada coluna. Isso e proposital -- medido em 1600px de tela, TODAS
+   as abas ganharam folga (a menor coluna nunca fica abaixo de 34px, que e a do
+   check) e todas passaram a transbordar. Se um dia a conta precisar ser exata,
+   e so pôr `box-sizing:border-box` nas celulas. */
+const PX_POR_PONTO = 12.5;
+
+const px = largura => Math.round((Number(largura) || 0) * PX_POR_PONTO);
+
+function desenharConferencia(itens){
+  const cols = colunasDaAba();
   const grupos = [];
   cols.forEach(c => {
     const ultimo = grupos[grupos.length - 1];
@@ -1543,26 +1586,31 @@ function desenharConferencia(itens){
 
   // Em table-layout:fixed as larguras vem da primeira linha -- que aqui tem
   // colspan. Por isso as medidas ficam no colgroup, que tem precedencia.
-  const medidas = `<colgroup><col style="width:40px">${
-    cols.map(c => `<col style="width:${c.largura}%">`).join("")}</colgroup>`;
+  // ⚠ A gutter do contador `#` saiu em 13/08/2026 (pedido do usuario) e ela
+  // aparecia em CINCO lugares: este colgroup, os dois `<th class="canto">`, o
+  // `<td class="gutter">` e o colspan do "nenhuma linha". Tirar de menos de
+  // cinco desalinha a grade inteira -- se o `<col>` ficasse, TODAS as larguras
+  // andariam uma coluna para o lado.
+  const medidas = `<colgroup>${
+    cols.map(c => `<col style="width:${px(c.largura)}px">`).join("")}</colgroup>`;
 
   const cabeca = `${medidas}<thead>
-    <tr class="grupos"><th class="canto"></th>${grupos.map(g => {
+    <tr class="grupos">${grupos.map(g => {
       const classe = {VALOR:"g-delta", VENCIMENTO:"g-delta", CONTRAPARTE:"g-parte",
-                      NF:"g-nf", EMPRESA:"g-boleto"}[g.nome] || "g-titulo";
+                      NF:"g-nf", EMPRESA:"g-boleto", PEDIDO:"g-pedido"}[g.nome] || "g-titulo";
       return `<th colspan="${g.qtd}" class="${g.nome ? classe : "g-titulo"}">${esc(g.nome)}</th>`;
     }).join("")}</tr>
-    <tr class="titulos"><th class="canto">#</th>${cols.map(c => {
+    <tr class="titulos">${cols.map(c => {
       const ativa = estado.ordem === c.chave;
-      return `<th style="width:${c.largura}%" data-ord="${c.chave}" class="${ativa ? "ativa" : ""}"
+      return `<th style="width:${px(c.largura)}px" data-ord="${c.chave}" class="${ativa ? "ativa" : ""}"
         title="${esc(c.rotulo)}">${esc(c.rotulo)}<span class="ord">${ativa ? (estado.desc ? "▼" : "▲") : "▾"}</span></th>`;
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
     ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""} ${
         r.se2 ? "resolvida" : ""}">
-        <td class="gutter">${i + 1}</td>${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
-    : `<tr><td class="vazio" colspan="${cols.length + 1}">Nenhuma linha encontrada.</td></tr>`;
+        ${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
+    : `<tr><td class="vazio" colspan="${cols.length}">Nenhuma linha encontrada.</td></tr>`;
 
   return cabeca + "<tbody>" + corpo + "</tbody>";
 }
@@ -2131,6 +2179,14 @@ function avisoSefazSf1(){
     <b>Nada aqui encosta na SE2.</b></div>`;
 }
 
+function avisoPedidos(){
+  if (estado.aba !== "pedidos") return "";
+  return `<div class="linha-aviso calmo">📌 De qual <b>pedido de compra</b> veio cada nota da
+    <b>SEFAZ</b>. O número do pedido é lido do texto da nota e <b>só vale quando algo o
+    confirma</b> — fornecedor, valor ou emissão. Quando a nota não cita pedido, o painel
+    procura pelo <b>fornecedor + valor</b>. A coluna <b>Situação</b> diz o quanto confiar.</div>`;
+}
+
 /* ---------- legenda dos selos ----------
    Pedido do usuario (13/08/2026): "informe no painel o que cada situação
    significa de maneira detalhada". Os selos sao curtos porque a celula corta o
@@ -2262,6 +2318,37 @@ const LEGENDAS = {
         casos é.`],
     ],
   },
+  /* ⚠ Estes cinco espelham o `escolher()` do pedidos_sefaz.py. O ponto que a
+     legenda existe para explicar: "o número está escrito na nota" NÃO é prova.
+     A base de pedidos vai de 1 a 3492 quase sem buraco, então qualquer número
+     de 3–4 dígitos "existe" nela — medido, 64 notas apontavam para o pedido de
+     outro fornecedor. Quem decide é a corroboração. */
+  pedidos: {
+    intro: `O número do pedido é lido do <b>texto da nota</b> (<i>PEDIDO DE COMPRA</i>, <i>OC</i>,
+      <i>PC</i>…), mas <b>estar escrito não basta</b>: quase todo número de 3 ou 4 dígitos existe na
+      base de pedidos por acaso. O que decide o selo é o que <b>confirma além do número</b> —
+      fornecedor (raiz do CNPJ), valor e emissão. Quando a nota <b>não</b> cita pedido, o painel
+      procura entre os pedidos <b>daquele fornecedor</b> e só arrisca quando o <b>valor bate</b>.`,
+    itens: [
+      ["forte", "PEDIDO CONFIRMADO",
+       `O número está na nota <b>e</b> o fornecedor do pedido é o emitente dela (ou o valor total
+        é idêntico). É o caso de não conferir nada.`],
+      ["provavel", "PEDIDO PROVÁVEL",
+       `Ou o painel <b>achou sozinho</b> pelo fornecedor + valor total idêntico (a nota não citava
+        pedido), ou o número citado tem valor batendo mas o fornecedor não confirma. Vale abrir o
+        <b>Critério</b> antes de usar.`],
+      ["provavel", "CONFERIR PEDIDO",
+       `Achou pelo fornecedor + <b>valor de um item</b> (entrega parcial), ou o número citado não
+        tem nada que o sustente. É o balde de <b>olho humano</b> — o pedido mostrado é um palpite
+        fundamentado, não um veredito.`],
+      ["grave", "PEDIDO FORA DA BASE",
+       `A nota cita um pedido que <b>não existe na SC7</b>. Pedido cancelado, de filial que não
+        entrou na exportação, ou exportação incompleta. O <b>Critério</b> diz qual número era.`],
+      ["grave", "SEM PEDIDO",
+       `A nota <b>não cita</b> pedido nenhum e <b>nenhum</b> pedido daquele fornecedor bate com o
+        valor dela. Pode ser compra sem pedido — que costuma ser exatamente o que se quer achar.`],
+    ],
+  },
   sefaz: {
     intro: `Não há veredito nesta aba — <b>Origem</b> só diz que tipo de nota é a linha.`,
     itens: [
@@ -2311,7 +2398,7 @@ function avisosAbertos(){
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
   const explica = avisoVisao() + avisoPendentes() + avisoCruzamento()
-                + avisoSefaz() + avisoSefazSf1() + avisoSE2() + avisoTipoPgto();
+                + avisoSefaz() + avisoSefazSf1() + avisoPedidos() + avisoSE2() + avisoTipoPgto();
   const corpo = avisoOcr() + linhaAlertasSefaz()
     + (explica ? `<details class="explica"${avisosAbertos() ? " open" : ""}>
         <summary>Como esta aba funciona</summary>${explica}</details>` : "")
@@ -2450,6 +2537,63 @@ document.getElementById("grade").addEventListener("click", e => {
     desenhar();
   }
 });
+
+/* ---------- arrastar a tabela com o mouse (13/08/2026, pedido do usuario) ----
+   A grade e larga e rolar so na barra e ruim: agora da para pegar a tabela e
+   puxar, como a mao aberta do Excel/PDF.
+
+   ⚠ O gesto divide o botao esquerdo com TRES coisas que ja existiam: o botao de
+   copiar, o check, e o clique no cabecalho que ordena. Por isso ele so vira
+   arraste depois de LIMIAR px de movimento -- antes disso e clique comum e nada
+   muda. Um `mousedown` que ja rouba a rolagem transformaria cada clique errado
+   num arrasto de 1px, e o painel e usado clicando o dia inteiro.
+   ⚠ E quando VIRA arraste, o `click` que fecha o gesto tem de morrer: sem isso,
+   soltar o mouse em cima de um botao de copiar copiaria. O ouvinte de morte vai
+   na fase de CAPTURA, porque quem copia escuta no `document`, em bolha -- em
+   bolha o `stopPropagation` chegaria tarde demais. */
+function ligarArraste(){
+  const caixa = document.querySelector(".planilha");
+  if (!caixa) return;
+  const LIMIAR = 4;
+  let origem = null, arrastando = false;
+
+  caixa.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;                       // so o botao esquerdo
+    // campo com dono proprio: digitar/marcar tem de continuar funcionando
+    if (e.target.closest("input, button, select, textarea, a, label, [data-copiar]")) return;
+    origem = {x:e.clientX, y:e.clientY, sx:caixa.scrollLeft, sy:caixa.scrollTop, id:e.pointerId};
+    arrastando = false;
+  });
+
+  caixa.addEventListener("pointermove", e => {
+    if (!origem || e.pointerId !== origem.id) return;
+    const dx = e.clientX - origem.x, dy = e.clientY - origem.y;
+    if (!arrastando){
+      if (Math.abs(dx) < LIMIAR && Math.abs(dy) < LIMIAR) return;
+      arrastando = true;
+      caixa.setPointerCapture(origem.id);             // segue fora da caixa
+      caixa.classList.add("arrastando");
+    }
+    caixa.scrollLeft = origem.sx - dx;
+    caixa.scrollTop  = origem.sy - dy;
+    e.preventDefault();                               // nao selecionar texto
+  });
+
+  const soltar = () => {
+    if (!origem) return;
+    if (arrastando){
+      try { caixa.releasePointerCapture(origem.id); } catch (e) {}
+      caixa.classList.remove("arrastando");
+      caixa.addEventListener("click", ev => {
+        ev.stopPropagation(); ev.preventDefault();
+      }, {capture:true, once:true});
+    }
+    origem = null; arrastando = false;
+  };
+  caixa.addEventListener("pointerup", soltar);
+  caixa.addEventListener("pointercancel", soltar);
+}
+ligarArraste();
 
 document.getElementById("btnTema").addEventListener("click", () => {
   const escuro = document.documentElement.dataset.tema === "escuro";
