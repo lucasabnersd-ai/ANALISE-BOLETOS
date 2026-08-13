@@ -225,6 +225,12 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
 .pills button.ativa{background:var(--acento, var(--azul-2)); border-color:var(--acento, var(--azul-2));
   color:#fff}
 .pills button.ativa small{opacity:.9}
+/* Botao que hoje nao tem nenhuma linha. Vale para QUALQUER grupo -- nos do
+   Python isso so acontece quando o outro filtro esvazia o valor; no de tipo de
+   pagamento e o normal, porque ele mostra os quatro estados sempre.
+   Apagado e nao escondido: "zero DIVERGE" e uma resposta, e botao que some e
+   volta faria a barra pular a cada escolha. */
+.pills button.vazia{opacity:.45}
 
 /* avisos proprios da aba: um por assunto, empilhados */
 .aviso-aba{margin:0 0 10px; display:flex; flex-direction:column; gap:7px}
@@ -984,7 +990,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131833"></script>
+<script src="supa.js?v=202608131844"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1495,10 +1501,30 @@ function aplicarTipoSE2(abas){
 
 const tipoSE2 = r => r.tipo_se2 || "";
 const tipoReal = r => tiposReais[r.uuid] || "";
-/* So ha divergencia com os DOIS lados preenchidos: sem tipo real nao ha o que
+
+/* Os QUATRO estados da coluna Confere?, num lugar so: a celula, o filtro de
+   botao, a ordenacao e o .xlsx tem de dizer todos a mesma coisa -- repetir a
+   regra em quatro lugares e como um deles fica para tras numa mudanca.
+
+   ⚠ So ha divergencia com os DOIS lados preenchidos: sem tipo real nao ha o que
    comparar, e sem a SE2 (titulo fora dela, ou base ausente na geracao) nao ha
    com o que -- nesses casos o painel diz isso, em vez de acusar diferenca. */
-const tipoDiverge = r => !!tipoSE2(r) && !!tipoReal(r) && tipoSE2(r) !== tipoReal(r);
+const TIPO_A_INFORMAR = "A INFORMAR";
+function situacaoTipo(r){
+  if (!tipoReal(r)) return TIPO_A_INFORMAR;
+  if (!tipoSE2(r)) return "SEM SE2";
+  return tipoReal(r) === tipoSE2(r) ? "CONFERE" : "DIVERGE";
+}
+const tipoDiverge = r => situacaoTipo(r) === "DIVERGE";
+const CLASSE_TIPO = {"DIVERGE":"tipo-diverge", "CONFERE":"tipo-ok", "SEM SE2":"sem-se2"};
+// ordem da coluna Confere?: o que pede acao primeiro, o que ninguem olhou por ultimo
+const ORDEM_TIPO = {"DIVERGE":1, "CONFERE":2, "SEM SE2":3, [TIPO_A_INFORMAR]:4};
+const DICA_TIPO = {
+  "DIVERGE": r => `Na SE2 o título está como ${tipoSE2(r)}, mas o pagamento real foi informado
+    como ${tipoReal(r)}. Corrigir o tipo no TOTVS.`,
+  "CONFERE": r => `O tipo informado é o mesmo que está no título (SE2): ${tipoSE2(r)}.`,
+  "SEM SE2": () => "Não dá para comparar: este título não veio na SE2 lida nesta rodada.",
+};
 
 /* Menu do tipo real: o vocabulario vem da PROPRIA SE2 (`opcoes`, do mais usado
    para o menos), porque so vale escolher o que o TOTVS de fato usa.
@@ -1541,6 +1567,9 @@ function recontarAbas(abas){
     aba.com_alerta = aba.linhas.filter(r => r.alerta && r.alerta.tipo).length;
     aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
     (aba.pills || []).forEach((grupo, i) => {
+      // ⚠ grupo `fixo` (o do tipo de pagamento) nao se recalcula: os valores
+      // dele sao os quatro estados possiveis, e nao o que existe hoje na aba.
+      if (grupo.fixo) return;
       aba.pills[i] = Object.assign({}, grupo, {
         valores: [...new Set(aba.linhas.map(r => r.c[grupo.chave]).filter(Boolean))]
                    .sort((a, b) => a.localeCompare(b, "pt-BR")),
@@ -1549,6 +1578,39 @@ function recontarAbas(abas){
   });
   return abas;
 }
+
+/* ---------- filtro de botao do tipo de pagamento ----------
+   13/08/2026, pedido do usuario ("filtrar os tipos de pagamento que conferem e
+   nao conferem"). E o unico grupo de botoes que NAO sai de uma coluna da carga:
+   o valor de cada linha e calculado (`situacaoTipo`) e muda no instante em que
+   alguem escolhe um tipo real -- por isso ele nasce aqui, no navegador, e nao
+   no `grupos_de_pills()` do Python como os outros.
+
+   ⚠ Os quatro botoes aparecem SEMPRE, mesmo zerados, ao contrario dos grupos do
+   Python (que exigem 2 a 8 valores presentes). Aqui o vocabulario e fechado e
+   conhecido, e no primeiro dia tudo esta em "A INFORMAR": pela regra dos
+   outros, o filtro que o usuario pediu simplesmente nao apareceria. Botao
+   zerado fica apagado (classe `vazia`) -- ele informa "nao ha nenhum assim". */
+const PILL_TIPO = {
+  chave: "alerta_tipo", rotulo: "Tipo de pagamento", fixo: true,
+  valores: ["DIVERGE", "CONFERE", "SEM SE2", TIPO_A_INFORMAR],
+};
+
+function pillsDeTipo(abas){
+  abas.forEach(aba => {
+    // pela COLUNA existir, nao pelo id da aba: se o trio for para outra aba um
+    // dia, o filtro vai junto sem ninguem lembrar de mexer aqui
+    if (!(aba.compacta || []).some(c => c.tipo === "alerta_tipo")) return;
+    if ((aba.pills || []).some(g => g.chave === PILL_TIPO.chave)) return;
+    aba.pills = (aba.pills || []).concat([PILL_TIPO]);
+  });
+  return abas;
+}
+
+/* O valor da linha para um grupo de botoes. Quase sempre e a celula da base; o
+   grupo do tipo de pagamento e o caso calculado. */
+const valorPill = (r, chave) =>
+  chave === PILL_TIPO.chave ? situacaoTipo(r) : r.c[chave];
 
 function dentroDoPeriodo(r, de, ate){
   return COLUNAS_VENC.some(chave => {
@@ -1595,10 +1657,11 @@ function linhas(){
     });
   });
 
-  // barras de botoes (fonte/origem e situacao): filtram juntas, em E
+  // barras de botoes (fonte/origem, situacao e tipo de pagamento): filtram
+  // juntas, em E
   (A().pills || []).forEach(grupo => {
     const escolhido = estado.pill[grupo.chave];
-    if (escolhido) itens = itens.filter(r => r.c[grupo.chave] === escolhido);
+    if (escolhido) itens = itens.filter(r => valorPill(r, grupo.chave) === escolhido);
   });
   // o check -- ou a SE2 ja resolvida -- move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
@@ -1613,8 +1676,7 @@ function linhas(){
       : chave === "tipo_pgto" ? tipoSE2(r)
       : chave === "tipo_real" ? tipoReal(r)
       // DIVERGE primeiro na ordem crescente: e o que se procura nessa coluna
-      : chave === "alerta_tipo" ? (!tipoReal(r) ? "" : tipoDiverge(r) ? "1 DIVERGE"
-                                   : tipoSE2(r) ? "2 CONFERE" : "3 SEM SE2")
+      : chave === "alerta_tipo" ? ORDEM_TIPO[situacaoTipo(r)]
       : r.o[chave];
     itens.sort((a, b) => {
       const va = ler(a), vb = ler(b);
@@ -1703,19 +1765,12 @@ function celulaCompacta(r, col){
       }</select></td>`;
   }
   if (col.tipo === "alerta_tipo"){
-    const real = tipoReal(r), se2 = tipoSE2(r);
-    // ninguem informou nada: celula vazia, nao "ok" -- nada foi conferido aqui
-    if (!real) return `<td class="selo-cel ${zona}"></td>`;
-    if (!se2){
-      return `<td class="selo-cel ${zona}"><span class="selo sem-se2"
-        title="Não dá para comparar: este título não veio na SE2 lida nesta rodada.">SEM SE2</span></td>`;
-    }
-    return real === se2
-      ? `<td class="selo-cel ${zona}"><span class="selo tipo-ok"
-          title="O tipo informado é o mesmo que está no título (SE2): ${esc(se2)}.">CONFERE</span></td>`
-      : `<td class="selo-cel ${zona}"><span class="selo tipo-diverge"
-          title="Na SE2 o título está como ${esc(se2)}, mas o pagamento real foi informado como ${
-          esc(real)}. Corrigir o tipo no TOTVS.">DIVERGE</span></td>`;
+    const st = situacaoTipo(r);
+    // ninguem informou nada: celula vazia, nao "ok" -- nada foi conferido aqui.
+    // (No filtro de botao esse mesmo estado tem nome: "A INFORMAR".)
+    if (st === TIPO_A_INFORMAR) return `<td class="selo-cel ${zona}"></td>`;
+    return `<td class="selo-cel ${zona}"><span class="selo ${CLASSE_TIPO[st]}"
+      title="${esc(DICA_TIPO[st](r))}">${st}</span></td>`;
   }
   if (col.tipo === "tratativa"){
     const nota = tratativas[r.uuid] || "";
@@ -1962,9 +2017,9 @@ function valorExportacao(r, c){
   if (c.tipoPainel === "tipo_pgto") return tipoSE2(r);
   if (c.tipoPainel === "tipo_real") return tipoReal(r);
   if (c.tipoPainel === "alerta_tipo"){
-    if (!tipoReal(r)) return "";
-    if (!tipoSE2(r)) return "SEM SE2";
-    return tipoDiverge(r) ? "DIVERGE" : "CONFERE";
+    // na planilha o "A INFORMAR" sai vazio, igual a celula da tela
+    const st = situacaoTipo(r);
+    return st === TIPO_A_INFORMAR ? "" : st;
   }
   if (c.tipoPainel === "delta"){
     const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
@@ -2208,18 +2263,25 @@ function desenharPills(){
   // ⚠ A contagem de um grupo respeita o que OS OUTROS filtram: numero que ignora
   // o outro botao aceso promete linhas que a tela nao vai mostrar.
   const baseDe = chave => A().linhas.filter(r => grupos.every(
-    g => g.chave === chave || !estado.pill[g.chave] || r.c[g.chave] === estado.pill[g.chave]));
+    g => g.chave === chave || !estado.pill[g.chave]
+         || valorPill(r, g.chave) === estado.pill[g.chave]));
 
   caixa.innerHTML = grupos.map(g => {
     const base = baseDe(g.chave);
-    const conta = v => base.filter(r => r.c[g.chave] === v).length;
+    const conta = v => base.filter(r => valorPill(r, g.chave) === v).length;
     const escolhido = estado.pill[g.chave] || "";
     return `<div class="pills">` +
       (grupos.length > 1 ? `<span class="pills-rotulo">${esc(g.rotulo)}</span>` : "") +
       `<button type="button" data-chave="${esc(g.chave)}" data-pill=""
          class="${escolhido ? "" : "ativa"}">Todas<small>${num(base.length)}</small></button>` +
-      g.valores.map(v => `<button type="button" data-chave="${esc(g.chave)}" data-pill="${esc(v)}"
-         class="${escolhido === v ? "ativa" : ""}">${esc(v)}<small>${num(conta(v))}</small></button>`).join("") +
+      g.valores.map(v => {
+        const quantas = conta(v);
+        // botao zerado so existe no grupo `fixo`, que mostra os quatro estados
+        // sempre: fica apagado para o olho pular, mas continua clicavel
+        return `<button type="button" data-chave="${esc(g.chave)}" data-pill="${esc(v)}"
+         class="${escolhido === v ? "ativa" : quantas ? "" : "vazia"}">${esc(v)}<small>${
+         num(quantas)}</small></button>`;
+      }).join("") +
       `</div>`;
   }).join("");
 }
@@ -2329,6 +2391,7 @@ function avisoTipoPgto(){
     foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
     coluna <b>Confere?</b> acusa <span class="selo tipo-diverge">DIVERGE</span>: é título para
     corrigir no TOTVS. Enquanto o tipo real não for informado, a coluna fica vazia.
+    Os botões <b>Tipo de pagamento</b>, lá em cima, filtram a aba por esses estados.
     ${divergem ? `Hoje <b>${num(divergem)}</b> ${divergem === 1 ? "título diverge" : "títulos divergem"}.`
                : ""}</div>`;
 }
@@ -2626,7 +2689,10 @@ document.getElementById("grade").addEventListener("change", e => {
     const uuid = menu.dataset.tipoReal, escolhido = menu.value;
     if (escolhido) tiposReais[uuid] = escolhido; else delete tiposReais[uuid];
     gravarTipoReal(uuid);
-    // a coluna do alerta, ao lado, e calculada a partir daqui
+    // a coluna do alerta, ao lado, e calculada a partir daqui -- e as contagens
+    // dos botoes de tipo de pagamento tambem: sem redesenhar as duas coisas, o
+    // filtro passaria a prometer um numero que a tela nao mostra mais
+    desenharPills();
     desenhar();
   }
 });
@@ -2759,7 +2825,8 @@ function iniciar(dados){
   // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento.
   // O tipo da SE2 e aplicado ANTES do corte: a linha que fica escondida por
   // filtrarSE2 nao passaria mais por aqui, e ela reaparece em Tratados.
-  dados.abas = recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(aplicarTipoSE2(dados.abas)))));
+  dados.abas = pillsDeTipo(
+    recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(aplicarTipoSE2(dados.abas))))));
   // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
   // os filtros dela ligados na aba que assume o lugar.
   if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);
