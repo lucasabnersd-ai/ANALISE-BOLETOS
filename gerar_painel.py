@@ -170,6 +170,18 @@ COMPACTA = [
     ("Vencto Real",       "titulo", "VENCIMENTO", 5.5),
     ("Vencimento Boleto", "boleto", "VENCIMENTO", 5.5),
     ("@delta_dias",       "delta",  "VENCIMENTO", 4.5),
+    # Tipo de pagamento (13/08/2026, pedido do usuario). Tres colunas coladas,
+    # com a mesma logica dos pares titulo x boleto do resto da aba: o que a SE2
+    # tem gravado (coluna IK), o que a pessoa informa que foi de verdade, e o
+    # alerta quando os dois nao batem. ⚠ Nenhuma das tres vem da base do painel:
+    # a primeira vem da SE2 (pelo `_meta` da aba) e as outras duas nascem no
+    # navegador -- por isso todas sao virtuais (@).
+    # ⚠ Largura medida contra os valores REAIS do campo: "BOLETO S/C" e o mais
+    # comum desta aba e nao cabia em 5 -- saia "BOLETO S...", que nao distingue
+    # de "BOLETO S/C" nenhum outro valor, mas obriga a passar o mouse.
+    ("@tipo_pgto",        "titulo", "PAGAMENTO",  6),
+    ("@tipo_real",        "boleto", "PAGAMENTO",  6),
+    ("@alerta_tipo",      "delta",  "PAGAMENTO",  5),
     ("Status",            "",       "",           7),
     ("Alerta Fatura",     "",       "",           5),
     ("@tratativa",        "",       "",           4),
@@ -602,6 +614,8 @@ ABAS = {
 ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Alerta Fatura": "Alerta", "Campo UUID": "UUID",
                     "Linha Digitável": "Linha", "@tratativa": "Nota",
+                    "@tipo_pgto": "Tipo (SE2)", "@tipo_real": "Tipo real",
+                    "@alerta_tipo": "Confere?",
                     "CHECK (FEITO)": "OK", "No. Titulo": "Nº título",
                     "NF/Doc Boleto": "NF boleto", "Prefixo": "Pref.",
                     "Parcela": "Parc.", "Razão Social": "Razão social",
@@ -631,6 +645,9 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
 ROTULOS_PLANILHA = {"@delta_valor": "Diferença de Valor (Boleto - Título)",
                     "@delta_dias": "Diferença de Dias (Boleto - Título)",
                     "@tratativa": "Tratativa",
+                    "@tipo_pgto": "Tipo de Pagamento no Título (SE2)",
+                    "@tipo_real": "Tipo de Pagamento Real (informado no painel)",
+                    "@alerta_tipo": "Tipo Real Confere com a SE2?",
                     "CHECK (FEITO)": "Tratado",
                     "Campo UUID": "Campo UUID",
                     "No. Titulo": "No. Título",
@@ -882,6 +899,19 @@ def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
     return colunas, compacta, registros
 
 
+# Colunas que NAO existem na base: o painel as desenha por conta propria. O
+# valor aqui e o que o `celulaCompacta` do modelo usa para escolher o desenho --
+# sem entrada, uma coluna "@nova" sairia como delta e mostraria "—" para sempre.
+TIPOS_VIRTUAIS = {
+    "@delta_valor": "delta",
+    "@delta_dias": "delta",
+    "@tratativa": "tratativa",
+    "@tipo_pgto": "tipo_pgto",      # so leitura, vem da SE2
+    "@tipo_real": "tipo_real",      # menu; grava no banco, por titulo
+    "@alerta_tipo": "alerta_tipo",  # calculado na hora, no navegador
+}
+
+
 def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[dict]:
     """Colunas da visao Conferencia, respeitando a ordem em que estao na base."""
     ordem_base = {rotulo: i for i, rotulo in enumerate(cabecalho) if rotulo}
@@ -901,8 +931,7 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
         colunas.append({
             "chave": rotulo.lstrip("@") if virtual else chave_de(rotulo),
             "rotulo": rotulos.get(rotulo, rotulo),
-            "tipo": ("tratativa" if rotulo == "@tratativa" else "delta") if virtual
-                    else tipo_da_coluna(rotulo),
+            "tipo": TIPOS_VIRTUAIS[rotulo] if virtual else tipo_da_coluna(rotulo),
             "lado": lado,
             "grupo": grupo,
             "largura": largura,
@@ -1100,7 +1129,7 @@ def ler_resumo(wb) -> dict:
     return resumo
 
 
-def conferir_na_se2(registros: list[dict], conferencia) -> dict:
+def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) -> dict:
     """Veredito da SE2 para os titulos de uma aba, pronto para o `_meta`.
 
     So os titulos que SAEM da fila entram no mapa `fora` -- e a lista curta
@@ -1112,13 +1141,26 @@ def conferir_na_se2(registros: list[dict], conferencia) -> dict:
     um campo novo colocado na linha nunca chegaria justamente em quem ja foi
     tratado -- que sao os que precisam continuar aparecendo com o selo. O
     cabecalho `#meta:<aba>`, esse sim, e reescrito em toda carga.
+
+    Pelo MESMO motivo o `Tipo Pgto` do titulo (coluna IK) viaja aqui, no mapa
+    `tipos`, e nao em `c`: a coluna nova nasceria vazia justamente nos titulos
+    que alguem ja tratou. `opcoes` e o vocabulario do campo na SE2 inteira --
+    vira o menu do "tipo real" no painel.
+
+    `com_tipo` vem de a aba TER a coluna, e nao de um id fixo: sem isso a aba
+    Nao Associados -- que tambem confere a SE2 e nao mostra tipo nenhum --
+    carregaria o mapa inteiro na carga para ninguem ler.
     """
-    fora, abertos, sem_se2 = {}, 0, 0
+    fora, tipos, abertos, sem_se2 = {}, {}, 0, 0
     for registro in registros:
         situacao = conferencia.olhar(registro["uuid"])
         if situacao is None:
             sem_se2 += 1          # nao esta na SE2: fica no painel, na duvida
             continue
+        # o tipo vale para TODO titulo que existe na SE2, tenha ele saido da
+        # fila ou nao -- ao contrario do `fora`, que so guarda os resolvidos
+        if com_tipo and situacao.get("t"):
+            tipos[registro["uuid"]] = situacao["t"]
         if not situacao["m"]:
             abertos += 1          # em aberto e sem boleto: e o trabalho da aba
             continue
@@ -1129,8 +1171,12 @@ def conferir_na_se2(registros: list[dict], conferencia) -> dict:
             indicado = registro["copia"].get(chave_de("Linha Digitável"), "")
             saida["igual"] = bool(indicado) and situacao["dig"] == indicado
         fora[registro["uuid"]] = saida
-    return {"lido_em": conferencia.lido_em, "fora": fora,
-            "abertos": abertos, "sem_se2": sem_se2}
+    saida_meta = {"lido_em": conferencia.lido_em, "fora": fora,
+                  "abertos": abertos, "sem_se2": sem_se2}
+    if com_tipo:
+        saida_meta["tipos"] = tipos
+        saida_meta["opcoes"] = conferencia.tipos
+    return saida_meta
 
 
 # Teto de botoes de um grupo de filtro. Acima disso a barra vira parede -- a aba
@@ -1328,7 +1374,8 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             # Veredito da SE2 (so nas abas que declaram `conferir_se2`). None
             # quando a base nao foi lida -- o painel entende como "nao conferi"
             # e nao esconde ninguem.
-            "se2": (conferir_na_se2(registros, conferencia_se2)
+            "se2": (conferir_na_se2(registros, conferencia_se2,
+                                    any(c["tipo"] == "tipo_pgto" for c in compacta))
                     if cfg.get("conferir_se2") and conferencia_se2 else None),
             "ocr": sum(1 for r in registros if r["ocr"]),
             # pelo PAPEL, nao pela chave: nas abas da SEFAZ a coluna do alerta se

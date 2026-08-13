@@ -151,7 +151,7 @@
     var t = { data: titulos };
 
     var m = { data: await lerTudo("analise_boletos_marcacoes",
-      "uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em") };
+      "uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em,tipo_pgto_real") };
     var porUuid = {};
     (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
 
@@ -178,6 +178,9 @@
         selo: d.selo || "", ocr: !!d.ocr,
         feito: marca.feito != null ? marca.feito : !!d.feito,
         tratativa: marca.tratativa || "",
+        // tipo de pagamento REAL, informado a mao na aba de associados. So
+        // existe na marcacao -- a carteira nunca traz este campo.
+        tipo_pgto_real: marca.tipo_pgto_real || "",
         tratado_em: marca.tratado_em || "",
         tratado_por: marca.tratado_por || "",
         quem: marca.quem || "",

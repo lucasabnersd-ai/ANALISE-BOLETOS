@@ -439,6 +439,26 @@ td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margi
   cursor:help; font-weight:700; letter-spacing:0}
 .selo.texto:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
 
+/* ---------- tipo de pagamento: SE2 x real ----------
+   Vermelho so na divergencia -- e o unico caso que pede acao (corrigir o tipo
+   no TOTVS). "CONFERE" fica verde discreto e "SEM SE2" cinza: nenhum dos dois e
+   problema, e pintar os tres de cor forte tiraria o peso justamente do que e. */
+.selo.tipo-diverge{background:var(--sobe-bg); color:var(--sobe-txt); border-color:var(--sobe-linha)}
+.selo.tipo-ok{background:var(--verde-bg); color:var(--verde-txt); border-color:var(--verde-linha)}
+.selo.sem-se2{background:var(--surface-2); color:var(--txt-3); border-color:var(--line-forte)}
+.selo.tipo-diverge, .selo.tipo-ok, .selo.sem-se2{font-size:9.5px; letter-spacing:0; padding:1px 5px}
+td.tipo-se2{font-size:10.5px; color:var(--txt-2)}
+td.tipo-se2 .txt{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+/* o menu ocupa a celula inteira: em coluna estreita um <select> do tamanho do
+   texto vira um alvo de clique de 20px */
+td.tipo-real{padding:2px 4px}
+.sel-tipo{width:100%; max-width:100%; font:inherit; font-size:10.5px; font-weight:700;
+  padding:2px 3px; border-radius:5px; cursor:pointer; background:var(--surface);
+  color:var(--txt-3); border:1px dashed var(--line-forte)}
+.sel-tipo:hover{border-color:var(--azul-2); color:var(--azul-2); border-style:solid}
+.sel-tipo.tem{background:var(--sel); color:var(--azul-2); border:1px solid var(--azul-2)}
+.sel-tipo:focus{outline:2px solid var(--azul-2); outline-offset:-1px}
+
 /* Selos da conferencia na SE2. Aparecem so nas linhas que JA foram resolvidas
    no TOTVS e que continuam na tela porque alguem daqui tratou -- as demais
    somem (ver filtrarSE2). Verde = fizeram o que o painel pediu; ambar = o
@@ -964,7 +984,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131554"></script>
+<script src="supa.js?v=202608131833"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1075,6 +1095,7 @@ const CHAVE_FEITOS = "painel_boletos_feitos";
 const CHAVE_TRATATIVAS = "painel_boletos_tratativas";
 const CHAVE_RESP = "painel_boletos_responsaveis";
 const CHAVE_ULTIMO_RESP = "painel_boletos_ultimo_resp";
+const CHAVE_TIPO_REAL = "painel_boletos_tipo_real";
 const CHAVE_FILA = "painel_boletos_fila";
 
 const lerLS = (chave, padrao) => {
@@ -1089,6 +1110,10 @@ const feitos = new Set();
 lerLS(CHAVE_FEITOS, "[]").forEach(u => feitos.add(u));
 let tratativas = lerLS(CHAVE_TRATATIVAS, "{}") || {};
 let responsaveis = lerLS(CHAVE_RESP, "{}") || {};
+/* Tipo de pagamento REAL, informado a mao por titulo. Anda pelo mesmo caminho
+   do check e da tratativa -- fila, banco, uma linha por titulo -- porque e a
+   mesma coisa: trabalho da pessoa, nao dado da base. */
+let tiposReais = lerLS(CHAVE_TIPO_REAL, "{}") || {};
 /* Quem esta tratando: digitado pela pessoa, por titulo. O ultimo nome usado
    fica lembrado para nao ter de redigitar a cada linha. */
 let ultimoResp = "";
@@ -1107,6 +1132,7 @@ function espelhar(){
   guardarLS(CHAVE_QUANDO, tratadoEm);
   guardarLS(CHAVE_TRATATIVAS, tratativas);
   guardarLS(CHAVE_RESP, responsaveis);
+  guardarLS(CHAVE_TIPO_REAL, tiposReais);
 }
 
 function enfileirar(uuid, campos){
@@ -1215,7 +1241,8 @@ function baixarCopiaMarcacoes(){
   const copia = {
     baixado_em: new Date().toISOString(),
     pendentes_no_banco: fila,
-    espelho: {feitos:[...feitos], tratativas, responsaveis, tratado_em: tratadoEm},
+    espelho: {feitos:[...feitos], tratativas, responsaveis, tratado_em: tratadoEm,
+              tipo_pgto_real: tiposReais},
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(copia, null, 2)],
     {type:"application/json"}));
@@ -1238,6 +1265,13 @@ function gravarTratativas(uuid){
   espelhar();
   if (noBanco()) enfileirar(uuid, {tratativa: tratativas[uuid] || null,
                                    tratado_por: responsaveis[uuid] || null});
+}
+
+/* null e nao "" ao limpar: a coluna e text NULL no banco, e "" gravado seria um
+   tipo real "vazio" indistinguivel de um nunca informado. */
+function gravarTipoReal(uuid){
+  espelhar();
+  if (noBanco()) enfileirar(uuid, {tipo_pgto_real: tiposReais[uuid] || null});
 }
 
 /* A fila e reenviada em toda oportunidade: volta da internet, volta para a
@@ -1432,6 +1466,56 @@ function filtrarSE2(abas){
    a caixinha -- nao ha mais o que fazer com ele. */
 const encerrado = r => feitos.has(r.uuid) || !!r.se2;
 
+/* ---------- tipo de pagamento (SE2 x real) ----------
+   13/08/2026, pedido do usuario. Tres colunas: o `Tipo Pgto` gravado no titulo
+   (coluna IK da SE2), o tipo que a pessoa informa que foi de verdade, e o
+   alerta quando os dois nao batem.
+
+   ⚠ O tipo da SE2 chega no CABECALHO da aba (`aba.se2.tipos`), como o veredito
+   da SE2 e pelo mesmo motivo: a carga nao regrava titulo ja tratado, entao um
+   campo novo posto dentro da linha nunca chegaria em quem ja tem check.
+
+   ⚠ O alerta e calculado NA HORA, no navegador -- o tipo real muda a qualquer
+   momento e um alerta congelado na geracao mentiria ate a rodada seguinte. */
+function aplicarTipoSE2(abas){
+  abas.forEach(aba => {
+    const tipos = (aba.se2 || {}).tipos;
+    if (!tipos) return;
+    aba.linhas.forEach(r => {
+      const t = tipos[r.uuid];
+      if (!t) return;
+      r.tipo_se2 = t;
+      // entra na busca: procurar por "BOLETO S/C" e uma pergunta legitima, e o
+      // `busca` e montado so com o que veio em `c`
+      r.busca += " " + t.toLowerCase();
+    });
+  });
+  return abas;
+}
+
+const tipoSE2 = r => r.tipo_se2 || "";
+const tipoReal = r => tiposReais[r.uuid] || "";
+/* So ha divergencia com os DOIS lados preenchidos: sem tipo real nao ha o que
+   comparar, e sem a SE2 (titulo fora dela, ou base ausente na geracao) nao ha
+   com o que -- nesses casos o painel diz isso, em vez de acusar diferenca. */
+const tipoDiverge = r => !!tipoSE2(r) && !!tipoReal(r) && tipoSE2(r) !== tipoReal(r);
+
+/* Menu do tipo real: o vocabulario vem da PROPRIA SE2 (`opcoes`, do mais usado
+   para o menos), porque so vale escolher o que o TOTVS de fato usa.
+   ⚠ O valor ja gravado entra na lista mesmo que nao esteja mais no vocabulario
+   -- senao o menu abriria sem a opcao que esta selecionada e a primeira mexida
+   apagaria calada o que alguem escolheu. */
+const TIPOS_PADRAO = ["BOLETO", "BOLETO S/C", "TRANSFERENCIA", "PIX", "CONVENIO",
+                      "IMPOSTO", "DEBITO EM CONTA", "CARTÃO DE CREDITO",
+                      "AMARRAR ADIANTAMENTO", "NÃO DEFINIDO"];
+function opcoesTipo(atual){
+  // sem `opcoes` a SE2 nao foi lida na geracao; a lista fixa e so o plano B
+  const base = ((A().se2 || {}).opcoes || []).slice();
+  const lista = base.length ? base : TIPOS_PADRAO.slice();
+  if (atual && !lista.includes(atual)) lista.push(atual);
+  return lista;
+}
+
 /* ---------- boleto que saiu do DDA sai do painel ----------
    13/08/2026, pedido do usuario: "nesses casos simplesmente exclua os boletos
    da base -- do painel eu digo". O gerador ja parou de mandar quem saiu, mas o
@@ -1522,7 +1606,16 @@ function linhas(){
   if (estado.ordem){
     const chave = estado.ordem;
     const deDelta = chave === "delta_valor" ? "valor" : chave === "delta_dias" ? "dias" : null;
-    const ler = r => deDelta ? Math.abs(r.delta[deDelta] ?? 0) : r.o[chave];
+    // as tres colunas de tipo de pagamento nao existem em `o` (nao vem da base):
+    // sem isto, clicar no cabecalho delas ordenaria por vazio, sem erro nenhum
+    const ler = r =>
+      deDelta ? Math.abs(r.delta[deDelta] ?? 0)
+      : chave === "tipo_pgto" ? tipoSE2(r)
+      : chave === "tipo_real" ? tipoReal(r)
+      // DIVERGE primeiro na ordem crescente: e o que se procura nessa coluna
+      : chave === "alerta_tipo" ? (!tipoReal(r) ? "" : tipoDiverge(r) ? "1 DIVERGE"
+                                   : tipoSE2(r) ? "2 CONFERE" : "3 SEM SE2")
+      : r.o[chave];
     itens.sort((a, b) => {
       const va = ler(a), vb = ler(b);
       // vazio vai sempre para o fim, independente do sentido -- senao inverter
@@ -1592,6 +1685,37 @@ function celulaCompacta(r, col){
     const quem = responsaveis[r.uuid] || r.tratado_por || r.quem || "";
     return `<td class="${zona} quando" title="${esc(quem)}">${esc(dataHora(quando)) || "—"}${
       quem ? `<span class="por">${esc(quem)}</span>` : ""}</td>`;
+  }
+  if (col.tipo === "tipo_pgto"){
+    const t = tipoSE2(r);
+    return `<td class="${zona} tipo-se2"><span class="txt" title="${
+      esc(t) || "este título não foi encontrado na SE2"}">${esc(t) || "—"}</span></td>`;
+  }
+  if (col.tipo === "tipo_real"){
+    const atual = tipoReal(r);
+    // o title mostra a escolha inteira: "AMARRAR ADIANTAMENTO" nao cabe em
+    // nenhuma largura razoavel e o <select> corta sem aviso
+    return `<td class="${zona} tipo-real"><select class="sel-tipo${atual ? " tem" : ""}"
+      data-tipo-real="${esc(r.uuid)}" title="${atual ? "Tipo real: " + esc(atual)
+        : "Informe como este título foi (ou vai ser) pago de verdade"}">
+      <option value="">—</option>${opcoesTipo(atual).map(o =>
+        `<option value="${esc(o)}"${o === atual ? " selected" : ""}>${esc(o)}</option>`).join("")
+      }</select></td>`;
+  }
+  if (col.tipo === "alerta_tipo"){
+    const real = tipoReal(r), se2 = tipoSE2(r);
+    // ninguem informou nada: celula vazia, nao "ok" -- nada foi conferido aqui
+    if (!real) return `<td class="selo-cel ${zona}"></td>`;
+    if (!se2){
+      return `<td class="selo-cel ${zona}"><span class="selo sem-se2"
+        title="Não dá para comparar: este título não veio na SE2 lida nesta rodada.">SEM SE2</span></td>`;
+    }
+    return real === se2
+      ? `<td class="selo-cel ${zona}"><span class="selo tipo-ok"
+          title="O tipo informado é o mesmo que está no título (SE2): ${esc(se2)}.">CONFERE</span></td>`
+      : `<td class="selo-cel ${zona}"><span class="selo tipo-diverge"
+          title="Na SE2 o título está como ${esc(se2)}, mas o pagamento real foi informado como ${
+          esc(real)}. Corrigir o tipo no TOTVS.">DIVERGE</span></td>`;
   }
   if (col.tipo === "tratativa"){
     const nota = tratativas[r.uuid] || "";
@@ -1833,6 +1957,15 @@ function valorExportacao(r, c){
   if (c.chave === "@quando") return dataHora(tratadoEm[r.uuid] || r.tratado_em || "");
   if (c.chave === "@quem")   return responsaveis[r.uuid] || r.tratado_por || "";
   if (c.chave === "@nota")   return tratativas[r.uuid] || "";
+  // as tres colunas de tipo de pagamento nao estao em `c`: uma vem da SE2 pelo
+  // cabecalho da aba e as outras duas nascem aqui no navegador
+  if (c.tipoPainel === "tipo_pgto") return tipoSE2(r);
+  if (c.tipoPainel === "tipo_real") return tipoReal(r);
+  if (c.tipoPainel === "alerta_tipo"){
+    if (!tipoReal(r)) return "";
+    if (!tipoSE2(r)) return "SEM SE2";
+    return tipoDiverge(r) ? "DIVERGE" : "CONFERE";
+  }
   if (c.tipoPainel === "delta"){
     const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
     return v == null ? "" : v;
@@ -2185,6 +2318,21 @@ function avisoSE2(){
     Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.</div>`;
 }
 
+/* As tres colunas de tipo de pagamento. O texto sai pela COLUNA existir na aba,
+   nao pelo id dela: e assim que ele acompanha, sem manutencao, o dia em que o
+   trio for para outra aba. */
+function avisoTipoPgto(){
+  if (!A().compacta.some(c => c.tipo === "tipo_pgto")) return "";
+  const divergem = A().linhas.filter(tipoDiverge).length;
+  return `<div class="linha-aviso calmo">📌 <b>Tipo (SE2)</b> é o tipo de pagamento gravado no
+    título no TOTVS. Ao lado, <b>Tipo real</b> é onde você informa como o pagamento realmente
+    foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
+    coluna <b>Confere?</b> acusa <span class="selo tipo-diverge">DIVERGE</span>: é título para
+    corrigir no TOTVS. Enquanto o tipo real não for informado, a coluna fica vazia.
+    ${divergem ? `Hoje <b>${num(divergem)}</b> ${divergem === 1 ? "título diverge" : "títulos divergem"}.`
+               : ""}</div>`;
+}
+
 /* A base da SEFAZ tem 386 colunas e vem por item da nota. Sem dizer as duas
    coisas, a aba parece ter perdido coluna e repetido linha. */
 /* ⚠ As duas abas da SEFAZ ficaram com o texto CURTO -- so o funcionamento basico
@@ -2262,6 +2410,19 @@ const LEGENDAS = {
       ["provavel", "MATCH PROVÁVEL",
        `Passou de <b>75</b> e não chegou a 100 — associação aceita, com menos confirmações
         acumuladas. Vale abrir o <b>Critério</b> e ver <i>o que</i> bateu antes de lançar.`],
+      /* Selos da coluna Confere? (13/08/2026). Não são veredito do associador —
+         comparam o Tipo Pgto do título (SE2, coluna IK) com o tipo real
+         informado aqui. Ficam na mesma legenda porque é onde se procura o que
+         um selo quer dizer. */
+      ["tipo-diverge", "DIVERGE",
+       `O <b>tipo real</b> informado não é o que está gravado no título no TOTVS
+        (<b>Tipo (SE2)</b>). É título para <b>corrigir o tipo de pagamento</b> na SE2.`],
+      ["tipo-ok", "CONFERE",
+       `O tipo real informado é <b>igual</b> ao do título. Nada a fazer — o selo existe para
+        separar "conferi e bate" de "ninguém olhou ainda", que é a célula vazia.`],
+      ["sem-se2", "SEM SE2",
+       `Há tipo real informado, mas o título <b>não veio na SE2</b> desta rodada — não há com o
+        que comparar. Costuma ser título de fora da base exportada.`],
     ],
   },
   correspondencias: {
@@ -2401,7 +2562,7 @@ function avisosAbertos(){
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
   const explica = avisoVisao() + avisoPendentes() + avisoCruzamento()
-                + avisoSefaz() + avisoSefazSf1() + avisoSE2();
+                + avisoSefaz() + avisoSefazSf1() + avisoSE2() + avisoTipoPgto();
   const corpo = avisoOcr() + linhaAlertasSefaz()
     + (explica ? `<details class="explica"${avisosAbertos() ? " open" : ""}>
         <summary>Como esta aba funciona</summary>${explica}</details>` : "")
@@ -2453,11 +2614,21 @@ document.body.classList.add("amplo");
 
 document.getElementById("grade").addEventListener("change", e => {
   const caixa = e.target.closest("[data-feito]");
-  if (!caixa) return;
-  caixa.checked ? feitos.add(caixa.dataset.feito) : feitos.delete(caixa.dataset.feito);
-  gravarFeitos(caixa.dataset.feito);
-  // o titulo troca de sub-aba, entao nao da para so marcar a linha
-  desenhar();
+  if (caixa){
+    caixa.checked ? feitos.add(caixa.dataset.feito) : feitos.delete(caixa.dataset.feito);
+    gravarFeitos(caixa.dataset.feito);
+    // o titulo troca de sub-aba, entao nao da para so marcar a linha
+    desenhar();
+    return;
+  }
+  const menu = e.target.closest("[data-tipo-real]");
+  if (menu){
+    const uuid = menu.dataset.tipoReal, escolhido = menu.value;
+    if (escolhido) tiposReais[uuid] = escolhido; else delete tiposReais[uuid];
+    gravarTipoReal(uuid);
+    // a coluna do alerta, ao lado, e calculada a partir daqui
+    desenhar();
+  }
 });
 
 document.getElementById("busca").addEventListener("input", e => { estado.busca = e.target.value; desenhar(); });
@@ -2555,6 +2726,9 @@ function aplicarFila(){
     if ("tratado_por" in c){
       if (c.tratado_por) responsaveis[uuid] = c.tratado_por; else delete responsaveis[uuid];
     }
+    if ("tipo_pgto_real" in c){
+      if (c.tipo_pgto_real) tiposReais[uuid] = c.tipo_pgto_real; else delete tiposReais[uuid];
+    }
   });
   espelhar();
   marcarTinha();
@@ -2570,18 +2744,22 @@ function iniciar(dados){
   // Com login o banco e a fonte unica: zerar antes evita que um espelho velho
   // deste navegador ressuscite o que outra pessoa desmarcou. O que ainda nao
   // chegou la volta logo abaixo, pela fila.
-  if (noBanco()){ feitos.clear(); tratativas = {}; responsaveis = {}; tratadoEm = {}; }
+  if (noBanco()){ feitos.clear(); tratativas = {}; responsaveis = {}; tratadoEm = {};
+                  tiposReais = {}; }
   dados.abas.forEach(aba => aba.linhas.forEach(r => {
     if (r.feito) feitos.add(r.uuid);
     // com login, o banco manda sobre o que houver gravado no navegador
     if (r.tratativa) tratativas[r.uuid] = r.tratativa;
     if (r.tratado_em) tratadoEm[r.uuid] = r.tratado_em;
     if (r.tratado_por) responsaveis[r.uuid] = r.tratado_por;
+    if (r.tipo_pgto_real) tiposReais[r.uuid] = r.tipo_pgto_real;
   }));
   if (noBanco()) aplicarFila();
   // os dois cortes leem o que foi tratado, entao vem depois do laco acima:
-  // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento
-  dados.abas = recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(dados.abas))));
+  // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento.
+  // O tipo da SE2 e aplicado ANTES do corte: a linha que fica escondida por
+  // filtrarSE2 nao passaria mais por aqui, e ela reaparece em Tratados.
+  dados.abas = recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(aplicarTipoSE2(dados.abas)))));
   // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
   // os filtros dela ligados na aba que assume o lugar.
   if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);

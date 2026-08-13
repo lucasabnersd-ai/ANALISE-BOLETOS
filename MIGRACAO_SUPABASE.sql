@@ -158,3 +158,21 @@ commit;
 --   select count(*) from public.analise_boletos_titulos;
 -- E rodar os advisors (get_advisors / supabase db advisors) antes de publicar.
 -- ===========================================================================
+
+-- ===========================================================================
+-- COLUNAS QUE ENTRARAM DEPOIS
+--
+-- O bloco acima e o desenho de 04/08/2026 e ficou como estava; a tabela de
+-- marcacoes ganhou colunas desde entao. Quem rodar so o script de cima monta um
+-- banco que o painel de hoje NAO consegue usar -- por isso elas estao aqui,
+-- todas idempotentes. (O trigger `ab_carimbar` tambem mudou; a versao que vale
+-- e a do banco / das migrations do Supabase, nao a deste arquivo.)
+-- ===========================================================================
+alter table public.analise_boletos_marcacoes
+  add column if not exists tratativa      text,        -- a nota por titulo
+  add column if not exists tratado_em     timestamptz, -- 1a vez que virou feito
+  add column if not exists tratado_por    text,        -- quem assinou a nota
+  -- 13/08/2026: tipo de pagamento REAL, informado a mao na aba de associados.
+  -- Fica na marcacao (trabalho da pessoa), nunca na carteira, que a carga
+  -- regrava. NULL = ninguem informou; "" nao e gravado.
+  add column if not exists tipo_pgto_real text;
