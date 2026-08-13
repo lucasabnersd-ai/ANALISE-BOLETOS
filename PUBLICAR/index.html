@@ -193,6 +193,9 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
   padding:9px 11px; background:var(--surface); border:1px solid var(--line); border-radius:9px}
 .filtros label{display:flex; flex-direction:column; gap:3px; font-size:9.5px; font-weight:700;
   letter-spacing:.5px; text-transform:uppercase; color:var(--txt-3)}
+/* ⚠ Sem isto o `hidden` do rotulo nao vale nada: o `display:flex` de cima ganha
+   do display:none que o atributo traz, e o campo escondido continuaria na tela. */
+.filtros label[hidden]{display:none}
 .filtros input{width:132px; font:inherit; font-size:12px; color:var(--txt); background:var(--surface-2);
   border:1px solid var(--line); border-radius:6px; padding:5px 8px; outline:none}
 .filtros input:focus{border-color:var(--acento, var(--azul-2)); background:var(--surface)}
@@ -574,6 +577,14 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <label>Valor<input type="search" data-filtro="valor" placeholder="5.427 ou 5427" autocomplete="off"></label>
     <label>Vencimento de<input type="date" data-filtro="vencDe"></label>
     <label>até<input type="date" data-filtro="vencAte"></label>
+    <!-- Faixas de UMA coluna (13/08/2026, pedido do usuario: filtro para o
+         vencimento real e para o do boleto). O "Vencimento" acima casa QUALQUER
+         uma das datas da linha; estas duas olham so a sua. Cada par aparece
+         apenas nas abas que TEM a coluna -- ver refletirFiltros(). -->
+    <label data-so-com="vencto_real">Vencto real de<input type="date" data-filtro="realDe"></label>
+    <label data-so-com="vencto_real">até<input type="date" data-filtro="realAte"></label>
+    <label data-so-com="vencimento_boleto">Venc. boleto de<input type="date" data-filtro="bolDe"></label>
+    <label data-so-com="vencimento_boleto">até<input type="date" data-filtro="bolAte"></label>
     <label>Nº título<input type="search" data-filtro="titulo" placeholder="000050174" autocomplete="off"></label>
     <label>NF<input type="search" data-filtro="nf" placeholder="50174" autocomplete="off"></label>
     <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
@@ -953,7 +964,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131533"></script>
+<script src="supa.js?v=202608131554"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -974,7 +985,9 @@ const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
    13/08/2026 a aba pode ter mais de uma barra de botoes (a declarada -- Fonte
    Boleto, Origem -- e a de Situação). Os grupos filtram JUNTOS, em E. */
 const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:{},
-                filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"", titulo:"", nf:"", uuid:""}};
+                filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
+                         realDe:"", realAte:"", bolDe:"", bolAte:"",
+                         titulo:"", nf:"", uuid:""}};
 
 /* ---------- os filtros sao de cada aba, nao do painel ----------
    Ate 13/08/2026 havia um estado so para todas: o que se digitava numa aba
@@ -991,6 +1004,7 @@ const porAba = {};
 
 const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:{},
                           filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
+                                   realDe:"", realAte:"", bolDe:"", bolAte:"",
                                    titulo:"", nf:"", uuid:""}});
 
 // copia, nunca a referencia: `filtros` e `pill` sao mutados in loco (a cada tecla
@@ -1014,6 +1028,14 @@ function refletirFiltros(){
   document.getElementById("busca").value = estado.busca;
   document.querySelectorAll("#filtros input").forEach(campo => {
     campo.value = estado.filtros[campo.dataset.filtro] ?? "";
+  });
+  /* Faixa de coluna aparece so onde a coluna existe: em Boletos em Aberto DDA
+     nao ha vencimento real, e um campo que nunca acha nada e pior do que campo
+     nenhum. ⚠ Esconder e seguro porque o filtro e de CADA aba: a aba sem a
+     coluna tem o proprio estado, sempre vazio nesses campos -- ninguem digita
+     num campo escondido, e nada fica filtrando invisivel. */
+  document.querySelectorAll("#filtros [data-so-com]").forEach(rotulo => {
+    rotulo.hidden = !abaTemColuna(rotulo.dataset.soCom);
   });
 }
 
@@ -1264,6 +1286,16 @@ const CAMPOS_FILTRO = {
 // O vencimento tem filtro proprio (intervalo), entao sai da busca por texto.
 const COLUNAS_VENC = ["vencimento", "vencto_real", "vencimento_boleto"];
 
+/* Faixas de UMA coluna (13/08/2026): [coluna, campo "de", campo "até"].
+   O filtro "Vencimento" acima e generoso de proposito -- casa QUALQUER data da
+   linha --, e era o unico que existia. Nas abas que trazem as tres datas isso
+   nao permite perguntar "quais vencem em agosto PELO VENCIMENTO REAL", que e o
+   que o usuario pediu. Cada par aqui olha so a sua coluna. */
+const FAIXAS_COLUNA = [["vencto_real", "realDe", "realAte"],
+                       ["vencimento_boleto", "bolDe", "bolAte"]];
+
+const abaTemColuna = chave => (A().compacta || []).some(c => c.chave === chave);
+
 /* A data vem em ISO no mapa de ordenacao (`o`); o `c` traz dd/mm/aaaa. */
 function dataISO(r, chave){
   const bruto = r.o[chave];
@@ -1467,6 +1499,17 @@ function linhas(){
   }
   const {vencDe, vencAte} = estado.filtros;
   if (vencDe || vencAte) itens = itens.filter(r => dentroDoPeriodo(r, vencDe, vencAte));
+
+  // faixas de uma coluna so: linha sem essa data NAO passa (perguntar pelo
+  // vencimento real e perguntar por quem tem vencimento real)
+  FAIXAS_COLUNA.forEach(([chave, campoDe, campoAte]) => {
+    const de = estado.filtros[campoDe], ate = estado.filtros[campoAte];
+    if (!de && !ate) return;
+    itens = itens.filter(r => {
+      const data = dataISO(r, chave);
+      return data && (!de || data >= de) && (!ate || data <= ate);
+    });
+  });
 
   // barras de botoes (fonte/origem e situacao): filtram juntas, em E
   (A().pills || []).forEach(grupo => {
