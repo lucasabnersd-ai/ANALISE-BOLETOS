@@ -76,7 +76,9 @@ button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
    Cada uma tem sua cor; o painel inteiro segue a cor da aba ativa, via
    --acento / --acento-bg, para nao confundir uma com a outra. */
 .abas-topo{display:flex; gap:0; border-bottom:2px solid var(--line-forte); margin:4px 0 12px}
-.abas-topo button{font:inherit; font-size:13px; font-weight:650; color:var(--txt-3); cursor:pointer;
+/* nome da aba em CAIXA ALTA (pedido do usuario, 13/08/2026) */
+.abas-topo button{font:inherit; font-size:12.5px; font-weight:700; color:var(--txt-3); cursor:pointer;
+  text-transform:uppercase; letter-spacing:.4px;
   background:transparent; border:0; border-bottom:3px solid transparent; margin-bottom:-2px;
   padding:9px 18px; display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
 .abas-topo button small{font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px;
@@ -357,6 +359,21 @@ td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margi
 .selo.fatura{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
 .selo.grave{background:var(--sobe-bg); color:var(--sobe-txt); border-color:var(--sobe-linha)}
 .selo.outro{background:var(--alerta-bg); color:var(--alerta); border-color:var(--alerta)}
+
+/* Selos da conferencia na SE2. Aparecem so nas linhas que JA foram resolvidas
+   no TOTVS e que continuam na tela porque alguem daqui tratou -- as demais
+   somem (ver filtrarSE2). Verde = fizeram o que o painel pediu; ambar = o
+   boleto lancado nao e o que o painel indicou, vale conferir; cinza = baixado. */
+.selo.se2-boleto{background:var(--verde-bg); color:var(--verde-txt); border-color:var(--verde-linha)}
+.selo.se2-outro{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
+.selo.se2-baixa{background:var(--surface-2); color:var(--txt-2); border-color:var(--line-forte)}
+/* menor que os outros selos: a coluna de Status e estreita e aqui cabem DOIS.
+   Texto curto pelo mesmo motivo -- o detalhe inteiro esta no tooltip. */
+.selo.se2-boleto, .selo.se2-outro, .selo.se2-baixa{font-size:9.5px; letter-spacing:0; padding:1px 5px}
+/* pilha vertical: o selo da SE2 em cima do Status, sem esconder nenhum dos dois.
+   ⚠ flex fica no <td>, nunca no <tr> -- linha em flex destroi a tabela. */
+td.selo-cel .pilha-selo{display:flex; flex-direction:column; align-items:center; gap:2px}
+tr.resolvida td.check{box-shadow:inset 3px 0 0 var(--verde-linha)}
 td.selo-cel{text-align:center; cursor:default}
 td.selo-cel[title]{cursor:help}
 /* selo de parcela que abre o drill */
@@ -902,6 +919,51 @@ function partirAbas(abas){
   return saida;
 }
 
+/* ---------- conferencia na SE2 ----------
+   Regra (pedido do usuario, 13/08/2026): estas abas so trabalham titulo EM
+   ABERTO e SEM boleto lancado no TOTVS. A cada atualizacao o gerador confere a
+   SE2 e manda, no cabecalho da aba, quem saiu: `aba.se2.fora[uuid]` com
+   {m:"BOLETO"|"BAIXA", d:detalhe, igual:boolean}.
+
+   Quem saiu some da tela -- MENOS quem ja foi tratado por aqui. Esse continua,
+   na sub-aba Tratados, com o selo do que aconteceu: "so ficara no painel os
+   tratados por meio dele, e detalhado la".
+
+   ⚠ O corte e feito no NAVEGADOR, nao na geracao, porque depende das
+   marcacoes, que so existem depois do login. E nada e apagado: a linha continua
+   no banco e volta sozinha se a SE2 disser outra coisa amanha (foi o caso de um
+   boleto lancado por engano e retirado do titulo).
+
+   ⚠ Sem `aba.se2` (base SE2 fora da maquina na hora de gerar) NINGUEM e
+   escondido -- na duvida, mostrar de novo e melhor do que sumir com trabalho. */
+function tratadoPorAqui(r){
+  // aqui a NOTA conta, diferente das sub-abas A tratar/Tratados, que olham so o
+  // check: quem escreveu uma nota trabalhou o titulo e nao pode ve-lo sumir.
+  return feitos.has(r.uuid) || !!(tratativas[r.uuid] || r.tratativa);
+}
+
+function filtrarSE2(abas){
+  abas.forEach(aba => {
+    const fora = (aba.se2 || {}).fora;
+    if (!fora) return;
+    aba.se2.escondidos = 0;
+    aba.linhas = aba.linhas.filter(r => {
+      const saiu = fora[r.uuid];
+      if (!saiu) return true;
+      r.se2 = saiu;                       // vira selo e manda para Tratados
+      if (tratadoPorAqui(r)) return true;
+      aba.se2.escondidos++;
+      return false;
+    });
+  });
+  return abas;
+}
+
+/* "Tratados" = o check OU a propria SE2 ja resolvida. Um titulo com o boleto
+   lancado no TOTVS nao pode ficar na fila de A tratar so porque ninguem marcou
+   a caixinha -- nao ha mais o que fazer com ele. */
+const encerrado = r => feitos.has(r.uuid) || !!r.se2;
+
 /* Contagens do resumo e valores dos botoes de fonte: recalculados a partir das
    linhas de CADA aba -- depois do corte, os totais que vieram da geracao
    valeriam para as duas visoes somadas. */
@@ -956,9 +1018,9 @@ function linhas(){
   // botao de fonte do boleto
   const pills = A().pills;
   if (estado.pill && pills) itens = itens.filter(r => r.c[pills.chave] === estado.pill);
-  // o check move o titulo de uma sub-aba para a outra
+  // o check -- ou a SE2 ja resolvida -- move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
-  itens = itens.filter(r => feitos.has(r.uuid) === tratado);
+  itens = itens.filter(r => encerrado(r) === tratado);
   if (estado.ordem){
     const chave = estado.ordem;
     const deDelta = chave === "delta_valor" ? "valor" : chave === "delta_dias" ? "dias" : null;
@@ -998,6 +1060,22 @@ function marca(valor, tipo){
     ? `Boleto ${valor > 0 ? "acima" : "abaixo"} do título em ${moeda(Math.abs(valor))}`
     : `Vencimento do boleto ${valor > 0 ? "depois" : "antes"} do título em ${Math.abs(valor)} dia(s)`;
   return `<span class="marca ${classe}" title="${esc(dica)}"><span class="seta">${seta}</span>${corpo}</span>`;
+}
+
+/* O que a SE2 diz sobre a linha que ficou na tela. O texto do selo e curto (a
+   coluna e estreita); o detalhe inteiro -- data da baixa, linha digitavel
+   lancada -- vai no tooltip. */
+function seloSE2(r){
+  if (!r.se2) return "";
+  if (r.se2.m === "BAIXA"){
+    return `<span class="selo se2-baixa" title="Título já BAIXADO no TOTVS em ${
+      esc(r.se2.d)} — não há boleto a lançar.">BAIXADO</span>`;
+  }
+  return r.se2.igual
+    ? `<span class="selo se2-boleto" title="Boleto já lançado no título, e é exatamente o que o
+        painel indicou. Resolvido — está aqui só como registro.">BOLETO</span>`
+    : `<span class="selo se2-outro" title="O título já tem boleto lançado, mas com OUTRA linha
+        digitável: ${esc(r.se2.d)}. Confira se lançaram o boleto certo.">OUTRO</span>`;
 }
 
 function celulaCompacta(r, col){
@@ -1046,8 +1124,12 @@ function celulaCompacta(r, col){
   }
   if (col.papel === "status"){
     // sem title: quem explica o match agora e o quadro que abre no hover
-    return `<td class="selo-cel ${zona}"><span class="selo ${r.selo || (r.forte ? "forte" : "provavel")}"
-      data-match="${esc(r.uuid)}">${esc(valor) || "—"}</span></td>`;
+    const selo = `<span class="selo ${r.selo || (r.forte ? "forte" : "provavel")}"
+      data-match="${esc(r.uuid)}">${esc(valor) || "—"}</span>`;
+    // o veredito da SE2 entra ACIMA do Status, sem substituir nenhum dos dois:
+    // um diz o que o painel achou, o outro o que o TOTVS ja tem
+    return `<td class="selo-cel ${zona}">${
+      r.se2 ? `<span class="pilha-selo">${seloSE2(r)}${selo}</span>` : selo}</td>`;
   }
   if (col.papel === "alerta"){
     if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
@@ -1102,7 +1184,8 @@ function desenharConferencia(itens){
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
-    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""}">
+    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""} ${
+        r.se2 ? "resolvida" : ""}">
         <td class="gutter">${i + 1}</td>${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
     : `<tr><td class="vazio" colspan="${cols.length + 1}">Nenhuma linha encontrada.</td></tr>`;
 
@@ -1526,15 +1609,37 @@ function avisoCruzamento(){
     chegar amanhã, a linha muda sozinha.` : "Todos acharam boleto."}</div>`;
 }
 
+/* A conferencia na SE2 tira titulo da tela -- e o que sai some MESMO. Isso tem
+   de estar escrito, senao a aba encolhe entre uma rodada e outra e parece
+   perda de dados. */
+function avisoSE2(){
+  const se2 = A().se2;
+  if (!se2) return "";
+  const escondidos = se2.escondidos || 0;
+  const ficaram = A().linhas.filter(r => r.se2).length;
+  return `<div class="linha-aviso calmo">📌 A cada atualização estes títulos são conferidos na
+    <b>SE2</b> (posição de <b>${esc(se2.lido_em)}</b>). Só continua aqui o título
+    <b>em aberto</b> e <b>sem código de barras e linha digitável</b> no TOTVS — que é o que ainda
+    precisa de boleto.
+    ${escondidos ? `<b>${num(escondidos)}</b> saíram nesta rodada (boleto já lançado ou título
+    baixado).` : "Nenhum saiu nesta rodada."}
+    ${ficaram ? `<b>${num(ficaram)}</b> já resolvido${ficaram === 1 ? "" : "s"} no TOTVS
+    ${ficaram === 1 ? "continua" : "continuam"} na sub-aba <b>Tratados</b>, com o selo
+    <span class="selo se2-boleto">BOLETO</span> (já lançado) ou
+    <span class="selo se2-baixa">BAIXADO</span>
+    — são os que foram tratados por aqui.` : ""}
+    Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.</div>`;
+}
+
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
-  const corpo = avisoOcr() + avisoVisao() + avisoPendentes() + avisoCruzamento();
+  const corpo = avisoOcr() + avisoVisao() + avisoPendentes() + avisoCruzamento() + avisoSE2();
   caixa.hidden = !corpo;
   caixa.innerHTML = corpo;
 }
 
 function atualizarSubabas(){
-  const tratados = A().linhas.filter(r => feitos.has(r.uuid)).length;
+  const tratados = A().linhas.filter(encerrado).length;
   const contas = {tratar: A().linhas.length - tratados, tratados: tratados};
   document.querySelectorAll("#subabas button").forEach(b => {
     b.classList.toggle("ativa", b.dataset.sub === estado.sub);
@@ -1697,8 +1802,9 @@ function iniciar(dados){
     if (r.tratado_por) responsaveis[r.uuid] = r.tratado_por;
   }));
   if (noBanco()) aplicarFila();
-  // o corte futura/passado le o que foi tratado, entao vem depois do laco acima
-  dados.abas = recontarAbas(partirAbas(dados.abas));
+  // os dois cortes leem o que foi tratado, entao vem depois do laco acima:
+  // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento
+  dados.abas = recontarAbas(partirAbas(filtrarSE2(dados.abas)));
   if (!dados.abas.some(a => a.id === estado.aba)) estado.aba = dados.abas[0].id;
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharCartaoAtualizacao();

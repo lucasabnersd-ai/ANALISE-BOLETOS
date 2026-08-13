@@ -56,6 +56,11 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 "cor": aba["cor"],
                 # quando existe, o painel abre esta aba em duas (futura/passado)
                 "particoes": aba.get("particoes"),
+                # veredito da SE2: quem ja tem boleto lancado ou ja foi baixado.
+                # Fica AQUI, no cabecalho, porque a carga nao regrava titulo ja
+                # tratado (regra 3 desta funcao) -- num campo dentro da linha,
+                # o selo nunca chegaria em quem mais precisa dele.
+                "se2": aba.get("se2"),
                 # rotulos dos contadores da linha de resumo (mudam por aba)
                 "resumo": aba.get("resumo"),
                 "gerado_em": carga["gerado_em"],

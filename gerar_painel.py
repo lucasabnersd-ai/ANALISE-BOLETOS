@@ -28,6 +28,7 @@ from openpyxl import load_workbook
 import cruzamento_classificacao
 import pendentes_itau
 import planilha_excel_js
+import verificacao_se2
 
 # Motor .xlsx do painel SE2, reaproveitado aqui (pedido do usuario: "use o
 # modelo de planilha que e gerado na base desse painel"). A FONTE e a copia do
@@ -283,6 +284,9 @@ ABAS = {
         "col_score": "Score Match",
         "col_uuid": "Campo UUID",
         "prefixo_uuid": "",
+        # Confere cada titulo na SE2 a cada rodada: quem ja tem boleto lancado
+        # (ou ja foi baixado) sai da fila. Ver verificacao_se2.py.
+        "conferir_se2": True,
     },
     "correspondencias": {
         "planilha": ABA_CORRESPONDENCIAS,
@@ -296,6 +300,7 @@ ABAS = {
         "col_score": "Score",
         "col_uuid": "Campo UUID",
         "prefixo_uuid": "",
+        "conferir_se2": True,
     },
     "futuros": {
         "planilha": ABA_FUTUROS,
@@ -894,8 +899,41 @@ def ler_resumo(wb) -> dict:
     return resumo
 
 
+def conferir_na_se2(registros: list[dict], conferencia) -> dict:
+    """Veredito da SE2 para os titulos de uma aba, pronto para o `_meta`.
+
+    So os titulos que SAEM da fila entram no mapa `fora` -- e a lista curta
+    (dezenas), nao a aba inteira. Os outros dois numeros existem para o painel
+    poder dizer em que pe esta a conferencia sem recontar nada.
+
+    ⚠ Isto vive no `_meta` da aba, e nao dentro de cada titulo, de proposito: a
+    Edge Function NAO regrava titulo que ja tem check (regra 3 da carga), entao
+    um campo novo colocado na linha nunca chegaria justamente em quem ja foi
+    tratado -- que sao os que precisam continuar aparecendo com o selo. O
+    cabecalho `#meta:<aba>`, esse sim, e reescrito em toda carga.
+    """
+    fora, abertos, sem_se2 = {}, 0, 0
+    for registro in registros:
+        situacao = conferencia.olhar(registro["uuid"])
+        if situacao is None:
+            sem_se2 += 1          # nao esta na SE2: fica no painel, na duvida
+            continue
+        if not situacao["m"]:
+            abertos += 1          # em aberto e sem boleto: e o trabalho da aba
+            continue
+        saida = {"m": situacao["m"], "d": situacao["d"]}
+        if situacao["m"] == "BOLETO":
+            # Lancaram o boleto que o painel indicou ou um outro? A resposta
+            # muda o que a pessoa precisa conferir, entao vai junto.
+            indicado = registro["copia"].get(chave_de("Linha Digitável"), "")
+            saida["igual"] = bool(indicado) and situacao["dig"] == indicado
+        fora[registro["uuid"]] = saida
+    return {"lido_em": conferencia.lido_em, "fora": fora,
+            "abertos": abertos, "sem_se2": sem_se2}
+
+
 def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
-          base_sf1: Path | None = None) -> dict:
+          base_sf1: Path | None = None, base_se2: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -966,6 +1004,26 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         print(f"AVISO: base SF1 nao encontrada, aba de classificacao nao atualizada:\n"
               f"       {caminho_sf1}", file=sys.stderr)
 
+    # Conferencia na SE2 (pedido do usuario, 13/08/2026): so segue na fila o
+    # titulo em aberto e sem boleto lancado. Mesma regra das outras bases de
+    # fora -- se ela nao estiver aqui, o painel continua funcionando inteiro,
+    # mas o aviso tem de aparecer: sem a SE2 o painel volta a mostrar titulo
+    # que ja foi resolvido, e ninguem descobriria sozinho.
+    conferencia_se2 = None
+    caminho_se2 = base_se2 or verificacao_se2.BASE_PADRAO
+    if not caminho_se2.exists():
+        print(f"AVISO: base SE2 nao encontrada, titulos NAO conferidos:\n"
+              f"       {caminho_se2}", file=sys.stderr)
+    else:
+        try:
+            conferencia_se2 = verificacao_se2.ler(caminho_se2)
+        except Exception as exc:  # noqa: BLE001 - planilha aberta, coluna renomeada...
+            # Sem conferencia o painel volta a mostrar todo mundo -- que e o
+            # comportamento antigo, e o certo aqui: esconder titulo por causa de
+            # uma leitura que falhou seria sumir com trabalho de verdade.
+            print(f"AVISO: nao consegui ler a SE2, titulos NAO conferidos: {exc}\n"
+                  f"       {caminho_se2}", file=sys.stderr)
+
     def do_resumo(rotulo):
         valor = resumo.get(rotulo, 0)
         return int(valor) if isinstance(valor, (int, float)) else 0
@@ -996,6 +1054,11 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
                 "valores": sorted({r["c"].get(chave_de(cfg["pills"]), "")
                                    for r in registros} - {""}),
             } if cfg.get("pills") else None,
+            # Veredito da SE2 (so nas abas que declaram `conferir_se2`). None
+            # quando a base nao foi lida -- o painel entende como "nao conferi"
+            # e nao esconde ninguem.
+            "se2": (conferir_na_se2(registros, conferencia_se2)
+                    if cfg.get("conferir_se2") and conferencia_se2 else None),
             "ocr": sum(1 for r in registros if r["ocr"]),
             "com_alerta": sum(1 for r in registros if r["c"].get("alerta_fatura")),
             "divergentes": sum(1 for r in registros if r["difere"]),
@@ -1049,6 +1112,9 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     # para nao viajar no HTML nem na carga do banco.
     dados["_pendentes_itau"] = pendentes_resumo
     dados["_cruzamento"] = cruzamento_resumo
+    dados["_se2"] = ({"base": str(caminho_se2), "salva_em": conferencia_se2.lido_em,
+                      "total": conferencia_se2.total, "dias": conferencia_se2.dias}
+                     if conferencia_se2 else None)
     return dados
 
 
@@ -1102,11 +1168,14 @@ def main() -> int:
                         help="planilha do DDA do Itau (COPIAR E COLAR BOLETOS PENDENTES)")
     parser.add_argument("--base-sf1", type=Path, default=cruzamento_classificacao.BASE_PADRAO,
                         help="base SF1 (notas classificadas no TOTVS)")
+    parser.add_argument("--base-se2", type=Path, default=verificacao_se2.BASE_PADRAO,
+                        help="base SE2 (posicao diaria) usada para conferir os titulos")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
-        dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1)
+        dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1,
+                      args.base_se2)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
@@ -1136,12 +1205,27 @@ def main() -> int:
         print(f"           {cruz['com_boleto']} com boleto | {cruz['sem_boleto']} sem boleto"
               f" | {cruz['selos']}")
         print(f"           historico: {cruz['total']} titulos -> {HISTORICO_CRUZAMENTO.name}")
+
+    se2 = dados.pop("_se2", None)
+    if se2:
+        print(f"Base SE2: {se2['base']}")
+        print(f"           (planilha salva em {se2['salva_em']} | {se2['total']} titulos)")
+        if se2["dias"] >= 2:
+            print(f"           AVISO: a SE2 tem {se2['dias']} dias. Exporte de novo antes de "
+                  f"confiar em quem saiu do painel.", file=sys.stderr)
     print()
 
     for aba in dados["abas"]:
         print(f"{aba['nome']}: {len(aba['linhas'])} linhas | {len(aba['compacta'])} colunas"
               f" | com alerta: {aba['com_alerta']} | boleto difere: {aba['divergentes']}"
               f" | NFs com drill: {len(aba['parcelas'])}")
+        conferido = aba.get("se2")
+        if conferido:
+            motivos = [m["m"] for m in conferido["fora"].values()]
+            print(f"           SE2: {conferido['abertos']} em aberto sem boleto (ficam)"
+                  f" | {motivos.count('BOLETO')} ja com boleto lancado"
+                  f" | {motivos.count('BAIXA')} baixados"
+                  f" | {conferido['sem_se2']} fora da SE2 (ficam)")
     print(f"Publicavel (sem dados): {args.saida}")
     print(f"Carteira para subir:    {DADOS_JSON}")
     print(f"Painel local (com dados): {DEV}")
