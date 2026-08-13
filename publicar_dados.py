@@ -107,7 +107,13 @@ def enxugar(carga: dict) -> list[dict]:
                     "forte": r["forte"],
                     "feito": r["feito"],
                     "alerta": r["alerta"],
-                    "match": r["match"],
+                    # Sem criterio nao ha quadro para abrir. Na aba da SEFAZ isso
+                    # e a regra (o selo e um flag, nao um veredito), e mandar o
+                    # dicionario vazio custava 95 KB para nao dizer nada.
+                    **({"match": r["match"]} if r["match"].get("itens") else {}),
+                    # texto longo (Info Comp da SEFAZ, Criterio do cruzamento):
+                    # nao cabe na celula e abre no quadro. So viaja onde existe.
+                    **({"texto": r["texto"]} if r.get("texto") else {}),
                 },
             })
     return titulos

@@ -150,6 +150,22 @@ body[data-aba="pendentes_itau"] .subabas button.ativa{background:#0f7b52;
   border-color:#0f7b52; color:#fff}
 body[data-aba="pendentes_itau"] tr.grupos th.g-parte{background:var(--verde-bg); color:var(--verde-txt)}
 
+/* SEFAZ: a base da SEFAZ como ela e (azul, como a primeira aba) e o cruzamento
+   dela com a SF1 (verde-agua, para nao virar a mesma coisa que a do Itau). */
+body[data-aba="sefaz"]{--acento:var(--azul-2); --acento-bg:var(--sel)}
+body[data-aba="sefaz_sf1"]{--acento:#0d6d78; --acento-bg:#cdeef1}
+html[data-tema="escuro"] body[data-aba="sefaz_sf1"]{--acento:#22d3ee; --acento-bg:#0b3b42}
+body[data-aba="sefaz_sf1"] tr.titulos th{background:#0a5661}
+body[data-aba="sefaz_sf1"] tr.titulos th:hover,
+body[data-aba="sefaz_sf1"] tr.titulos th.ativa{background:#0d6d78}
+body[data-aba="sefaz_sf1"] th.canto,
+body[data-aba="sefaz_sf1"] tr.titulos th.canto{background:#0a5661}
+body[data-aba="sefaz_sf1"] tr:hover td,
+body[data-aba="sefaz_sf1"] tr:hover td.gutter,
+body[data-aba="sefaz_sf1"] table.conferencia tr:hover td{background:var(--acento-bg) !important}
+body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
+  border-color:#0d6d78; color:#fff}
+
 /* ---------- sub-abas: a tratar x tratados ---------- */
 .subabas{display:flex; gap:6px; margin:10px 0 8px}
 .subabas button{font:inherit; font-size:12px; font-weight:600; color:var(--txt-2); cursor:pointer;
@@ -203,6 +219,36 @@ body[data-aba="pendentes_itau"] tr.grupos th.g-parte{background:var(--verde-bg);
 /* o aviso que so explica a aba nao e alarme: fica no tom neutro da pagina */
 .linha-aviso.calmo{background:var(--surface); color:var(--txt-2); border-color:var(--line)}
 .linha-aviso.calmo b{color:var(--txt)}
+/* ---------- blocos recolhiveis: a legenda dos selos e o "como esta aba funciona"
+   A legenda comeca FECHADA: quem ja sabe o que "AMBÍGUO" quer dizer nao precisa
+   de mais um bloco de texto empurrando a tabela para baixo todo dia.
+   O .explica recolhe os avisos 📌 que explicam a aba (13/08/2026, pedido do
+   usuario: "coloque para minimizar esses alertas") -- eram 4 a 6 linhas de texto
+   fixas no topo de toda aba. ⚠ O aviso ⚠ de OCR fica FORA dele de proposito:
+   aquele fala dos DADOS de hoje, nao de como a aba funciona. */
+.legenda, .explica{margin-top:8px; padding:0; border-radius:9px; font-size:12.5px; line-height:1.5;
+  background:var(--surface); color:var(--txt-2); border:1px solid var(--line)}
+.legenda summary, .explica summary{padding:9px 13px; cursor:pointer; font-weight:700; color:var(--txt);
+  font-size:12px; list-style:none; display:flex; align-items:center; gap:7px}
+.legenda summary::before, .explica summary::before{content:"▸"; color:var(--acento, var(--azul-2));
+  font-size:11px}
+.legenda[open] summary::before, .explica[open] summary::before{content:"▾"}
+.legenda summary::-webkit-details-marker, .explica summary::-webkit-details-marker{display:none}
+.legenda summary:hover, .explica summary:hover{color:var(--acento, var(--azul-2))}
+/* dentro do bloco o aviso perde a moldura propria: a moldura passa a ser a do
+   bloco, senao ficaria caixa dentro de caixa */
+.explica .linha-aviso{border:0; border-radius:0; padding:0 13px 11px; background:none}
+.explica .linha-aviso + .linha-aviso{border-top:1px solid var(--line); padding-top:10px}
+.legenda .intro-legenda{margin:0; padding:0 13px 9px; color:var(--txt-2)}
+.legenda dl{margin:0; padding:0 13px 12px; display:grid; grid-template-columns:auto 1fr;
+  gap:8px 12px; align-items:start}
+.legenda dt{padding-top:1px; max-width:34ch}
+/* ⚠ No <dt> o selo mostra o texto INTEIRO. Na tabela ele e nowrap + ellipsis (celula
+   estreita), mas aqui ele E a definicao: cortar "diferenca de valor acima de R$50"
+   em "diferenca de va..." apagaria justamente o que a legenda existe para dizer. */
+.legenda dt .selo{white-space:normal; overflow:visible; text-overflow:clip}
+.legenda dd{margin:0; color:var(--txt-2)}
+.legenda b{color:var(--txt); font-weight:800}
 /* ---------- estado da gravacao ----------
    Canto inferior direito, por cima de tudo: quem esta no fim da lista precisa
    ver que algo nao subiu sem ter de rolar ate o topo. */
@@ -310,6 +356,12 @@ td.z-delta{white-space:nowrap; overflow:hidden; padding:5px 3px}
 .cartao.nota    .topo-cartao{background:var(--verde-bg); color:var(--verde-txt)}
 .cartao.match-forte .topo-cartao{background:var(--verde-bg); color:var(--verde-txt)}
 .cartao.match-fraco .topo-cartao{background:var(--ambar-bg); color:var(--ambar-txt)}
+/* texto longo (Info Comp da SEFAZ vai a 5.000 caracteres): o quadro e mais
+   largo e o texto rola dentro dele -- sem isso ele cobriria a tela inteira. */
+.cartao.texto{max-width:560px}
+.cartao.texto .topo-cartao{background:var(--sel); color:var(--azul-2)}
+.cartao.texto .frase{max-height:44vh; overflow-y:auto; white-space:pre-wrap;
+  word-break:break-word; pointer-events:auto}
 .cartao ul.criterios{margin:0; padding:0 0 0 16px; list-style:none}
 .cartao ul.criterios li{position:relative; margin-bottom:4px; color:var(--txt-2)}
 .cartao ul.criterios li::before{content:"✓"; position:absolute; left:-16px; color:var(--verde-linha);
@@ -359,6 +411,13 @@ td.fornecedor .abaixo{display:block; font-size:10.5px; color:var(--txt-3); margi
 .selo.fatura{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
 .selo.grave{background:var(--sobe-bg); color:var(--sobe-txt); border-color:var(--sobe-linha)}
 .selo.outro{background:var(--alerta-bg); color:var(--alerta); border-color:var(--alerta)}
+/* flag de qual aba da SEFAZ.xlsx a linha veio: duas cores, senao nao e flag */
+.selo.nfe{background:var(--sel); color:var(--azul-2); border-color:var(--azul-2)}
+.selo.nfse{background:var(--roxo-bg); color:var(--roxo-txt); border-color:var(--roxo-linha)}
+/* botao da coluna de texto longo: nao e selo de status, e um "abrir" */
+.selo.texto{background:var(--surface-2); color:var(--txt-2); border-color:var(--line-forte);
+  cursor:help; font-weight:700; letter-spacing:0}
+.selo.texto:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
 
 /* Selos da conferencia na SE2. Aparecem so nas linhas que JA foram resolvidas
    no TOTVS e que continuam na tela porque alguem daqui tratou -- as demais
@@ -877,7 +936,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131358"></script>
+<script src="supa.js?v=202608131455"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1319,6 +1378,21 @@ function filtrarSE2(abas){
    a caixinha -- nao ha mais o que fazer com ele. */
 const encerrado = r => feitos.has(r.uuid) || !!r.se2;
 
+/* ---------- boleto que saiu do DDA sai do painel ----------
+   13/08/2026, pedido do usuario: "nesses casos simplesmente exclua os boletos
+   da base -- do painel eu digo". O gerador ja parou de mandar quem saiu, mas o
+   que foi gravado ANTES continua no Postgres e chegaria aqui na carga. Sem este
+   corte, os 7 que sairam hoje ficariam na tela ate alguem limpar o banco.
+   ⚠ O corte e por SITUACAO, nao por aba: se um dia o selo voltar a existir em
+   outra aba, o mesmo criterio vale. Nada e apagado do banco -- a linha continua
+   la, so deixa de ser exibida (mesma escolha da aba de vencidas). */
+function tirarSaiuDaBase(abas){
+  abas.forEach(aba => {
+    aba.linhas = aba.linhas.filter(r => (r.c.situacao || "").indexOf("SAIU") !== 0);
+  });
+  return abas;
+}
+
 /* Contagens do resumo e valores dos botoes de fonte: recalculados a partir das
    linhas de CADA aba -- depois do corte, os totais que vieram da geracao
    valeriam para as duas visoes somadas. */
@@ -1478,9 +1552,12 @@ function celulaCompacta(r, col){
       data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
   if (col.papel === "status"){
-    // sem title: quem explica o match agora e o quadro que abre no hover
+    // sem title: quem explica o match agora e o quadro que abre no hover.
+    // Sem critério não há o que abrir -- é o caso da aba da SEFAZ, onde o selo
+    // é um flag de origem, não um veredito.
+    const temQuadro = ((r.match || {}).itens || []).length > 0;
     const selo = `<span class="selo ${r.selo || (r.forte ? "forte" : "provavel")}"
-      data-match="${esc(r.uuid)}">${esc(valor) || "—"}</span>`;
+      ${temQuadro ? `data-match="${esc(r.uuid)}"` : ""}>${esc(valor) || "—"}</span>`;
     // o veredito da SE2 entra ACIMA do Status, sem substituir nenhum dos dois:
     // um diz o que o painel achou, o outro o que o TOTVS ja tem
     return `<td class="selo-cel ${zona}">${
@@ -1494,6 +1571,15 @@ function celulaCompacta(r, col){
     return `<td class="selo-cel ${zona}"><span
       class="selo ${classe}${temDrill ? " abre" : ""}" data-cartao="${esc(r.uuid)}"
       ${temDrill ? `data-drill="${esc(r.alerta.nf)}"` : ""}>${esc(r.alerta.tipo)}</span></td>`;
+  }
+  if (col.papel === "texto"){
+    // Info Comp da SEFAZ chega a 5.000 caracteres: na celula nao cabe nem o
+    // comeco. Fica o botao com o tamanho do texto, e o conteudo abre no quadro.
+    const inteiro = (r.texto || {})[col.chave] || valor;
+    if (!inteiro) return `<td class="selo-cel ${zona}"></td>`;
+    return `<td class="selo-cel ${zona}"><span class="selo texto"
+      data-texto="${esc(r.uuid)}" data-col="${esc(col.chave)}"
+      >ver ▾</span></td>`;
   }
   if (col.chave === "razao_social" || col.chave === "fornecedor_boleto"
       || (col.chave === "fornecedor" && !col.copiavel)){
@@ -1611,6 +1697,22 @@ function abrirCartaoMatch(alvo, uuid){
   posicionarCartao(alvo);
 }
 
+/* Coluna de texto longo: o titulo do quadro e o nome da propria coluna, senao
+   nao da para saber se aquilo e Info Comp, descricao de servico ou criterio. */
+function abrirCartaoTexto(alvo, uuid, chave){
+  const r = A().linhas.find(l => l.uuid === uuid);
+  if (!r) return;
+  const inteiro = (r.texto || {})[chave] || r.c[chave] || "";
+  if (!inteiro) return;
+  const col = A().compacta.find(c => c.chave === chave) || {};
+  cartao.className = "cartao texto";
+  cartao.innerHTML =
+    `<div class="topo-cartao">${esc(col.planilha || col.rotulo || "Texto")}</div>
+     <div class="conteudo"><p class="frase">${esc(inteiro)}</p></div>
+     <div class="rodape-cartao">${num(inteiro.length)} caracteres</div>`;
+  posicionarCartao(alvo);
+}
+
 function abrirCartaoTratativa(alvo, uuid){
   const nota = tratativas[uuid];
   if (!nota) return;
@@ -1640,6 +1742,7 @@ function colunasExportacao(){
     .map(c => ({
       chave: c.chave,
       tipoPainel: c.tipo,
+      papel: c.papel,
       titulo: c.planilha || c.rotulo,
       // delta_valor e dinheiro; delta_dias e contagem de dias
       tipo: c.tipo === "delta"
@@ -1665,6 +1768,9 @@ function valorExportacao(r, c){
     const v = r.delta[c.chave === "delta_valor" ? "valor" : "dias"];
     return v == null ? "" : v;
   }
+  // Texto longo: na tela a celula e so o botao "ver"; na planilha vai o texto
+  // INTEIRO -- exportar o rotulo do botao seria exportar nada.
+  if (c.papel === "texto") return (r.texto || {})[c.chave] || r.c[c.chave] || "";
   // o valor CRU quando existir (numero, data ISO): so assim a celula vira
   // numero/data no Excel em vez de "R$ 5.427,50" como texto
   const cru = r.o[c.chave];
@@ -1708,10 +1814,12 @@ document.addEventListener("mouseover", e => {
   if (match) return abrirCartaoMatch(match, match.dataset.match);
   const trat = e.target.closest("[data-trat]");
   if (trat) return abrirCartaoTratativa(trat, trat.dataset.trat);
+  const txt = e.target.closest("[data-texto]");
+  if (txt) return abrirCartaoTexto(txt, txt.dataset.texto, txt.dataset.col);
 });
 document.addEventListener("mouseout", e => {
   if (e.target.closest("[data-cartao]") || e.target.closest("[data-match]")
-      || e.target.closest("[data-trat]")) fecharCartao();
+      || e.target.closest("[data-trat]") || e.target.closest("[data-texto]")) fecharCartao();
 });
 addEventListener("scroll", fecharCartao, true);
 
@@ -1937,13 +2045,16 @@ function avisoVisao(){
    dizer isso, "SAIU DA BASE" parece erro de carga. */
 function avisoPendentes(){
   if (estado.aba !== "pendentes_itau") return "";
-  const saiu = A().linhas.filter(r => (r.c.situacao || "").indexOf("SAIU") === 0).length;
   return `<div class="linha-aviso calmo">📌 Vem da planilha de <b>boletos pendentes do DDA do Itaú</b>,
     lida a cada atualização do painel. Cada boleto entra <b>uma vez só</b>: quem já apareceu antes
-    não vira linha nova, e a coluna <b>Entrou</b> mostra desde quando ele está aqui.
-    ${saiu ? `<b>${num(saiu)}</b> já <b>não estão mais</b> na planilha do banco (selo
-    <span class="selo forte">SAIU DA BASE</span>) — normalmente porque foram pagos; ficam no painel
-    para conferência e nada é apagado.` : "Nada saiu da planilha do banco até agora."}
+    não vira linha nova, e a coluna <b>Entrou</b> mostra desde quando ele está aqui — a partir de
+    <b>12/08/2026</b>, que foi quando esta aba começou (boleto mais antigo que isso aparece com essa
+    data, não com a de origem).
+    <b>Boleto que sai da planilha do banco sai do painel</b>: normalmente é porque foi pago.
+    ⚠ O painel não vê pagamento, só a ausência na lista do DDA — a confirmação é a baixa no TOTVS.
+    Por isso, se a colagem do dia vier <b>incompleta</b>, os boletos que faltarem somem daqui; cole a
+    tela inteira das 4 empresas. Nada é apagado do histórico: se voltarem, voltam com a data de
+    entrada original.
     O <b>Δ</b> aqui não compara com título nenhum: é o quanto de <b>juros/multa</b> já correu
     entre o valor até o vencimento e o valor a pagar hoje.</div>`;
 }
@@ -1987,11 +2098,225 @@ function avisoSE2(){
     Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.</div>`;
 }
 
+/* A base da SEFAZ tem 386 colunas e vem por item da nota. Sem dizer as duas
+   coisas, a aba parece ter perdido coluna e repetido linha. */
+function avisoSefaz(){
+  if (estado.aba !== "sefaz") return "";
+  const linhas = A().linhas;
+  const nfe = linhas.filter(r => r.c.origem === "NF-e").length;
+  const notas = new Set(linhas.map(r => r.copia.chave_nf_e || r.uuid)).size;
+  return `<div class="linha-aviso calmo">📌 Vem da <b>SEFAZ.xlsx</b>, das duas abas:
+    <span class="selo nfe">NF-e</span> (nota de produto) e <span class="selo nfse">NFS-e</span>
+    (nota de serviço) — a coluna <b>Origem</b> diz de qual. Só entram as
+    <b>colunas marcadas em verde</b> na planilha; as outras 360 ficam de fora.
+    ${nfe ? `As <b>${num(nfe)}</b> linhas de NF-e são <b>por item × duplicata</b>, não por nota:
+    uma nota com 5 itens pagos em 3x ocupa 15 linhas, todas com a mesma Chave.` : ""}
+    O texto de <b>Informações</b> abre no quadro ao passar o mouse.
+    <b>Esta aba não cruza com nada</b> — é a base da SEFAZ, legível.</div>`;
+}
+
+/* O cruzamento e por NUMERO de NF, e numero de NF nao identifica nota. Isso tem
+   de estar escrito, senao "NÃO ACHADA" parece falha do cruzamento. */
+function avisoSefazSf1(){
+  if (estado.aba !== "sefaz_sf1") return "";
+  const linhas = A().linhas;
+  const nao = linhas.filter(r => (r.c.situacao || "").indexOf("NÃO") === 0).length;
+  const conf = linhas.filter(r => r.c.situacao === "CONFERIR").length;
+  return `<div class="linha-aviso calmo">📌 Cada <b>nota</b> da SEFAZ procurada na
+    <b>SF1</b> inteira (todos os status) <b>pelo número da NF</b>. Uma linha por nota — a base de
+    NF-e vem por item, aqui ela sobe para o nível da nota.
+    ⚠ <b>Número de NF não identifica nota</b>: dois fornecedores emitem a NF 1234 no mesmo mês.
+    Por isso só é <span class="selo forte">ACHADA NA SF1</span> quando o <b>emitente confere</b>
+    (raiz do CNPJ = cód. do fornecedor) ou a <b>Chave NF-e de 44 dígitos</b> é idêntica.
+    ${conf ? `<b>${num(conf)}</b> em <span class="selo provavel">CONFERIR</span>: o número bate e
+    o valor ou a emissão sustentam, mas o emitente não confirma — são essas que pedem olho.` : ""}
+    ${nao ? `<b>${num(nao)}</b> <span class="selo grave">NÃO ACHADA</span>: nota que existe na
+    SEFAZ e não foi lançada. Inclui os casos em que até há título com o mesmo número, mas de outro
+    fornecedor — o <b>Critério</b> conta qual é o caso.` : ""}
+    <b>Nada aqui encosta na SE2.</b></div>`;
+}
+
+/* ---------- legenda dos selos ----------
+   Pedido do usuario (13/08/2026): "informe no painel o que cada situação
+   significa de maneira detalhada". Os selos sao curtos porque a celula corta o
+   que nao couber -- e "AMBÍGUO"/"REVISAR" nao se explicam sozinhos.
+   ⚠ O texto aqui tem de espelhar a REGRA do Python, nao a intuicao: quem
+   decide o selo da aba de classificacao e o `_selo()` do
+   cruzamento_classificacao.py, e o da SEFAZ x SF1 e o `cruzar()` do
+   cruzamento_sefaz_sf1.py. Mudou la, muda aqui. */
+const LEGENDAS = {
+  /* Estas duas abas saem do associador (associador_boletos_totvs.py,
+     `executar_matching`), nao deste repo. Os numeros abaixo sao as constantes
+     dele: SCORE_MINIMO 75, MARGEM_MINIMA 12, MARGEM_BOLETO_CONCORRIDO 10,
+     TOLERANCIA_VALOR_APROX R$50. ⚠ Ha um `_executar_matching_legado` com corte
+     em 75 para o FORTE -- nao e o que roda. */
+  associacoes: {
+    intro: `O associador dá <b>pontos</b> a cada coisa que confere entre título e boleto — NF <b>55</b>,
+      CNPJ/CPF <b>45</b>, valor exato <b>35</b>, razão social <b>25</b>, parcela <b>20</b>, vencimento
+      <b>15</b>, emissão <b>8</b> — e só associa sozinho quando <b>nada bloqueia</b>: o valor não pode
+      diferir mais de <b>R$ 1,00</b>, precisa haver <b>identidade forte</b> (CNPJ, código do
+      fornecedor, NF ou fatura) e o 2º melhor candidato tem de ficar <b>12 pontos ou mais atrás</b>.
+      Boleto que era o melhor candidato de dois títulos não é associado a nenhum.`,
+    itens: [
+      ["forte", "MATCH FORTE",
+       `Somou <b>100 pontos ou mais</b>. Na prática são três ou mais confirmações grandes juntas —
+        NF + CNPJ + valor, por exemplo. É o caso de conferir de relance e lançar.`],
+      ["provavel", "MATCH PROVÁVEL",
+       `Passou de <b>75</b> e não chegou a 100 — associação aceita, com menos confirmações
+        acumuladas. Vale abrir o <b>Critério</b> e ver <i>o que</i> bateu antes de lançar.`],
+    ],
+  },
+  correspondencias: {
+    intro: `Aqui o título <b>tem</b> um boleto candidato, mas algo impediu a associação automática.
+      O <b>Motivo Revisão</b> lista <b>todos</b> os impedimentos de uma vez, separados por
+      <b>ponto e vírgula</b> — é comum ter dois ou três na mesma linha. O que cada um quer dizer:`,
+    itens: [
+      ["grave", "diferenca de valor acima de R$50",
+       `Boleto e título diferem mais de <b>R$ 50,00</b>, e a diferença não se explica por fatura
+        parcelada. É o impedimento mais comum desta aba.`],
+      ["grave", "sem identidade suficiente",
+       `Nada <b>identifica</b> as duas pontas: nem CNPJ/CPF, nem código do fornecedor, nem NF, nem
+        fatura — e a razão social, quando bateu, não veio com vencimento a 7 dias. Valor igual,
+        sozinho, não associa nada.`],
+      ["provavel", "ambiguidade: margem de N pontos",
+       `O 2º melhor candidato ficou a <b>menos de 12 pontos</b> do 1º: existe outro boleto quase tão
+        parecido quanto o escolhido. <b>Margem 0</b> é empate puro.`],
+      ["provavel", "boleto disputado por mais de um titulo",
+       `Este boleto era o melhor candidato de <b>dois títulos diferentes</b>, com menos de 10 pontos
+        entre eles. Associar a um seria escolher no escuro.`],
+      ["grave", "CNPJ/CPF divergente",
+       `O CNPJ/CPF do boleto <b>conflita</b> com o do título.`],
+      ["grave", "CNPJ/CPF diverge do historico do fornecedor",
+       `O CNPJ/CPF do boleto não é o que esse <b>código de fornecedor</b> costuma usar no TOTVS —
+        pode ser filial, cadastro novo, ou boleto de outra empresa.`],
+      ["grave", "parcela do boleto (NNN) difere da parcela do titulo",
+       `A NF bate, mas é <b>outra parcela</b> dela.`],
+      ["grave", "vencimento diverge mais de 31 dias para a mesma NF",
+       `Mesmo número de NF, vencimentos a mais de <b>31 dias</b> um do outro e <b>nada de fornecedor
+        confirmando</b> — quase sempre é NF de outro fornecedor com a mesma numeração. Não se aplica
+        a fatura parcelada, onde meses de diferença são o normal.`],
+      ["grave", "vencimento muito distante",
+       `Mais de <b>120 dias</b> entre os vencimentos, sem NF nem fornecedor batendo.`],
+      ["grave", "sem valor comparavel",
+       `Um dos lados está sem valor legível — não há o que confrontar.`],
+      ["provavel", "evidencia insuficiente para associacao automatica",
+       `Motivo <b>genérico</b>: o candidato não alcançou o mínimo e nenhum impedimento específico se
+        aplicou. Aparece sozinho, nunca junto de outro.`],
+    ],
+  },
+  cruzamento: {
+    intro: `Para um boleto sequer virar candidato ele precisa passar de uma <b>barra mínima</b>:
+      ou a <b>NF</b> bate, ou o <b>fornecedor</b> bate com pelo menos uma confirmação de valor ou
+      vencimento. Sem isso ele nem é avaliado — o mesmo fornecedor tem vários boletos em aberto, e
+      "só o CNPJ bateu" não é associação nenhuma.`,
+    itens: [
+      ["forte", "MATCH FORTE",
+       `A <b>NF</b> do boleto é a mesma do título, o <b>CNPJ</b> do fornecedor confere e ainda bate
+        <b>pelo menos mais um</b> dado (valor exato ou vencimento). Três confirmações independentes
+        — é o caso em que dá para lançar direto.`],
+      ["provavel", "MATCH PROVÁVEL",
+       `Um de dois caminhos: a <b>NF bate + uma</b> confirmação (CNPJ, valor ou vencimento); ou
+        <b>não há NF</b>, mas o <b>CNPJ + valor exato + vencimento</b> batem os três. Dá para
+        lançar conferindo o boleto.`],
+      ["provavel", "AMBÍGUO",
+       `<b>Dois ou mais boletos de documentos diferentes</b> (NF + CNPJ distintos) empataram na mesma
+        pontuação máxima, e o cruzamento não escolhe no seu lugar.
+        ⚠ <b>Parcelas da mesma nota não caem aqui</b>: são agrupadas, o valor confrontado é a
+        <b>soma</b> delas e o desempate é pela parcela de vencimento mais próximo do título.
+        Abra o <b>Critério</b> para ver o que bateu e desempate pela linha digitável.`],
+      ["provavel", "REVISAR",
+       `Passou a barra mínima e não chegou a provável. São dois casos: a <b>NF batendo sozinha</b>
+        (sem CNPJ, valor nem vencimento confirmando), ou o <b>fornecedor com uma confirmação só</b>
+        — valor <i>ou</i> vencimento, não os dois. ⚠ Número de NF se repete entre fornecedores
+        diferentes, então pode ser apenas coincidência de numeração.`],
+      ["grave", "SEM BOLETO",
+       `Nenhum boleto passou da barra mínima. É o <b>esperado</b> para serviço e nota sem cobrança.
+        O cruzamento é <b>refeito a cada atualização</b>: se o boleto chegar amanhã, a linha muda
+        de selo sozinha.`],
+    ],
+  },
+  sefaz_sf1: {
+    intro: `A busca é <b>pelo número da NF</b>, e número de NF <b>não identifica nota</b> — dois
+      fornecedores emitem a NF 1234 no mesmo mês. Por isso o que decide o selo é o que <b>confirma
+      além do número</b>.`,
+    itens: [
+      ["forte", "ACHADA NA SF1",
+       `O número bate <b>e</b> o emitente confere (raiz do CNPJ = código do fornecedor na SF1) — ou,
+        melhor ainda, a <b>Chave NF-e de 44 dígitos</b> é idêntica. Não há dúvida: a nota está
+        lançada.`],
+      ["provavel", "CONFERIR",
+       `O número bate e o <b>valor exato</b> ou a <b>emissão no mesmo dia</b> sustentam, mas o
+        <b>emitente não confirma</b>. Pode ser a mesma nota com cadastro de fornecedor diferente,
+        ou coincidência. São poucas — e são as que pedem olho humano.`],
+      ["grave", "NÃO ACHADA",
+       `Nenhum título da SF1 com esse número, <b>ou</b> até há, mas sem nada em comum além do
+        número. A nota existe na SEFAZ e <b>não foi lançada</b>. O <b>Critério</b> diz qual dos dois
+        casos é.`],
+    ],
+  },
+  sefaz: {
+    intro: `Aqui a "situação" é só um <b>flag de origem</b>: de qual das duas abas da SEFAZ.xlsx a
+      linha veio. Não há veredito nenhum — esta aba não cruza com nada.`,
+    itens: [
+      ["nfe", "NF-e", `Nota fiscal <b>de produto</b> (aba <b>NFes SEFAZ</b>). Vem por
+        <b>item × duplicata</b>: uma nota com 5 itens pagos em 3x ocupa 15 linhas.`],
+      ["nfse", "NFS-e", `Nota fiscal <b>de serviço</b> (aba <b>NFS</b>). Uma linha por nota.`],
+    ],
+  },
+  pendentes_itau: {
+    intro: "",
+    itens: [
+      ["provavel", "PENDENTE",
+       `O boleto <b>está</b> na planilha do DDA do Itaú na última colagem. Quando ele sai de lá,
+        <b>sai do painel</b> — normalmente porque foi pago.`],
+    ],
+  },
+  futuros: {
+    intro: "",
+    itens: [
+      ["grave", "SEM PAR ENCONTRADO",
+       `Boleto que <b>não achou título</b> no TOTVS. Todos nesta aba estão nessa situação.`],
+    ],
+  },
+};
+
+function legendaSelos(){
+  const l = LEGENDAS[estado.aba];
+  if (!l) return "";
+  return `<details class="legenda">
+    <summary>O que cada situação significa</summary>
+    ${l.intro ? `<p class="intro-legenda">${l.intro}</p>` : ""}
+    <dl>${l.itens.map(([classe, nome, texto]) =>
+      `<dt><span class="selo ${classe}">${esc(nome)}</span></dt><dd>${texto}</dd>`).join("")}</dl>
+  </details>`;
+}
+
+/* Os avisos que EXPLICAM a aba entram num bloco recolhivel (13/08/2026, pedido
+   do usuario: "coloque para minimizar esses alertas").
+   ⚠ Comeca ABERTO e, uma vez fechado, fica fechado: a escolha vai para o
+   localStorage. Sem guardar, cada F5 traria a parede de texto de volta e o
+   "minimizar" nao teria valido de nada; comecar fechado esconderia a explicacao
+   de quem nunca a leu. O aviso de OCR nao entra -- ver o CSS. */
+const CHAVE_AVISOS = "painel_boletos_avisos_abertos";
+function avisosAbertos(){
+  try { return localStorage.getItem(CHAVE_AVISOS) !== "0"; } catch (e) { return true; }
+}
+
 function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
-  const corpo = avisoOcr() + avisoVisao() + avisoPendentes() + avisoCruzamento() + avisoSE2();
+  const explica = avisoVisao() + avisoPendentes() + avisoCruzamento()
+                + avisoSefaz() + avisoSefazSf1() + avisoSE2();
+  const corpo = avisoOcr()
+    + (explica ? `<details class="explica"${avisosAbertos() ? " open" : ""}>
+        <summary>Como esta aba funciona</summary>${explica}</details>` : "")
+    + legendaSelos();
   caixa.hidden = !corpo;
   caixa.innerHTML = corpo;
+  // `toggle` nao borbulha: o ouvinte vai no proprio <details>, a cada desenho.
+  const bloco = caixa.querySelector(".explica");
+  if (bloco) bloco.addEventListener("toggle", () => {
+    try { localStorage.setItem(CHAVE_AVISOS, bloco.open ? "1" : "0"); } catch (e) {}
+  });
 }
 
 function atualizarSubabas(){
@@ -2160,7 +2485,7 @@ function iniciar(dados){
   if (noBanco()) aplicarFila();
   // os dois cortes leem o que foi tratado, entao vem depois do laco acima:
   // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento
-  dados.abas = recontarAbas(partirAbas(filtrarSE2(dados.abas)));
+  dados.abas = recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(dados.abas))));
   // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
   // os filtros dela ligados na aba que assume o lugar.
   if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);

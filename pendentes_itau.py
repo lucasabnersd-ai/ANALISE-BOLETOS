@@ -334,17 +334,32 @@ def gravar_historico(historico: dict, arquivo: Path) -> None:
 
 
 def montar_linhas(historico: dict) -> list[tuple]:
-    """Historico -> tuplas na ordem de CABECALHO, prontas para o `montar_aba`."""
+    """Historico -> tuplas na ordem de CABECALHO, prontas para o `montar_aba`.
+
+    ⚠ SO OS PENDENTES ENTRAM (13/08/2026, pedido do usuario: "nesses casos
+    simplesmente exclua os boletos da base"). Ate aqui o boleto que sumia da
+    planilha do banco continuava no painel com o selo SAIU DA BASE; agora ele
+    deixa a tela -- a aba passa a ser a lista do que ainda esta pendente, e nada
+    mais. Isso revoga a exibicao do "SAIU DA BASE", nao o historico.
+
+    ⚠ E o historico CONTINUA guardando quem saiu, de proposito. E o que protege
+    a data de entrada: numa colagem parcial (so a tela de uma empresa), os
+    boletos das outras somem por um dia e voltam no dia seguinte -- com o
+    registro, voltam com a data original; sem ele, voltariam como novos e o
+    "ha quanto tempo este boleto esta parado" seria zerado toda vez.
+    """
     registros = []
     for chave, guardado in historico["boletos"].items():
-        linha = guardado.get("linha") or {}
         saiu = guardado.get("saiu_em")
+        if saiu:
+            continue
+        linha = guardado.get("linha") or {}
         venc = _data(linha.get(VENCIMENTO))
         registros.append({
             CHAVE: chave,
-            SITUACAO: SITUACAO_SAIU if saiu else SITUACAO_PENDENTE,
+            SITUACAO: SITUACAO_PENDENTE,
             ENTROU: _data(guardado.get("entrou_em")),
-            VISTO: _data(saiu or guardado.get("visto_em")),
+            VISTO: _data(guardado.get("visto_em")),
             # o historico guarda o texto do banco; a tela mostra o nome limpo
             PAGADOR: empresa_pagadora(linha.get(PAGADOR, "")),
             BENEFICIARIO: linha.get(BENEFICIARIO, ""),
@@ -357,9 +372,8 @@ def montar_linhas(historico: dict) -> list[tuple]:
             ALERTA: linha.get(ALERTA, ""),
         })
 
-    # pendentes primeiro, e dentro de cada grupo o vencimento mais antigo antes
-    registros.sort(key=lambda r: (r[SITUACAO] == SITUACAO_SAIU,
-                                  r[VENCIMENTO] or dt.date.max))
+    # vencimento mais antigo primeiro (todos aqui estao pendentes)
+    registros.sort(key=lambda r: r[VENCIMENTO] or dt.date.max)
     return [tuple(r[coluna] for coluna in CABECALHO) for r in registros]
 
 

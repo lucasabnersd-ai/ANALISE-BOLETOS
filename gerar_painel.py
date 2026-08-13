@@ -26,8 +26,10 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 import cruzamento_classificacao
+import cruzamento_sefaz_sf1
 import pendentes_itau
 import planilha_excel_js
+import sefaz
 import verificacao_se2
 
 # Motor .xlsx do painel SE2, reaproveitado aqui (pedido do usuario: "use o
@@ -71,6 +73,20 @@ IGNORAR = {"Código de Barras"}
 # selecao. O que ja estiver preenchido na base entra marcado.
 COLUNA_CHECK = "CHECK (FEITO)"
 
+# Fontes que sao a MESMA coisa para quem usa o painel. Os tres CENTRAL saem do
+# mesmo lugar -- o e-mail da central de boletos --, mudando so quem recebeu.
+# Consolidados a pedido do usuario (13/08/2026): tres botoes de filtro para uma
+# origem so obrigavam a clicar nos tres para ver o mesmo conjunto.
+# ⚠ Isto troca o TEXTO da celula, entao vale para o botao de filtro, para a
+# tela e para o .xlsx exportado. A busca continua achando pelo nome antigo: ela
+# e montada com os valores CRUS da base, de proposito.
+COLUNA_FONTE = "Fonte Boleto"
+FONTES = {
+    "CENTRAL_LUCAS": "EMAIL CENTRAL DE BOLETOS",
+    "CENTRAL_GRAZIELA": "EMAIL CENTRAL DE BOLETOS",
+    "CENTRAL_BH": "EMAIL CENTRAL DE BOLETOS",
+}
+
 MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
          "Correcao", "Val Liq Baix",
          # nomes usados na aba Tratar Correspondencias
@@ -82,23 +98,29 @@ MOEDA = {"Vlr.Titulo", "Valor Boleto", "Saldo", "Desconto", "Multa", "Juros",
          # aba Titulos Associados na Classificacao. ⚠ "Vlr.Título" tem ACENTO e
          # e outra chave: o "Vlr.Titulo" acima e o nome da coluna na base do
          # painel. Faltando aqui, o valor sai cru ("29307.68") no lugar de R$.
-         "Vlr.Título"}
+         "Vlr.Título",
+         # abas da SEFAZ
+         "Vlr Item", "Vlr Total", "Vlr Duplicata", "Vlr SEFAZ"}
 DATA = {"Vencimento", "Vencto Real", "Vencimento Boleto", "DT Emissao",
         "DT Baixa", "DT Contab.",
         # aba NFs pendentes Itau
         "Entrou em", "Visto em",
         # aba Titulos Associados na Classificacao
-        "Classificado em", "Emissão"}
+        "Classificado em", "Emissão",
+        # abas da SEFAZ
+        "Saída/Entrada", "Venc Duplicata", "Emissão SF1"}
 INTEIRO = {"Score Match", "2º Score", "Margem", "Score"}
 
 # Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
 # aparece nas que sao SO_BOTAO; nas outras o proprio valor e o botao.
 COPIAVEIS = {"Campo UUID": "UUID", "Linha Digitável": "LINHA",
-             "Fornecedor": "", "No. Titulo": ""}
+             "Fornecedor": "", "No. Titulo": "",
+             # 44 digitos: ninguem le, so cola (no TOTVS, no portal da SEFAZ)
+             "Chave NF-e": "CHAVE"}
 
 # Dessas o valor nem aparece: a coluna e so o botao de copiar (sao longas demais
 # e o usuario nunca le, so cola).
-SO_BOTAO = {"Campo UUID", "Linha Digitável"}
+SO_BOTAO = {"Campo UUID", "Linha Digitável", "Chave NF-e"}
 
 # Tipos de alerta que ganham selo proprio na coluna Alerta. A ordem importa:
 # o texto de fatura tambem fala em "parcelas", entao FATURA e testado primeiro.
@@ -241,7 +263,10 @@ COMPACTA_CRUZAMENTO = [
     ("Situação",          "",       "",          10),
     # data por extenso + o Nº NF, que leva botao de copiar disputando a largura
     ("Classificado em",   "",       "",           7),
-    ("Filial",            "",       "",           3.5),
+    # Emissao da NF na SF1 (coluna I / DT Emissao). Entrou no lugar da Filial em
+    # 13/08/2026, a pedido do usuario: quando a nota foi emitida diz mais do que
+    # em qual filial ela caiu. O modulo ja lia essa data; so nao a mostrava.
+    ("Emissão",           "titulo", "",           6),
     ("Nº NF",             "titulo", "NF",         8),
     ("NF/Doc Boleto",     "boleto", "NF",         6.5),
     ("Razão Social",      "titulo", "CONTRAPARTE", 13),
@@ -260,9 +285,90 @@ COMPACTA_CRUZAMENTO = [
     ("Campo UUID",        "",       "",           4),
 ]
 
+# Aba "Analise Base SEFAZ": as colunas que o usuario pintou de verde nas duas
+# abas da SEFAZ.xlsx, empilhadas numa tela so. Aqui nao ha nada para confrontar
+# -- e a base como ela e, so que legivel. Ver sefaz.py.
+COMPACTA_SEFAZ = [
+    ("CHECK (FEITO)",     "",       "",           3),
+    # o flag de qual aba da planilha a linha veio; vira selo e botao de filtro
+    ("Origem",            "",       "",           5),
+    ("Nº NF",             "titulo", "NF",         4.5),
+    ("Emissão",           "titulo", "",           5),
+    ("Saída/Entrada",     "titulo", "",           5),
+    ("Tipo Operação",     "titulo", "",           4.5),
+    ("CFOP",              "titulo", "",           3.5),
+    ("Emitente",          "boleto", "EMITENTE",  11),
+    ("CNPJ Emitente",     "boleto", "EMITENTE",   7),
+    ("Nome Fantasia",     "boleto", "EMITENTE",   8.5),
+    ("Destinatário",      "titulo", "DESTINATÁRIO", 9.5),
+    ("CNPJ Destinatário", "titulo", "DESTINATÁRIO", 7),
+    ("Vlr Item",          "titulo", "VALOR",      5.5),
+    ("Vlr Total",         "boleto", "VALOR",      5.5),
+    ("Venc Duplicata",    "titulo", "DUPLICATA",  5),
+    ("Vlr Duplicata",     "boleto", "DUPLICATA",  5),
+    # texto de ate 5.000 caracteres: na celula so cabe o botao que abre o quadro
+    ("Informações",       "",       "",           3.5),
+    ("@tratativa",        "",       "",           4),
+    ("Chave NF-e",        "",       "",           3.5),
+]
+
+ROTULOS_PLANILHA_SEFAZ = {
+    "Origem": "Aba de origem na SEFAZ.xlsx",
+    "Informações": "Informações Complementares / Descrição do Serviço",
+    "Vlr Item": "Valor Total do Item (só NF-e)",
+    "Vlr Total": "Valor Total da Nota",
+    "Emitente": "Emitente (NF-e) / Prestador (NFS-e)",
+    "Destinatário": "Destinatário (NF-e) / Tomador (NFS-e)",
+    "CNPJ Emitente": "CNPJ do Emitente/Prestador",
+    "CNPJ Destinatário": "CNPJ do Destinatário/Tomador",
+}
+
+# Aba "SEFAZ x SF1": a nota da SEFAZ de um lado, o titulo que o cruzamento achou
+# na SF1 do outro -- mesmo desenho das outras abas de par. Ver
+# cruzamento_sefaz_sf1.py. ⚠ Nada aqui encosta na SE2 (pedido do usuario).
+COMPACTA_SEFAZ_SF1 = [
+    ("CHECK (FEITO)",     "",       "",           3),
+    ("Situação",          "",       "",           9.5),
+    ("Origem",            "",       "",           4.5),
+    ("Nº NF",             "titulo", "NF",         5),
+    ("Nº NF SF1",         "boleto", "NF",         5.5),
+    ("Emissão",           "titulo", "EMISSÃO",    5.5),
+    ("Emissão SF1",       "boleto", "EMISSÃO",    5.5),
+    ("Emitente",          "titulo", "CONTRAPARTE", 12),
+    ("Razão Social",      "boleto", "CONTRAPARTE", 12),
+    ("CNPJ Emitente",     "titulo", "",           7),
+    ("Vlr SEFAZ",         "titulo", "VALOR",      6),
+    ("Vlr.Título",        "boleto", "VALOR",      6),
+    ("@delta_valor",      "delta",  "VALOR",      6),
+    ("Série",             "boleto", "",           3.5),
+    ("Classificado em",   "boleto", "",           5.5),
+    ("Títulos",           "",       "",           3.5),
+    # ⚠ O Criterio NAO tem coluna propria aqui: ele ja abre no quadro do selo de
+    # Situação (o mesmo desenho do MATCH FORTE das outras abas). Repetir a
+    # coluna custava 78 KB de carteira para mostrar duas vezes a mesma frase.
+    ("@tratativa",        "",       "",           4),
+    ("Chave NF-e",        "",       "",           3.5),
+    ("Campo UUID",        "",       "",           3.5),
+]
+
+ROTULOS_PLANILHA_SEFAZ_SF1 = {
+    "Situação": "A nota da SEFAZ está lançada na SF1?",
+    "Nº NF": "Nº da NF (SEFAZ)",
+    "Nº NF SF1": "Nº da NF (SF1/TOTVS)",
+    "Emissão": "Emissão (SEFAZ)",
+    "Emissão SF1": "Emissão (SF1, DT Emissao)",
+    "Emitente": "Emitente/Prestador (SEFAZ)",
+    "Razão Social": "Razão Social do Fornecedor (SF1)",
+    "Vlr SEFAZ": "Valor Total da Nota (SEFAZ)",
+    "Títulos": "Quantos títulos da SF1 têm este mesmo nº de NF",
+    "Critério": "O que bateu no cruzamento",
+    "Classificado em": "Data de Classificação no TOTVS (Dt.Digitacao)",
+}
+
 ROTULOS_PLANILHA_CRUZAMENTO = {
     "Situação": "Resultado do Cruzamento",
     "Classificado em": "Data de Classificação no TOTVS (Dt.Digitacao)",
+    "Emissão": "Data de Emissão da NF (SF1, DT Emissao)",
     "Critério": "O que bateu no cruzamento",
     "Nº NF": "Nº da NF (SF1)",
     "Entrou em": "Entrou no Painel em",
@@ -369,7 +475,12 @@ ABAS = {
         # chega numa coluna propria; o prefixo "ITAU:" ja vem embutido nela.
         "col_uuid": "Chave",
         "prefixo_uuid": "",
-        "pills": "Pagador/Agregado",
+        # SEM botoes de filtro nesta aba (13/08/2026, pedido do usuario: "remova
+        # esses filtros de botoes da aba boletos abertos dda"). Eram por empresa
+        # pagadora, e o Itau trunca o pagador: dois viravam botao fantasma de 1
+        # linha ("S" = SOMPO, "S D FLORESTAL" = EQUIPO) sem dizer de qual empresa
+        # sao. "Pagador/Agregado" segue coluna visivel, entao a busca acha por
+        # empresa do mesmo jeito -- o que sai e so a barra de botoes.
         "rotulos": {"Beneficiário": "Beneficiário"},
         # Beneficiario e o NOME, nao codigo: nao vira botao de copiar (e o mesmo
         # motivo pelo qual "Fornecedor" nao e copiavel na aba de nao associadas).
@@ -411,6 +522,62 @@ ABAS = {
         "resumo": {"alerta": "com aviso do banco",
                    "divergentes": "boleto difere do título"},
         "rotulos_planilha": ROTULOS_PLANILHA_CRUZAMENTO,
+    },
+    # A SEFAZ.xlsx, so com as colunas que o usuario pintou de verde. Nao cruza
+    # com nada: e a base da SEFAZ ficando legivel. Ver sefaz.py.
+    "sefaz": {
+        "planilha": None,
+        "fonte": "sefaz",
+        "nome": "Análise Base SEFAZ",
+        "guia": "Analise Base SEFAZ",
+        "cor": "azul",
+        "compacta": COMPACTA_SEFAZ,
+        "confrontos": {},          # nao ha par para confrontar
+        # A Origem faz o papel de Status: e o flag de qual aba da planilha a
+        # linha veio. O painel decide o desenho pelo PAPEL, nunca pelo nome.
+        "col_status": "Origem",
+        # ⚠ VAZIO de proposito. Com uma coluna aqui, o `montar_match` monta um
+        # quadro para cada uma das 1.188 linhas ("NF-e / Saída") -- 122 KB de
+        # carteira para dizer o que o proprio selo ja diz.
+        "col_criterio": "",
+        "col_score": "",
+        # a chave ja vem montada (chave NF-e + item + duplicata), com prefixo
+        "col_uuid": "Chave",
+        "prefixo_uuid": "",
+        "pills": "Origem",
+        # Selo por valor exato: sem isto "NF-e" e "NFS-e" sairiam da mesma cor,
+        # e o flag nao flagaria nada.
+        "selos": {"NF-e": "nfe", "NFS-e": "nfse"},
+        # Colunas de texto longo: a celula vira botao e o texto inteiro abre no
+        # quadro flutuante, o mesmo do critério de match.
+        "texto_longo": {"Informações"},
+        "nao_copiar": {"Emitente", "Destinatário", "Nome Fantasia"},
+        "copiar_extra": {"Nº NF": "", "CNPJ Emitente": ""},
+        "resumo": {"alerta": None, "divergentes": None},
+        "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ,
+    },
+    # A nota da SEFAZ ja foi lancada no TOTVS? Cruza SO com a SF1, pelo numero
+    # da NF. Ver cruzamento_sefaz_sf1.py.
+    "sefaz_sf1": {
+        "planilha": None,
+        "fonte": "sefaz_sf1",
+        "nome": "SEFAZ x SF1",
+        "guia": "SEFAZ x SF1",
+        "cor": "verde",
+        "compacta": COMPACTA_SEFAZ_SF1,
+        "confrontos": {"Vlr.Título": ("Vlr SEFAZ", "moeda")},
+        "col_status": "Situação",
+        "col_criterio": "Critério",
+        "col_score": "",
+        "col_uuid": "Chave",
+        "prefixo_uuid": "",
+        "pills": "Origem",
+        "selos": {"ACHADA NA SF1": "forte", "CONFERIR": "provavel",
+                  "NÃO ACHADA": "grave"},
+        "nao_copiar": {"Emitente", "Razão Social"},
+        "copiar_extra": {"Nº NF": "", "Campo UUID": ""},
+        "resumo": {"alerta": None, "divergentes": "valor difere da SF1"},
+        "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ_SF1,
     },
 }
 
@@ -656,6 +823,9 @@ def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
                 ordem[chave] = re.sub(r"\D", "", texto(valor))
             elif rotulo == cfg["col_status"] and cfg.get("forcar_status"):
                 celulas[chave] = ordem[chave] = cfg["forcar_status"]
+            elif rotulo == COLUNA_FONTE:
+                bruto = texto(valor)
+                celulas[chave] = ordem[chave] = FONTES.get(bruto, bruto)
             else:
                 celulas[chave] = ordem[chave] = texto(valor)
 
@@ -681,6 +851,10 @@ def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
             "ocr": ocr_suspeito(origem),
             "alerta": montar_alerta(origem, cfg),
             "match": montar_match(origem, cfg),
+            # texto que nao cabe na celula, por coluna: abre no quadro
+            "texto": {chave_de(col): texto(origem.get(col))
+                      for col in cfg.get("texto_longo", ())
+                      if texto(origem.get(col))},
             "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
         })
 
@@ -720,7 +894,11 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             # o painel decide o desenho pelo PAPEL, nao pelo nome da coluna --
             # em Tratar Correspondencias o "status" chama Motivo Revisão.
             "papel": ("status" if rotulo == cfg["col_status"]
-                      else "alerta" if rotulo == "Alerta Fatura" else ""),
+                      else "alerta" if rotulo == "Alerta Fatura"
+                      # texto que nao cabe em celula (Info Comp da SEFAZ chega a
+                      # 5.000 caracteres): a celula vira botao e o texto abre no
+                      # quadro flutuante
+                      else "texto" if rotulo in cfg.get("texto_longo", ()) else ""),
             "copiavel": copiavel,
             "copiar": copiaveis.get(rotulo, "") if copiavel else "",
             "so_botao": rotulo in SO_BOTAO,
@@ -759,7 +937,13 @@ def chave_registro(origem: dict, cfg: dict) -> str:
 
 def selo_status(origem: dict, cfg: dict) -> str:
     """forte (verde) / provavel (ambar) / grave (vermelho)."""
-    valor = (cfg.get("forcar_status") or texto(origem.get(cfg["col_status"]))).upper()
+    bruto = cfg.get("forcar_status") or texto(origem.get(cfg["col_status"]))
+    # Mapa explicito da aba, quando existe. Vem antes das regras por SUBSTRING
+    # porque elas nao servem para todo status: "ACHADA NA SF1" e "NÃO ACHADA"
+    # sao vereditos opostos e um contem o outro.
+    if bruto in cfg.get("selos", {}):
+        return cfg["selos"][bruto]
+    valor = bruto.upper()
     if "FORTE" in valor:
         return "forte"
     # Pendentes do Itau: "SAIU DA BASE" e boa noticia (o boleto deixou de estar
@@ -933,7 +1117,8 @@ def conferir_na_se2(registros: list[dict], conferencia) -> dict:
 
 
 def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
-          base_sf1: Path | None = None, base_se2: Path | None = None) -> dict:
+          base_sf1: Path | None = None, base_se2: Path | None = None,
+          base_sefaz: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -1003,6 +1188,31 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     else:
         print(f"AVISO: base SF1 nao encontrada, aba de classificacao nao atualizada:\n"
               f"       {caminho_sf1}", file=sys.stderr)
+
+    # Abas da SEFAZ: a base como ela e (so as colunas marcadas) e o cruzamento
+    # dela com a SF1. Mesma regra das outras bases de fora -- falhar aqui nao
+    # derruba o painel, mas tem de aparecer na tela do .cmd.
+    sefaz_resumo = cruz_sefaz_resumo = None
+    caminho_sefaz = base_sefaz or sefaz.BASE_PADRAO
+    if not caminho_sefaz.exists():
+        print(f"AVISO: base SEFAZ nao encontrada, abas nao atualizadas:\n"
+              f"       {caminho_sefaz}", file=sys.stderr)
+    else:
+        cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz)
+        if brutas:
+            lidas["sefaz"] = montar_aba(cabecalho, brutas, ABAS["sefaz"])
+        sefaz_resumo["base"] = str(caminho_sefaz)
+        sefaz_resumo["salva_em"] = dt.datetime.fromtimestamp(
+            caminho_sefaz.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
+
+        # O cruzamento precisa das DUAS bases; sem a SF1 a aba simplesmente nao
+        # existe (em vez de existir dizendo que nada foi achado, o que seria
+        # mentira -- ninguem procurou).
+        if caminho_sf1.exists():
+            cabecalho, brutas, cruz_sefaz_resumo = cruzamento_sefaz_sf1.carregar(
+                caminho_sefaz, caminho_sf1)
+            if brutas:
+                lidas["sefaz_sf1"] = montar_aba(cabecalho, brutas, ABAS["sefaz_sf1"])
 
     # Conferencia na SE2 (pedido do usuario, 13/08/2026): so segue na fila o
     # titulo em aberto e sem boleto lancado. Mesma regra das outras bases de
@@ -1112,6 +1322,8 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     # para nao viajar no HTML nem na carga do banco.
     dados["_pendentes_itau"] = pendentes_resumo
     dados["_cruzamento"] = cruzamento_resumo
+    dados["_sefaz"] = sefaz_resumo
+    dados["_sefaz_sf1"] = cruz_sefaz_resumo
     dados["_se2"] = ({"base": str(caminho_se2), "salva_em": conferencia_se2.lido_em,
                       "total": conferencia_se2.total, "dias": conferencia_se2.dias}
                      if conferencia_se2 else None)
@@ -1170,12 +1382,14 @@ def main() -> int:
                         help="base SF1 (notas classificadas no TOTVS)")
     parser.add_argument("--base-se2", type=Path, default=verificacao_se2.BASE_PADRAO,
                         help="base SE2 (posicao diaria) usada para conferir os titulos")
+    parser.add_argument("--base-sefaz", type=Path, default=sefaz.BASE_PADRAO,
+                        help="base SEFAZ.xlsx (abas NFes SEFAZ e NFS)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
         dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1,
-                      args.base_se2)
+                      args.base_se2, args.base_sefaz)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
@@ -1205,6 +1419,19 @@ def main() -> int:
         print(f"           {cruz['com_boleto']} com boleto | {cruz['sem_boleto']} sem boleto"
               f" | {cruz['selos']}")
         print(f"           historico: {cruz['total']} titulos -> {HISTORICO_CRUZAMENTO.name}")
+
+    sfz = dados.pop("_sefaz", None)
+    if sfz:
+        print(f"Base SEFAZ: {sfz['base']}")
+        print(f"           (planilha salva em {sfz['salva_em']})")
+        print(f"           {sfz['nfe']} linhas de NF-e ({sfz['notas_nfe']} notas) | "
+              f"{sfz['nfs']} de NFS-e ({sfz['notas_nfs']} notas) | "
+              f"{sfz['com_duplicata']} com duplicata")
+    cruz_sfz = dados.pop("_sefaz_sf1", None)
+    if cruz_sfz:
+        print(f"           SEFAZ x SF1: {cruz_sfz['notas']} notas contra {cruz_sfz['sf1']} títulos"
+              f" -> {cruz_sfz['achadas']} achadas | {cruz_sfz['conferir']} conferir"
+              f" | {cruz_sfz['nao_achadas']} nao achadas")
 
     se2 = dados.pop("_se2", None)
     if se2:
