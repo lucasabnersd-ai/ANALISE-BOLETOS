@@ -1116,6 +1116,45 @@ def conferir_na_se2(registros: list[dict], conferencia) -> dict:
             "abertos": abertos, "sem_se2": sem_se2}
 
 
+# Teto de botoes de um grupo de filtro. Acima disso a barra vira parede -- a aba
+# Nao Associados tem 40 "Motivo Revisao" distintos -- e clicar deixa de ser mais
+# rapido que digitar na busca. Abaixo de 2 o botao nao filtra nada.
+MIN_BOTOES_PILL = 2
+MAX_BOTOES_PILL = 8
+
+
+def grupos_de_pills(cfg: dict, compacta: list[dict],
+                    registros: list[dict]) -> list[dict]:
+    """Grupos de botoes de filtro da aba, na ordem em que aparecem na tela.
+
+    Vem de duas origens:
+    - o que a aba declara em `pills` (Fonte Boleto, Origem);
+    - a coluna de STATUS (13/08/2026, pedido do usuario: "coloque um filtro de
+      botao das situacao das abas"), achada pelo PAPEL `status` e nunca pelo
+      nome -- ele muda de aba para aba ("Status", "Situação", "Motivo Revisão").
+
+    ⚠ O mesmo grupo nao entra duas vezes: na Analise Base SEFAZ o papel de status
+    E a coluna `Origem`, que ja e o grupo declarado. Sem esta guarda a aba ganharia
+    duas barras identicas.
+    """
+    grupos: list[dict] = []
+    candidatos = []
+    if cfg.get("pills"):
+        candidatos.append((chave_de(cfg["pills"]), cfg["pills"]))
+    status = next((c for c in compacta if c.get("papel") == "status"), None)
+    if status:
+        candidatos.append((status["chave"], status.get("rotulo") or "Situação"))
+
+    for chave, rotulo in candidatos:
+        if any(g["chave"] == chave for g in grupos):
+            continue
+        valores = sorted({str(r["c"].get(chave, "")) for r in registros} - {""})
+        if not MIN_BOTOES_PILL <= len(valores) <= MAX_BOTOES_PILL:
+            continue
+        grupos.append({"chave": chave, "rotulo": rotulo, "valores": valores})
+    return grupos
+
+
 def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
           base_sf1: Path | None = None, base_se2: Path | None = None,
           base_sefaz: Path | None = None) -> dict:
@@ -1257,13 +1296,9 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             "particoes": cfg.get("particoes"),
             # rotulos da linha de resumo; None em um deles esconde o item
             "resumo": cfg.get("resumo"),
-            # botoes de filtro (so onde a aba define uma coluna para isso)
-            "pills": {
-                "chave": chave_de(cfg["pills"]),
-                "rotulo": cfg["pills"],
-                "valores": sorted({r["c"].get(chave_de(cfg["pills"]), "")
-                                   for r in registros} - {""}),
-            } if cfg.get("pills") else None,
+            # Botoes de filtro: LISTA de grupos (era um grupo so). Ver
+            # grupos_de_pills -- a coluna declarada em `pills` e a de status.
+            "pills": grupos_de_pills(cfg, compacta, registros),
             # Veredito da SE2 (so nas abas que declaram `conferir_se2`). None
             # quando a base nao foi lida -- o painel entende como "nao conferi"
             # e nao esconde ninguem.

@@ -30,7 +30,14 @@ html[data-tema="escuro"]{
   --desce-bg:#123a5e; --desce-txt:#cfe6ff; --desce-linha:#4a7fb5;
 }
 *{box-sizing:border-box}
-body{margin:0; background:var(--bg); color:var(--txt);
+/* PAINEL TODO EM MAIUSCULAS (13/08/2026, pedido do usuario: "todos os textos no
+   painel devem ser em letra maiuscula"), no mesmo tom das telas do TOTVS.
+   ⚠ E so APARENCIA: `text-transform` nao mexe no valor. O que se copia sai de
+   `data-copiar`, a busca compara `input.value` e o .xlsx e montado a partir dos
+   dados -- nenhum dos tres passa pelo texto desenhado, entao UUID e linha
+   digitavel continuam saindo exatamente como estao na base.
+   Para voltar so a tabela ao normal, troque `body` por `.tabela` aqui. */
+body{margin:0; background:var(--bg); color:var(--txt); text-transform:uppercase;
   font:14px/1.45 "Segoe UI", Calibri, system-ui, sans-serif; -webkit-font-smoothing:antialiased}
 .envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 32px}
 body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
@@ -199,8 +206,14 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
 #exportar:hover{filter:brightness(1.08); color:#fff}
 
 /* botoes de filtro por fonte do boleto */
-.pills{display:flex; gap:6px; flex-wrap:wrap; margin:0 0 9px}
+/* uma linha de botoes por grupo (fonte/origem e situacao), empilhadas */
+.pills-caixa{display:flex; flex-direction:column; gap:5px; margin:0 0 9px}
+.pills-caixa:empty{display:none}
+.pills{display:flex; gap:6px; flex-wrap:wrap; margin:0; align-items:center}
 .pills:empty{display:none}
+/* so aparece quando ha 2+ barras: com uma so, dizer "Origem" seria enfeite */
+.pills-rotulo{font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+  color:var(--txt-2); opacity:.8; margin-right:1px}
 .pills button{font:inherit; font-size:11.5px; font-weight:650; cursor:pointer; color:var(--txt-2);
   background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:5px 13px;
   display:inline-flex; align-items:center; gap:6px}
@@ -565,7 +578,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <button type="button" id="exportar" title="Baixa em Excel (.xlsx) o que está na tela, com as marcações">⤓ Exportar Excel</button>
   </div>
 
-  <div class="pills" id="pills"></div>
+  <div class="pills-caixa" id="pills"></div>
   <div class="aviso-aba" id="avisoAba" hidden></div>
 
   <div class="planilha"><table id="grade"></table></div>
@@ -936,7 +949,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131455"></script>
+<script src="supa.js?v=202608131513"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -953,7 +966,10 @@ const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
 
 /* `estado` e SEMPRE o que esta na tela, ou seja, o da ABA ATIVA. O que cada uma
    das outras tinha fica guardado em `porAba` -- ver trocarAba(). */
-const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:"",
+/* ⚠ `pill` e um MAPA {chave do grupo: valor escolhido}, nao um texto: desde
+   13/08/2026 a aba pode ter mais de uma barra de botoes (a declarada -- Fonte
+   Boleto, Origem -- e a de Situação). Os grupos filtram JUNTOS, em E. */
+const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:{},
                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"", titulo:"", nf:"", uuid:""}};
 
 /* ---------- os filtros sao de cada aba, nao do painel ----------
@@ -969,13 +985,15 @@ const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:"",
    sobrevivente de outro dia faria a aba parecer vazia sem motivo visivel. */
 const porAba = {};
 
-const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:"",
+const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:{},
                           filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
                                    titulo:"", nf:"", uuid:""}});
 
-// copia, nunca a referencia: `filtros` e mutado in loco a cada tecla digitada
+// copia, nunca a referencia: `filtros` e `pill` sao mutados in loco (a cada tecla
+// digitada e a cada botao clicado)
 const copiaVista = v => ({busca:v.busca, ordem:v.ordem, desc:v.desc, sub:v.sub,
-                          pill:v.pill, filtros:Object.assign({}, v.filtros)});
+                          pill:Object.assign({}, v.pill),
+                          filtros:Object.assign({}, v.filtros)});
 
 function trocarAba(id){
   if (estado.aba) porAba[estado.aba] = copiaVista(estado);
@@ -1400,12 +1418,12 @@ function recontarAbas(abas){
   abas.forEach(aba => {
     aba.com_alerta = aba.linhas.filter(r => r.c.alerta_fatura).length;
     aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
-    if (aba.pills){
-      aba.pills = Object.assign({}, aba.pills, {
-        valores: [...new Set(aba.linhas.map(r => r.c[aba.pills.chave]).filter(Boolean))]
+    (aba.pills || []).forEach((grupo, i) => {
+      aba.pills[i] = Object.assign({}, grupo, {
+        valores: [...new Set(aba.linhas.map(r => r.c[grupo.chave]).filter(Boolean))]
                    .sort((a, b) => a.localeCompare(b, "pt-BR")),
       });
-    }
+    });
   });
   return abas;
 }
@@ -1444,9 +1462,11 @@ function linhas(){
   const {vencDe, vencAte} = estado.filtros;
   if (vencDe || vencAte) itens = itens.filter(r => dentroDoPeriodo(r, vencDe, vencAte));
 
-  // botao de fonte do boleto
-  const pills = A().pills;
-  if (estado.pill && pills) itens = itens.filter(r => r.c[pills.chave] === estado.pill);
+  // barras de botoes (fonte/origem e situacao): filtram juntas, em E
+  (A().pills || []).forEach(grupo => {
+    const escolhido = estado.pill[grupo.chave];
+    if (escolhido) itens = itens.filter(r => r.c[grupo.chave] === escolhido);
+  });
   // o check -- ou a SE2 ja resolvida -- move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
   itens = itens.filter(r => encerrado(r) === tratado);
@@ -1991,25 +2011,43 @@ document.getElementById("abasTopo").addEventListener("click", e => {
   desenhar();
 });
 
+/* Uma barra por grupo (a declarada pela aba e a de Situação). O rotulo aparece
+   so quando ha mais de uma: com uma barra unica ele seria enfeite. */
 function desenharPills(){
   const caixa = document.getElementById("pills");
-  const pills = A().pills;
-  if (!pills || !pills.valores.length){ caixa.innerHTML = ""; return; }
+  const grupos = A().pills || [];
+  if (!grupos.length){ caixa.innerHTML = ""; return; }
   // O botao guardado pode ter sumido da carga nova (empresa sem boleto hoje).
   // Sem isto a aba abriria vazia com nenhum botao aceso -- filtro invisivel.
-  if (estado.pill && !pills.valores.includes(estado.pill)) estado.pill = "";
-  const conta = v => A().linhas.filter(r => r.c[pills.chave] === v).length;
-  caixa.innerHTML =
-    `<button type="button" data-pill="" class="${estado.pill ? "" : "ativa"}">
-       Todas<small>${num(A().linhas.length)}</small></button>` +
-    pills.valores.map(v => `<button type="button" data-pill="${esc(v)}"
-       class="${estado.pill === v ? "ativa" : ""}">${esc(v)}<small>${num(conta(v))}</small></button>`).join("");
+  grupos.forEach(g => {
+    const v = estado.pill[g.chave];
+    if (v && !g.valores.includes(v)) delete estado.pill[g.chave];
+  });
+  // ⚠ A contagem de um grupo respeita o que OS OUTROS filtram: numero que ignora
+  // o outro botao aceso promete linhas que a tela nao vai mostrar.
+  const baseDe = chave => A().linhas.filter(r => grupos.every(
+    g => g.chave === chave || !estado.pill[g.chave] || r.c[g.chave] === estado.pill[g.chave]));
+
+  caixa.innerHTML = grupos.map(g => {
+    const base = baseDe(g.chave);
+    const conta = v => base.filter(r => r.c[g.chave] === v).length;
+    const escolhido = estado.pill[g.chave] || "";
+    return `<div class="pills">` +
+      (grupos.length > 1 ? `<span class="pills-rotulo">${esc(g.rotulo)}</span>` : "") +
+      `<button type="button" data-chave="${esc(g.chave)}" data-pill=""
+         class="${escolhido ? "" : "ativa"}">Todas<small>${num(base.length)}</small></button>` +
+      g.valores.map(v => `<button type="button" data-chave="${esc(g.chave)}" data-pill="${esc(v)}"
+         class="${escolhido === v ? "ativa" : ""}">${esc(v)}<small>${num(conta(v))}</small></button>`).join("") +
+      `</div>`;
+  }).join("");
 }
 
 document.getElementById("pills").addEventListener("click", e => {
   const botao = e.target.closest("[data-pill]");
   if (!botao) return;
-  estado.pill = botao.dataset.pill;
+  // "Todas" tem data-pill="" -- tirar a chave do mapa, e nao gravar vazio nela
+  if (botao.dataset.pill) estado.pill[botao.dataset.chave] = botao.dataset.pill;
+  else delete estado.pill[botao.dataset.chave];
   desenharPills();
   desenhar();
 });
@@ -2100,39 +2138,21 @@ function avisoSE2(){
 
 /* A base da SEFAZ tem 386 colunas e vem por item da nota. Sem dizer as duas
    coisas, a aba parece ter perdido coluna e repetido linha. */
+/* ⚠ As duas abas da SEFAZ ficaram com o texto CURTO -- so o funcionamento basico
+   (13/08/2026, pedido do usuario: "informe de maneira resumida sem dar detalhes
+   das colunas"). O detalhe de cada selo continua na legenda, que e onde se procura
+   por ele; aqui em cima ele era parede de texto em toda visita. */
 function avisoSefaz(){
   if (estado.aba !== "sefaz") return "";
-  const linhas = A().linhas;
-  const nfe = linhas.filter(r => r.c.origem === "NF-e").length;
-  const notas = new Set(linhas.map(r => r.copia.chave_nf_e || r.uuid)).size;
-  return `<div class="linha-aviso calmo">📌 Vem da <b>SEFAZ.xlsx</b>, das duas abas:
-    <span class="selo nfe">NF-e</span> (nota de produto) e <span class="selo nfse">NFS-e</span>
-    (nota de serviço) — a coluna <b>Origem</b> diz de qual. Só entram as
-    <b>colunas marcadas em verde</b> na planilha; as outras 360 ficam de fora.
-    ${nfe ? `As <b>${num(nfe)}</b> linhas de NF-e são <b>por item × duplicata</b>, não por nota:
-    uma nota com 5 itens pagos em 3x ocupa 15 linhas, todas com a mesma Chave.` : ""}
-    O texto de <b>Informações</b> abre no quadro ao passar o mouse.
-    <b>Esta aba não cruza com nada</b> — é a base da SEFAZ, legível.</div>`;
+  return `<div class="linha-aviso calmo">📌 As notas que a <b>SEFAZ</b> registrou contra as empresas
+    do grupo — de produto (NF-e) e de serviço (NFS-e). É uma aba de <b>consulta</b>:
+    <b>não cruza com nada</b> e não olha a SE2.</div>`;
 }
 
-/* O cruzamento e por NUMERO de NF, e numero de NF nao identifica nota. Isso tem
-   de estar escrito, senao "NÃO ACHADA" parece falha do cruzamento. */
 function avisoSefazSf1(){
   if (estado.aba !== "sefaz_sf1") return "";
-  const linhas = A().linhas;
-  const nao = linhas.filter(r => (r.c.situacao || "").indexOf("NÃO") === 0).length;
-  const conf = linhas.filter(r => r.c.situacao === "CONFERIR").length;
-  return `<div class="linha-aviso calmo">📌 Cada <b>nota</b> da SEFAZ procurada na
-    <b>SF1</b> inteira (todos os status) <b>pelo número da NF</b>. Uma linha por nota — a base de
-    NF-e vem por item, aqui ela sobe para o nível da nota.
-    ⚠ <b>Número de NF não identifica nota</b>: dois fornecedores emitem a NF 1234 no mesmo mês.
-    Por isso só é <span class="selo forte">ACHADA NA SF1</span> quando o <b>emitente confere</b>
-    (raiz do CNPJ = cód. do fornecedor) ou a <b>Chave NF-e de 44 dígitos</b> é idêntica.
-    ${conf ? `<b>${num(conf)}</b> em <span class="selo provavel">CONFERIR</span>: o número bate e
-    o valor ou a emissão sustentam, mas o emitente não confirma — são essas que pedem olho.` : ""}
-    ${nao ? `<b>${num(nao)}</b> <span class="selo grave">NÃO ACHADA</span>: nota que existe na
-    SEFAZ e não foi lançada. Inclui os casos em que até há título com o mesmo número, mas de outro
-    fornecedor — o <b>Critério</b> conta qual é o caso.` : ""}
+  return `<div class="linha-aviso calmo">📌 Confere, nota por nota, se o que a <b>SEFAZ</b> registrou
+    já está <b>lançado no TOTVS</b> (base SF1). A coluna <b>Situação</b> traz o resultado da busca.
     <b>Nada aqui encosta na SE2.</b></div>`;
 }
 
@@ -2255,12 +2275,10 @@ const LEGENDAS = {
     ],
   },
   sefaz: {
-    intro: `Aqui a "situação" é só um <b>flag de origem</b>: de qual das duas abas da SEFAZ.xlsx a
-      linha veio. Não há veredito nenhum — esta aba não cruza com nada.`,
+    intro: `Não há veredito nesta aba — <b>Origem</b> só diz que tipo de nota é a linha.`,
     itens: [
-      ["nfe", "NF-e", `Nota fiscal <b>de produto</b> (aba <b>NFes SEFAZ</b>). Vem por
-        <b>item × duplicata</b>: uma nota com 5 itens pagos em 3x ocupa 15 linhas.`],
-      ["nfse", "NFS-e", `Nota fiscal <b>de serviço</b> (aba <b>NFS</b>). Uma linha por nota.`],
+      ["nfe", "NF-e", `Nota fiscal <b>de produto</b>.`],
+      ["nfse", "NFS-e", `Nota fiscal <b>de serviço</b>.`],
     ],
   },
   pendentes_itau: {
