@@ -25,6 +25,7 @@ SEFAZ com SF1 e mais nada.
 
 from __future__ import annotations
 
+import datetime as dt
 import re
 import shutil
 from pathlib import Path
@@ -56,7 +57,9 @@ UUID_NF = "Campo UUID"
 CRITERIO = "Critério"
 CANDIDATOS = "Títulos"
 
-CABECALHO = [CHAVE, SITUACAO, ORIGEM, NUM_NF, NF_SF1, EMISSAO, EMISSAO_SF1,
+ALERTA = "Alerta"
+
+CABECALHO = [CHAVE, SITUACAO, ALERTA, ORIGEM, NUM_NF, NF_SF1, EMISSAO, EMISSAO_SF1,
              NOME_EMIT, RAZAO, CNPJ_EMIT, VLR_SEFAZ, VLR_TITULO,
              FILIAL, SERIE, CLASSIFICADO, CANDIDATOS, CRITERIO,
              CHAVE_NFE, UUID_NF]
@@ -253,16 +256,34 @@ def montar_linhas(cruzadas: list[dict]) -> list[tuple]:
     return saida
 
 
-def carregar(base_sefaz: Path, base_sf1: Path) -> tuple[list[str], list[tuple], dict]:
-    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador."""
-    notas = notas_da_sefaz(sefaz.ler(base_sefaz))
+def carregar(base_sefaz: Path, base_sf1: Path,
+             hoje=None) -> tuple[list[str], list[tuple], dict]:
+    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador.
+
+    ⚠ O resumo leva `nao_lancadas` (as chaves em NÃO ACHADA). E este cruzamento
+    quem sabe o que falta lancar, e a aba da base SEFAZ precisa disso para poder
+    mostrar os mesmos alertas -- por isso o gerador roda o cruzamento ANTES dela.
+    """
+    hoje = hoje or dt.date.today()
+    # as linhas cruas ficam: e delas que sai o vencimento das duplicatas, que a
+    # visao por nota (`notas_da_sefaz`) nao carrega
+    linhas = sefaz.ler(base_sefaz)
+    notas = notas_da_sefaz(linhas)
     titulos = ler_sf1(base_sf1)
     cruzadas = cruzar(notas, titulos)
+
+    # Nota que a SF1 nao tem = nota nao lancada. E a base dos alertas 1 e 3.
+    nao_lancadas = {l[CHAVE_NFE] for l in cruzadas if l[SITUACAO] == NAO_ACHADA}
+    alertas = sefaz.alertas_por_nota(linhas, nao_lancadas, hoje)
+    for l in cruzadas:
+        l[ALERTA] = " · ".join(alertas.get(l[CHAVE_NFE], []))
 
     contagem = {ACHADA: 0, CONFERIR: 0, NAO_ACHADA: 0}
     for l in cruzadas:
         contagem[l[SITUACAO]] = contagem.get(l[SITUACAO], 0) + 1
     resumo = {
+        **sefaz.contar_alertas(alertas),
+        "nao_lancadas": nao_lancadas,
         "notas": len(notas),
         "sf1": len(titulos),
         "achadas": contagem[ACHADA],

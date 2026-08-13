@@ -80,9 +80,109 @@ FANTASIA = "Nome Fantasia"
 CNPJ_DEST = "CNPJ Destinatário"
 NOME_DEST = "Destinatário"
 
-CABECALHO = [CHAVE, ORIGEM, NUM_NF, EMISSAO, SAIDA, TIPO_OP, CFOP,
+ALERTA = "Alerta"
+
+CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, SAIDA, TIPO_OP, CFOP,
              NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              VLR_ITEM, VLR_TOTAL, VENC_DUP, VLR_DUP, INFO, CHAVE_NFE]
+
+# ------------------------------------------------------------------- alertas
+# 13/08/2026, pedido do usuario. Tres avisos, todos no nivel da NOTA -- ele pediu
+# "informando NF que entram na condicao", e nao a duplicata:
+#   1) vence em 5 dias ou menos E nao esta lancada na SF1;
+#   2) emitida com vencimento a menos de 15 dias da emissao;
+#   3) emitida ha mais de 3 dias E nao esta lancada na SF1.
+#
+# ⚠ Quem sabe o que esta lancado e o cruzamento com a SF1, entao o conjunto
+# `nao_lancadas` chega de FORA -- so as chaves. Assim este modulo nao precisa do
+# vocabulario do cruzamento (e nao ha import circular: e ele que importa este).
+# ⚠ NFS-e NAO TEM VENCIMENTO nesta base -- a aba `NFS` nao traz a coluna --,
+# entao nela so o alerta 3 pode disparar. Limite do arquivo, nao do codigo.
+# ⚠ Vencida tambem entra no alerta 1: "5 dias ou menos do vencimento" e uma
+# barra de urgencia, e quem passou dela e mais urgente, nao menos.
+# ⚠ O calculo e da GERACAO: o alerta envelhece ate a proxima rodada do painel.
+DIAS_VENCE_PERTO = 5
+DIAS_PRAZO_CURTO = 15
+DIAS_SEM_LANCAR = 3
+
+# Os prefixos sao contrato: o gerar_painel classifica o selo por eles (ALERTAS) e
+# o resumo conta por eles. Mudar o texto aqui pede mudar os dois.
+PREFIXO_VENCE = "VENCE EM ATÉ"
+PREFIXO_SEM_LANCAR = "SEM LANÇAMENTO NA SF1"
+PREFIXO_PRAZO = "PRAZO CURTO"
+
+
+def _dias(n: int) -> str:
+    return "1 dia" if abs(n) == 1 else f"{n} dias"
+
+
+def vencimentos_por_nota(linhas: list[dict]) -> dict[str, list]:
+    """{chave NF-e: vencimentos das duplicatas dela}. Nota sem duplicata fica fora."""
+    mapa: dict[str, list] = {}
+    for linha in linhas:
+        if linha.get(VENC_DUP):
+            mapa.setdefault(linha[CHAVE_NFE], []).append(linha[VENC_DUP])
+    return mapa
+
+
+def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
+                    hoje: dt.date) -> list[str]:
+    """Os avisos desta nota, do mais urgente para o menos.
+
+    O vencimento considerado e o PRIMEIRO da nota: e ele que chega antes, tanto
+    para a urgencia (alerta 1) quanto para o prazo concedido (alerta 2).
+    """
+    avisos = []
+    venc = min((v for v in vencimentos if v), default=None)
+
+    if venc and nao_lancada:
+        faltam = (venc - hoje).days
+        if faltam <= DIAS_VENCE_PERTO:
+            quando = (f"venceu há {_dias(-faltam)}" if faltam < 0
+                      else "vence hoje" if faltam == 0
+                      else f"vence em {_dias(faltam)}")
+            avisos.append(f"{PREFIXO_VENCE} {DIAS_VENCE_PERTO} DIAS E NÃO ESTÁ LANÇADA: "
+                          f"{quando} ({venc.strftime('%d/%m/%Y')}) e não foi encontrada na SF1")
+
+    if emissao and nao_lancada:
+        parada = (hoje - emissao).days
+        if parada > DIAS_SEM_LANCAR:
+            avisos.append(f"{PREFIXO_SEM_LANCAR} HÁ MAIS DE {DIAS_SEM_LANCAR} DIAS: "
+                          f"emitida em {emissao.strftime('%d/%m/%Y')}, há {_dias(parada)}")
+
+    if emissao and venc:
+        prazo = (venc - emissao).days
+        if prazo < DIAS_PRAZO_CURTO:
+            avisos.append(f"{PREFIXO_PRAZO}: emitida com vencimento {_dias(prazo)} depois da "
+                          f"emissão ({emissao.strftime('%d/%m/%Y')} → {venc.strftime('%d/%m/%Y')})")
+    return avisos
+
+
+def alertas_por_nota(linhas: list[dict], nao_lancadas: set | None,
+                     hoje: dt.date) -> dict[str, list[str]]:
+    """{chave NF-e: avisos}. Uma vez por NOTA, ainda que ela tenha 51 linhas."""
+    nao_lancadas = nao_lancadas or set()
+    vencimentos = vencimentos_por_nota(linhas)
+    por_nota: dict[str, list[str]] = {}
+    for linha in linhas:
+        chave = linha[CHAVE_NFE]
+        if chave in por_nota:
+            continue
+        por_nota[chave] = alertas_da_nota(
+            linha.get(EMISSAO), vencimentos.get(chave, []), chave in nao_lancadas, hoje)
+    return por_nota
+
+
+def contar_alertas(por_nota: dict[str, list[str]]) -> dict:
+    """Quantas NOTAS em cada condicao -- e o que o aviso da aba mostra."""
+    tem = lambda prefixo: sum(1 for avisos in por_nota.values()
+                              if any(a.startswith(prefixo) for a in avisos))
+    return {
+        "vence_sem_lancar": tem(PREFIXO_VENCE),
+        "sem_lancar": tem(PREFIXO_SEM_LANCAR),
+        "prazo_curto": tem(PREFIXO_PRAZO),
+        "com_alerta": sum(1 for avisos in por_nota.values() if avisos),
+    }
 
 # Selos da coluna Origem. Curtos: a celula corta o que nao couber.
 NFE = "NF-e"
@@ -290,12 +390,26 @@ def montar_linhas(linhas: list[dict]) -> list[tuple]:
     return [tuple(l.get(coluna, "") for coluna in CABECALHO) for l in ordenadas]
 
 
-def carregar(base: Path) -> tuple[list[str], list[tuple], dict]:
-    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador."""
+def carregar(base: Path, nao_lancadas: set | None = None,
+             hoje: dt.date | None = None) -> tuple[list[str], list[tuple], dict]:
+    """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador.
+
+    `nao_lancadas` sao as chaves NF-e que o cruzamento com a SF1 nao achou. Sem
+    elas os alertas 1 e 3 nao tem como existir (ninguem procurou), e so o de
+    prazo curto -- que depende apenas da propria nota -- continua valendo.
+    """
     linhas = ler(base)
+    hoje = hoje or dt.date.today()
+    # O alerta e da NOTA: a frase se repete nas linhas dela, como o Vlr Total ja
+    # se repete. Sem isso, a linha da duplicata 2 nao avisaria nada.
+    por_nota = alertas_por_nota(linhas, nao_lancadas, hoje)
+    for linha in linhas:
+        linha[ALERTA] = " · ".join(por_nota.get(linha[CHAVE_NFE], []))
+
     nfe = [l for l in linhas if l[ORIGEM] == NFE]
     nfs = [l for l in linhas if l[ORIGEM] == NFSE]
     resumo = {
+        **contar_alertas(por_nota),
         "total": len(linhas),
         "nfe": len(nfe),
         "nfs": len(nfs),

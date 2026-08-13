@@ -229,6 +229,10 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
 .linha-aviso{padding:10px 13px; border-radius:9px; font-size:12.5px; line-height:1.5;
   background:var(--ambar-bg); color:var(--ambar-txt); border:1px solid var(--ambar-linha)}
 .linha-aviso b{font-weight:800}
+/* lista dos alertas das abas da SEFAZ: um por linha, com o selo na frente */
+.alertas-sefaz{margin:6px 0 0; padding-left:17px}
+.alertas-sefaz li{margin-top:3px}
+.alertas-sefaz .selo{margin-right:4px}
 /* o aviso que so explica a aba nao e alarme: fica no tom neutro da pagina */
 .linha-aviso.calmo{background:var(--surface); color:var(--txt-2); border-color:var(--line)}
 .linha-aviso.calmo b{color:var(--txt)}
@@ -949,7 +953,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131513"></script>
+<script src="supa.js?v=202608131533"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1416,7 +1420,9 @@ function tirarSaiuDaBase(abas){
    valeriam para as duas visoes somadas. */
 function recontarAbas(abas){
   abas.forEach(aba => {
-    aba.com_alerta = aba.linhas.filter(r => r.c.alerta_fatura).length;
+    // pelo tipo do alerta, nao pela chave da coluna: nas abas da SEFAZ ela se
+    // chama `alerta`, nas de boleto `alerta_fatura`
+    aba.com_alerta = aba.linhas.filter(r => r.alerta && r.alerta.tipo).length;
     aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
     (aba.pills || []).forEach((grupo, i) => {
       aba.pills[i] = Object.assign({}, grupo, {
@@ -2142,6 +2148,35 @@ function avisoSE2(){
    (13/08/2026, pedido do usuario: "informe de maneira resumida sem dar detalhes
    das colunas"). O detalhe de cada selo continua na legenda, que e onde se procura
    por ele; aqui em cima ele era parede de texto em toda visita. */
+/* Os 3 alertas pedidos em 13/08/2026, nas duas abas da SEFAZ.
+   ⚠ Conta NOTAS, nao linhas: a aba da base vem por item x duplicata, e uma nota
+   de 51 itens contaria 51 vezes.
+   ⚠ Testa o TEXTO do alerta, nao o selo: quando a nota cai em mais de uma
+   condicao o selo mostra so a mais urgente, entao contar por selo perderia as
+   outras. Fica FORA do bloco recolhivel -- e aviso sobre as notas de hoje, nao
+   explicacao de como a aba funciona. */
+function linhaAlertasSefaz(){
+  if (estado.aba !== "sefaz" && estado.aba !== "sefaz_sf1") return "";
+  // ⚠ A chave da nota e `c.chave_nf_e`. `copia` so tem a linha digitavel -- usar
+  // `copia.chave_nf_e` cai no `uuid`, que e por LINHA, e a aba da base viraria
+  // 1.188 "notas" em vez de 617.
+  const notasCom = marca => new Set(A().linhas
+    .filter(r => r.alerta && (r.alerta.texto || "").includes(marca))
+    .map(r => r.c.chave_nf_e || r.uuid)).size;
+  const vence = notasCom("VENCE EM ATÉ"),
+        semLancar = notasCom("SEM LANÇAMENTO NA SF1"),
+        prazo = notasCom("PRAZO CURTO");
+  if (!vence && !semLancar && !prazo) return "";
+  const item = (quantas, selo, texto) => quantas
+    ? `<li><span class="selo outro">${selo}</span> <b>${num(quantas)}</b> ${texto}</li>` : "";
+  return `<div class="linha-aviso">⚠ <b>Notas em alerta</b> (o selo da linha abre o texto inteiro):
+    <ul class="alertas-sefaz">
+      ${item(vence, "VENCE ≤ 5D", "vencem em <b>5 dias ou menos</b> e <b>não estão lançadas</b> na SF1")}
+      ${item(semLancar, "NÃO LANÇADA", "emitidas há <b>mais de 3 dias</b> e ainda <b>não lançadas</b> na SF1")}
+      ${item(prazo, "PRAZO CURTO", "emitidas com vencimento a <b>menos de 15 dias</b> da emissão")}
+    </ul></div>`;
+}
+
 function avisoSefaz(){
   if (estado.aba !== "sefaz") return "";
   return `<div class="linha-aviso calmo">📌 As notas que a <b>SEFAZ</b> registrou contra as empresas
@@ -2324,7 +2359,7 @@ function desenharAviso(){
   const caixa = document.getElementById("avisoAba");
   const explica = avisoVisao() + avisoPendentes() + avisoCruzamento()
                 + avisoSefaz() + avisoSefazSf1() + avisoSE2();
-  const corpo = avisoOcr()
+  const corpo = avisoOcr() + linhaAlertasSefaz()
     + (explica ? `<details class="explica"${avisosAbertos() ? " open" : ""}>
         <summary>Como esta aba funciona</summary>${explica}</details>` : "")
     + legendaSelos();

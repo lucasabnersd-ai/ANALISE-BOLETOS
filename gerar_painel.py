@@ -129,7 +129,14 @@ SO_BOTAO = {"Campo UUID", "Linha Digitável", "Chave NF-e"}
 # como "ALERTA" generico, que nao diz nada.
 ALERTAS = ((("FATURA",), "FATURA"),
            (("MAIS DE UMA PARCELA", "OUTRAS PARCELAS", "PARCELA"), "PARCELA"),
-           (("ALTERAÇÃO", "ALTERACAO", "INSTRUÇÃO", "INSTRUCAO"), "ALTERADO"))
+           (("ALTERAÇÃO", "ALTERACAO", "INSTRUÇÃO", "INSTRUCAO"), "ALTERADO"),
+           # Alertas das abas da SEFAZ (13/08/2026). ⚠ A ORDEM decide qual selo
+           # aparece quando a nota cai em mais de uma condicao -- e por isso vao
+           # do mais urgente para o menos. O texto de TODOS continua no quadro
+           # que abre no selo, nenhum se perde.
+           ((sefaz.PREFIXO_VENCE,), "VENCE ≤ 5D"),
+           ((sefaz.PREFIXO_SEM_LANCAR,), "NÃO LANÇADA"),
+           ((sefaz.PREFIXO_PRAZO,), "PRAZO CURTO"))
 
 # Confrontos que viram destaque na celula do boleto.
 #   coluna destacada -> (coluna do titulo, tipo)
@@ -292,6 +299,9 @@ COMPACTA_SEFAZ = [
     ("CHECK (FEITO)",     "",       "",           3),
     # o flag de qual aba da planilha a linha veio; vira selo e botao de filtro
     ("Origem",            "",       "",           5),
+    # Alerta da NOTA (venc perto sem lancamento / sem lancar / prazo curto): o
+    # selo mostra o rotulo curto e o texto inteiro abre no quadro.
+    ("Alerta",            "",       "",           7),
     ("Nº NF",             "titulo", "NF",         4.5),
     ("Emissão",           "titulo", "",           5),
     ("Saída/Entrada",     "titulo", "",           5),
@@ -329,6 +339,7 @@ ROTULOS_PLANILHA_SEFAZ = {
 COMPACTA_SEFAZ_SF1 = [
     ("CHECK (FEITO)",     "",       "",           3),
     ("Situação",          "",       "",           9.5),
+    ("Alerta",            "",       "",           7),
     ("Origem",            "",       "",           4.5),
     ("Nº NF",             "titulo", "NF",         5),
     ("Nº NF SF1",         "boleto", "NF",         5.5),
@@ -553,7 +564,10 @@ ABAS = {
         "texto_longo": {"Informações"},
         "nao_copiar": {"Emitente", "Destinatário", "Nome Fantasia"},
         "copiar_extra": {"Nº NF": "", "CNPJ Emitente": ""},
-        "resumo": {"alerta": None, "divergentes": None},
+        # A coluna de alerta aqui se chama so "Alerta" (nas abas de boleto e
+        # "Alerta Fatura"); e o `col_alerta` que diz qual tem o papel.
+        "col_alerta": "Alerta",
+        "resumo": {"alerta": "com alerta", "divergentes": None},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ,
     },
     # A nota da SEFAZ ja foi lancada no TOTVS? Cruza SO com a SF1, pelo numero
@@ -576,7 +590,8 @@ ABAS = {
                   "NÃO ACHADA": "grave"},
         "nao_copiar": {"Emitente", "Razão Social"},
         "copiar_extra": {"Nº NF": "", "Campo UUID": ""},
-        "resumo": {"alerta": None, "divergentes": "valor difere da SF1"},
+        "col_alerta": "Alerta",
+        "resumo": {"alerta": "com alerta", "divergentes": "valor difere da SF1"},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ_SF1,
     },
 }
@@ -894,7 +909,7 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
             # o painel decide o desenho pelo PAPEL, nao pelo nome da coluna --
             # em Tratar Correspondencias o "status" chama Motivo Revisão.
             "papel": ("status" if rotulo == cfg["col_status"]
-                      else "alerta" if rotulo == "Alerta Fatura"
+                      else "alerta" if rotulo == cfg.get("col_alerta", "Alerta Fatura")
                       # texto que nao cabe em celula (Info Comp da SEFAZ chega a
                       # 5.000 caracteres): a celula vira botao e o texto abre no
                       # quadro flutuante
@@ -1004,7 +1019,9 @@ def montar_alerta(origem: dict, cfg: dict) -> dict:
     NF/Doc Boleto: quem escreveu o alerta sabia de qual NF estava falando, e a
     coluna as vezes traz dois numeros no mesmo campo.
     """
-    bruto = texto(origem.get("Alerta Fatura"))
+    # A coluna do alerta muda de aba: "Alerta Fatura" nas de boleto, "Alerta" nas
+    # da SEFAZ. Igual ao status, quem manda e o PAPEL declarado, nao o nome.
+    bruto = texto(origem.get(cfg.get("col_alerta", "Alerta Fatura")))
     tipo = tipo_alerta(bruto)
     if not tipo:
         return {"tipo": "", "nf": ""}
@@ -1237,21 +1254,30 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         print(f"AVISO: base SEFAZ nao encontrada, abas nao atualizadas:\n"
               f"       {caminho_sefaz}", file=sys.stderr)
     else:
-        cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz)
-        if brutas:
-            lidas["sefaz"] = montar_aba(cabecalho, brutas, ABAS["sefaz"])
-        sefaz_resumo["base"] = str(caminho_sefaz)
-        sefaz_resumo["salva_em"] = dt.datetime.fromtimestamp(
-            caminho_sefaz.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
-
+        # ⚠ A ORDEM AQUI IMPORTA: o cruzamento com a SF1 roda ANTES da aba da
+        # base, porque e ele quem sabe quais notas nao foram lancadas -- e os
+        # alertas de "vence em 5 dias sem lancamento" e "emitida ha mais de 3
+        # dias sem lancamento" dependem disso. Sem a SF1 os dois nao aparecem em
+        # lugar nenhum, e so o de prazo curto (que olha apenas a nota) continua.
+        #
         # O cruzamento precisa das DUAS bases; sem a SF1 a aba simplesmente nao
         # existe (em vez de existir dizendo que nada foi achado, o que seria
         # mentira -- ninguem procurou).
+        nao_lancadas = None
         if caminho_sf1.exists():
             cabecalho, brutas, cruz_sefaz_resumo = cruzamento_sefaz_sf1.carregar(
                 caminho_sefaz, caminho_sf1)
             if brutas:
                 lidas["sefaz_sf1"] = montar_aba(cabecalho, brutas, ABAS["sefaz_sf1"])
+            # `pop`: e um set, e o resumo vai para JSON -- set nao serializa.
+            nao_lancadas = cruz_sefaz_resumo.pop("nao_lancadas", None)
+
+        cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas)
+        if brutas:
+            lidas["sefaz"] = montar_aba(cabecalho, brutas, ABAS["sefaz"])
+        sefaz_resumo["base"] = str(caminho_sefaz)
+        sefaz_resumo["salva_em"] = dt.datetime.fromtimestamp(
+            caminho_sefaz.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
 
     # Conferencia na SE2 (pedido do usuario, 13/08/2026): so segue na fila o
     # titulo em aberto e sem boleto lancado. Mesma regra das outras bases de
@@ -1305,7 +1331,9 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             "se2": (conferir_na_se2(registros, conferencia_se2)
                     if cfg.get("conferir_se2") and conferencia_se2 else None),
             "ocr": sum(1 for r in registros if r["ocr"]),
-            "com_alerta": sum(1 for r in registros if r["c"].get("alerta_fatura")),
+            # pelo PAPEL, nao pela chave: nas abas da SEFAZ a coluna do alerta se
+            # chama "Alerta" (chave `alerta`), nao "Alerta Fatura"
+            "com_alerta": sum(1 for r in registros if r["alerta"]["tipo"]),
             "divergentes": sum(1 for r in registros if r["difere"]),
             # So as NFs que algum alerta de parcela realmente abre -- nao adianta
             # levar todas as NFs da aba se o painel so tem 3 alertas.
