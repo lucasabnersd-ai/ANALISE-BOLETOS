@@ -17,6 +17,10 @@
   --roxo-bg:#e6dbff; --roxo-txt:#3f1478; --roxo-linha:#8b5cf6;
   --sobe-bg:#fcdcdc; --sobe-txt:#8c1111; --sobe-linha:#e88a8a;
   --desce-bg:#d6e8fb; --desce-txt:#0f3f70; --desce-linha:#88b4e0;
+  /* elo da CHAVE (o mesmo título dos dois lados da aba). Cor PRÓPRIA, e não a
+     --roxo dos selos de alerta: aqui ela pinta moldura e trilho, não fundo de
+     selo -- duas coisas diferentes com a mesma cor se leriam como uma só. */
+  --elo:#7c3aed; --elo-suave:#f3eeff; --elo-txt:#4c1d95;
 }
 html[data-tema="escuro"]{
   --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
@@ -28,6 +32,7 @@ html[data-tema="escuro"]{
   --roxo-bg:#3a2a66; --roxo-txt:#e4d8ff; --roxo-linha:#a78bfa;
   --sobe-bg:#5a1a1a; --sobe-txt:#ffd4d4; --sobe-linha:#b45252;
   --desce-bg:#123a5e; --desce-txt:#cfe6ff; --desce-linha:#4a7fb5;
+  --elo:#a78bfa; --elo-suave:#231b3d; --elo-txt:#e4d8ff;
 }
 *{box-sizing:border-box}
 /* PAINEL TODO EM MAIUSCULAS (13/08/2026, pedido do usuario: "todos os textos no
@@ -405,6 +410,51 @@ tr.zebrada td.z-titulo{background:var(--surface-2)}
 tr.zebrada td.z-boleto{background:color-mix(in srgb, var(--zebra) 78%, var(--txt) 4%)}
 tr.zebrada td.z-delta{background:var(--surface-2)}
 table.conferencia tr:hover td{background:var(--sel) !important}
+
+/* ---------- a CHAVE: o MESMO título dos dois lados da aba ----------
+   14/08/2026. As linhas do mesmo fornecedor + nº de título (a NF que aparece em
+   CONTAS A PAGAR e em CLASSIFICAÇÃO) ficam coladas e dentro de UMA moldura:
+   trilho na esquerda + topo e base fechando o bloco. Ver `aglutinar()`.
+   ⚠ A especificidade tem de passar de `tr.zebrada td.z-titulo` (0,2,1), senão o
+   zebrado voltaria a pintar cada linha de um jeito e o par se desfaria aos
+   olhos justamente onde ele importa. Daí o `table.conferencia` na frente. */
+table.conferencia tr.elo td{background:var(--elo-suave)}
+/* O trilho vive na PRIMEIRA célula, que é a que fica parada na rolagem
+   horizontal: assim a chave continua visível com a tabela puxada para o lado.
+   ⚠ `box-shadow`, nunca `border-left`: em `table-layout:fixed` com célula
+   `content-box` uma borda nova soma 4px SÓ nessas linhas e desalinha a coluna
+   grudada. Ver PX_POR_PONTO. */
+table.conferencia tr.elo td:first-child{box-shadow:inset 4px 0 0 var(--elo)}
+/* Linha tratada (verde) ou já resolvida na SE2 dentro do par: os DOIS trilhos
+   convivem -- o roxo do elo nos 4px da esquerda, o de estado logo depois, dos 4
+   aos 7 (a primeira sombra da lista é a de cima). Sem estas duas regras a marca
+   de tratado sumiria em toda linha com gêmea, porque a de cá tem mais peso.
+   ⚠ A ordem entre elas repete a do CSS de origem: `resolvida` depois de
+   `feita`, senão a linha que é as duas coisas trocaria de cor. */
+table.conferencia tr.elo.feita td:first-child{
+  box-shadow:inset 4px 0 0 var(--elo), inset 7px 0 0 var(--ok)}
+table.conferencia tr.elo.resolvida td:first-child{
+  box-shadow:inset 4px 0 0 var(--elo), inset 7px 0 0 var(--verde-linha)}
+table.conferencia tr.elo-ini td{border-top:2px solid var(--elo)}
+table.conferencia tr.elo-fim td{border-bottom:2px solid var(--elo)}
+
+/* O selo do elo, na coluna Origem: é ele que diz o que a moldura significa e
+   carrega a chave inteira no tooltip. `fora` = a gêmea existe na aba mas o
+   filtro de agora não a mostra -- aí não há moldura nenhuma para explicar. */
+.elo-chip{display:inline-flex; align-items:center; gap:2px; font-size:9px; font-weight:800;
+  line-height:1.4; padding:0 4px; border-radius:999px; margin-right:4px; cursor:help;
+  background:var(--elo-suave); color:var(--elo-txt); border:1px solid var(--elo);
+  font-variant-numeric:tabular-nums; flex:none}
+.elo-chip.fora{border-style:dashed; opacity:.8}
+.elo-chip.abrir{cursor:pointer}
+.elo-chip.abrir:hover{opacity:1; background:var(--elo); color:#fff}
+/* A célula da Origem passa a ter dois filhos. O flex vai num <span> DENTRO da
+   célula, nunca no próprio `td`: `display:flex` num `td` o tira do modelo de
+   tabela e a coluna deixa de acompanhar o `colgroup` (mesma armadilha do
+   `.pilha-selo`). O `.txt` já é `nowrap` + ellipsis; o `min-width:0` é o que
+   permite ele encolher em vez de empurrar o chip para fora da célula. */
+.cel-elo{display:flex; align-items:baseline; gap:0}
+.cel-elo .txt{flex:1; min-width:0}
 
 .marca{display:inline-flex; align-items:center; gap:2px; font-size:10px; font-weight:700;
   font-variant-numeric:tabular-nums; padding:2px 6px; border-radius:999px; white-space:nowrap;
@@ -1711,7 +1761,66 @@ function linhas(){
     itens.sort((a, b) => distanciaDeHoje(a, hoje) - distanciaDeHoje(b, hoje)
                       || String(a.uuid).localeCompare(String(b.uuid)));
   }
-  return itens;
+  return aglutinar(itens);
+}
+
+/* ---------- a CHAVE: juntar na tela o MESMO título dos dois lados ----------
+   14/08/2026, pedido dele: "gere um visual que aglutina visualmente os mesmos
+   títulos na SE2 e SF1, como se fosse uma chave". Na aba fundida a mesma NF
+   aparece dos DOIS lados (CONTAS A PAGAR e CLASSIFICAÇÃO) e as duas linhas
+   caíam longe uma da outra: só o `gemeas()` sabia que eram a mesma coisa, e só
+   por dentro (a marcação e a nota já eram herdadas desde 14/08).
+   A chave é a MESMA do resto do painel -- `chaveNota()` = fornecedor + nº do
+   título -- e nunca o uuid, que é justamente o que NÃO casa entre os dois lados.
+   ⚠ Roda DEPOIS de ordenar, e o bloco herda a posição do seu PRIMEIRO membro:
+   a coluna escolhida continua mandando na ordem da tela; o que muda é só a
+   gêmea, que sobe para junto em vez de ficar quarenta linhas abaixo.
+   ⚠ `_bloco`/`_elo` são anotação de DESENHO, regravada a cada `linhas()`. Não
+   viram coluna, não vão para o banco nem para o .xlsx -- e por isso podem
+   morar na própria linha sem sujar nada. */
+function aglutinar(itens){
+  const blocos = new Map();
+  itens.forEach(r => {
+    // ⚠ Só agrupa quem TEM gêmea na aba: `chaveNota()` existe em quase toda
+    // linha, e agrupar por ela sozinha juntaria parcelas do mesmo título que
+    // vieram do mesmo lado -- que não são par nenhum, são linhas distintas.
+    const id = gemeas(r).length ? chaveNota(r) : "@" + r.uuid;
+    const bloco = blocos.get(id);
+    bloco ? bloco.push(r) : blocos.set(id, [r]);
+  });
+  const saida = [];
+  let n = 0;
+  blocos.forEach(bloco => {
+    bloco.forEach((r, i) => {
+      r._bloco = n;                          // zebrado por BLOCO, não por linha
+      r._eloQtd = bloco.length;              // quantas linhas da chave estão NA TELA
+      // "fora": a gêmea existe na aba mas o filtro/sub-aba de agora não a
+      // mostra. Dizer isso é melhor do que deixar a linha parecer solta --
+      // sem a moldura não haveria nada apontando para a outra metade.
+      r._elo = bloco.length > 1
+        ? (i === 0 ? "ini" : i === bloco.length - 1 ? "fim" : "meio")
+        : gemeas(r).length ? "fora" : "";
+      saida.push(r);
+    });
+    n++;
+  });
+  return saida;
+}
+
+/* O texto do elo. ⚠ Duas contas DIFERENTES, e é de propósito: dentro da moldura
+   vale o que está na TELA (`_eloQtd`, o tamanho do bloco); fora dela, o que
+   existe na ABA (`gemeas`) -- é exatamente a diferença que o chip pontilhado
+   está avisando. */
+function textoDoElo(r){
+  const lado = daClassificacao(r) ? "CONTAS A PAGAR" : "CLASSIFICAÇÃO";
+  const chave = `fornecedor ${r.c.fornecedor || "—"} · título ${r.c.no_titulo || "—"}`;
+  if (r._elo === "fora"){
+    const n = gemeas(r).length;
+    return `Mesma chave (${chave}): ${n === 1 ? "há outra linha" : `há mais ${n} linhas`} de `
+      + `${lado} nesta aba, mas o filtro (ou a sub-aba) de agora não mostra.`;
+  }
+  return `Mesma chave (${chave}): ${r._eloQtd} linhas na tela, de CONTAS A PAGAR e CLASSIFICAÇÃO.\n`
+    + `A moldura roxa é o que amarra as duas — tratar uma trata a outra.`;
 }
 
 /* ---------- visao Conferencia (mesma ordem de colunas da base) ---------- */
@@ -1831,6 +1940,23 @@ function celulaCompacta(r, col){
   }
 
   const valor = r.c[col.chave] ?? "";
+
+  /* O selo do elo mora na coluna ORIGEM -- que é, afinal, a coluna que existe
+     para dizer de qual lado a linha veio. Não vai na do nº do título (a célula
+     inteira lá é o botão de copiar, e qualquer coisa ao lado disputaria o
+     clique) nem numa coluna nova (a grade não espreme mais ninguém).
+     ⚠ Sai pela CHAVE `origem`, nunca pelo rótulo: o rótulo já foi renomeado
+     duas vezes em 14/08/2026. E só aparece onde há gêmea -- nas outras abas
+     `_elo` é vazio e a célula segue igualzinha ao que era. */
+  if (col.chave === "origem" && r._elo){
+    const fora = r._elo === "fora";
+    const abrir = fora && pillsAtivos("origem").length > 0;
+    return `<td class="${zona}"><span class="cel-elo"><span class="elo-chip${
+      fora ? " fora" : ""}${abrir ? " abrir" : ""}" ${abrir ? 'data-elo-abrir="1"' : ""}
+      title="${esc(textoDoElo(r) + (abrir ? "\nClique para mostrar as duas — apaga o filtro de Origem." : ""))
+      }">🔗${fora ? "" : r._eloQtd}</span><span class="txt"
+      title="${esc(valor)}">${esc(valor)}</span></span></td>`;
+  }
 
   if (col.copiavel){
     const copia = r.copia[col.chave] ?? valor;
@@ -1952,9 +2078,18 @@ function desenharConferencia(itens){
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
-    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitoDe(r) ? "feita" : ""} ${
-        r.se2 ? "resolvida" : ""}">
-        ${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
+    ? itens.map((r, i) => {
+        // ⚠ Zebrado pelo BLOCO da chave, não pela posição: as duas linhas do
+        // mesmo título têm de sair do MESMO tom, senão o zebrado parte no meio
+        // justamente o par que a moldura está tentando juntar. Fora da aba
+        // fundida cada linha é um bloco e nada muda.
+        const zebra = (r._bloco ?? i) % 2 ? "zebrada" : "";
+        const dentro = r._elo && r._elo !== "fora";
+        const classes = [zebra, feitoDe(r) ? "feita" : "", r.se2 ? "resolvida" : "",
+                         dentro ? "elo" : "", r._elo === "ini" ? "elo-ini" : "",
+                         r._elo === "fim" ? "elo-fim" : ""].filter(Boolean).join(" ");
+        return `<tr class="${classes}">${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`;
+      }).join("")
     : `<tr><td class="vazio" colspan="${cols.length}">Nenhuma linha encontrada.</td></tr>`;
 
   return cabeca + "<tbody>" + corpo + "</tbody>";
@@ -2498,9 +2633,13 @@ function avisoSE2(){
     — são os que foram tratados por aqui.` : ""}
     Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.
     ${comGemeas() ? `<br>📌 A mesma NF pode aparecer dos <b>dois lados</b> (CONTAS A PAGAR e
-    CLASSIFICAÇÃO). Nesse caso <b>tratar uma trata as duas</b>: elas vão juntas para
-    <b>Tratados</b>, com a mesma observação. A caixa da outra fica marcada e travada — quem
-    desmarca é quem marcou.` : ""}</div>`;
+    CLASSIFICAÇÃO). Elas aparecem <b>uma embaixo da outra, dentro de uma moldura roxa</b> — é a
+    <b>chave</b> (mesmo fornecedor + mesmo nº de título) que amarra as duas, e o selo
+    <span class="elo-chip">🔗2</span> na coluna Origem diz quantas linhas dessa chave estão na
+    tela. Nesse caso <b>tratar uma trata as duas</b>: elas vão juntas para <b>Tratados</b>, com a
+    mesma observação. A caixa da outra fica marcada e travada — quem desmarca é quem marcou.
+    Quando o filtro esconde a outra metade, sobra o selo <span class="elo-chip fora">🔗</span>
+    pontilhado, avisando que a gêmea existe mas não está sendo mostrada.` : ""}</div>`;
 }
 
 // a aba tem alguma NF dos dois lados? (so entao vale explicar a marcacao unica)
@@ -2956,6 +3095,19 @@ document.getElementById("grade").addEventListener("click", e => {
 
   const parcela = e.target.closest("[data-drill]");
   if (parcela){ abrirDrill(parcela.dataset.drill); return; }
+
+  /* Selo pontilhado do elo: a gêmea existe e o filtro de Origem é que a está
+     escondendo -- clicar apaga esse filtro e o par aparece junto, com moldura.
+     ⚠ Só apaga a barra de ORIGEM, e não os outros filtros: a aba abre filtrada
+     em CLASSIFICAÇÃO (ABERTURA_PADRAO) e é essa barra, quase sempre, a razão de
+     a outra metade não estar na tela. Por isso o selo só nasce clicável quando
+     há algum valor de Origem aceso. */
+  if (e.target.closest("[data-elo-abrir]")){
+    delete estado.pill.origem;
+    desenharPills();
+    desenhar();
+    return;
+  }
 
   const titulo = e.target.closest("th[data-ord]");
   if (titulo){

@@ -227,7 +227,11 @@ COMPACTA = [
     # 3.5, mas em 14/08/2026 viraram "CONTAS A PAGAR"/"CLASSIFICAÇÃO" (14
     # caracteres). Na largura antiga sairia "CONTAS A …" -- a celula corta com
     # ellipsis e NAO acusa erro nenhum.
-    ("Origem",            "",       "",           9),
+    # ⚠ 9 -> 11.5 em 14/08/2026: a celula passou a levar tambem o selo do elo da
+    # chave (o mesmo titulo dos dois lados, ver `aglutinar()` no modelo). O selo
+    # ocupa ~26px; nos 9 pontos de antes ele empurraria o texto e sairia
+    # "CONTAS A P…" -- de novo sem erro nenhum.
+    ("Origem",            "",       "",           11.5),
     ("Campo UUID",        "",       "",           4),
     ("Filial",            "",       "",           3.5),
     ("Prefixo",           "",       "",           3.5),
