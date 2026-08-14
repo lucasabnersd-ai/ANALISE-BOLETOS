@@ -344,12 +344,18 @@ class Cruzamento:
         return {l[CHAVE_NFE]: l for l in self.cruzadas}
 
 
-def preparar(base_sefaz: Path, base_sf1: Path, hoje=None) -> Cruzamento:
-    """Le as duas bases e cruza. Nao monta tabela nenhuma -- ver `carregar`."""
+def preparar(base_sefaz: Path, base_sf1: Path, hoje=None,
+             linhas: list[dict] | None = None) -> Cruzamento:
+    """Le as duas bases e cruza. Nao monta tabela nenhuma -- ver `carregar`.
+
+    `linhas` chega pronto do `sefaz.ler_com_historico()`: e a base do dia MAIS as
+    notas que sumiram dela. Ler a SEFAZ aqui de novo devolveria so o que esta no
+    arquivo hoje, e as removidas nao chegariam nesta aba nem na de pedidos.
+    """
     hoje = hoje or dt.date.today()
     # as linhas cruas ficam: e delas que sai o vencimento das duplicatas, que a
     # visao por nota (`notas_da_sefaz`) nao carrega
-    linhas = sefaz.ler(base_sefaz)
+    linhas = sefaz.ler(base_sefaz) if linhas is None else linhas
     notas = notas_da_sefaz(linhas)
     titulos = ler_sf1(base_sf1)
     cruzadas = cruzar(notas, titulos)

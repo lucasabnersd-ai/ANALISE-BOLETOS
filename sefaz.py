@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import re
 import shutil
 import tempfile
@@ -57,8 +58,15 @@ BASE_PADRAO = Path(
 # todas as abas moram na mesma tabela, e chave repetida seria marcacao trocada.
 PREFIXO = "SEFAZ:"
 
-ABA_NFE = "NFes SEFAZ"
-ABA_NFS = "NFS"
+# ⚠ O NOME DA ABA MUDA de uma exportacao para a outra: ate 13/08/2026 a de
+# produto vinha como "NFes SEFAZ" e em 14/08/2026 chegou como "NFe". Por isso sao
+# NOMES ACEITOS (comparados sem acento, espaco nem hifen) e nao um nome so -- e a
+# falta de uma delas e ERRO, nunca um `if` que pula calado.
+# Foi o `if` que custou caro: com a aba renomeada, as 820 linhas de NF-e foram
+# descartadas em silencio e a aba "Análise Base SEFAZ" saiu com 530 notas onde a
+# base tinha as duas metades. Nada na tela dizia que faltava alguma coisa.
+ABAS_NFE = ("NFes SEFAZ", "NFe", "NF-e", "NFES")
+ABAS_NFS = ("NFS", "NFS-e", "NFSe", "NFSes SEFAZ")
 
 # Nomes de saida (o painel casa a coluna por este nome).
 CHAVE = "Chave"
@@ -115,6 +123,16 @@ DIAS_SEM_LANCAR = 3
 PREFIXO_VENCE = "VENCE EM ATÉ"
 PREFIXO_SEM_LANCAR = "SEM LANÇAMENTO NA SF1"
 PREFIXO_PRAZO = "PRAZO CURTO"
+# 14/08/2026, pedido do usuario: "caso identifique alguma que nao esta no painel,
+# gere um alerta de NFs removidas da base SEFAZ". A base e ACUMULATIVA -- cada
+# exportacao traz as antigas mais as novas --, entao nota que ESTAVA e deixou de
+# vir nao e rotina: ou foi cancelada, ou a exportacao veio incompleta. Nos dois
+# casos e para olhar, e nao para sumir da tela em silencio.
+PREFIXO_REMOVIDA = "REMOVIDA DA BASE SEFAZ"
+
+# ⚠ Chave INTERNA da linha (comeca com "_" e nao esta no CABECALHO): marca a nota
+# que voltou do historico porque a base de hoje nao a trouxe. Nao vira coluna.
+REMOVIDA_EM = "_removida_em"
 
 
 def _dias(n: int) -> str:
@@ -131,7 +149,7 @@ def vencimentos_por_nota(linhas: list[dict]) -> dict[str, list]:
 
 
 def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
-                    hoje: dt.date) -> list[str]:
+                    hoje: dt.date, removida_em: dt.date | None = None) -> list[str]:
     """Os avisos desta nota, do mais urgente para o menos.
 
     O vencimento considerado e o PRIMEIRO da nota: e ele que chega antes, tanto
@@ -139,6 +157,16 @@ def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
     """
     avisos = []
     venc = min((v for v in vencimentos if v), default=None)
+
+    # ⚠ Vem ANTES dos outros de proposito: quando a nota cai em mais de uma
+    # condicao o selo mostra so a primeira, e esta e a unica que muda o que
+    # fazer. As outras dizem que a nota esta atrasada; esta diz que ela nao esta
+    # mais na base -- o texto das demais continua no quadro que abre no selo.
+    if removida_em:
+        avisos.append(
+            f"{PREFIXO_REMOVIDA}: estava no painel e não veio na exportação de "
+            f"{removida_em.strftime('%d/%m/%Y')} — como a base é acumulativa, "
+            f"confira se a nota foi cancelada ou se o arquivo veio incompleto")
 
     if venc and nao_lancada:
         faltam = (venc - hoje).days
@@ -174,7 +202,11 @@ def alertas_por_nota(linhas: list[dict], nao_lancadas: set | None,
         if chave in por_nota:
             continue
         por_nota[chave] = alertas_da_nota(
-            linha.get(EMISSAO), vencimentos.get(chave, []), chave in nao_lancadas, hoje)
+            linha.get(EMISSAO), vencimentos.get(chave, []), chave in nao_lancadas, hoje,
+            # a marca vem na propria linha (posta pelo historico), e nao num
+            # parametro a mais: assim os tres caminhos que chamam esta funcao
+            # ganham o alerta sem nenhum deles precisar saber que ele existe
+            removida_em=linha.get(REMOVIDA_EM))
     return por_nota
 
 
@@ -186,6 +218,7 @@ def contar_alertas(por_nota: dict[str, list[str]]) -> dict:
         "vence_sem_lancar": tem(PREFIXO_VENCE),
         "sem_lancar": tem(PREFIXO_SEM_LANCAR),
         "prazo_curto": tem(PREFIXO_PRAZO),
+        "removidas": tem(PREFIXO_REMOVIDA),
         "com_alerta": sum(1 for avisos in por_nota.values() if avisos),
     }
 
@@ -371,20 +404,172 @@ def _ler_aba(ws, colunas: list, origem: str, com_item: bool) -> list[dict]:
     return linhas
 
 
+def _nome_aba(nome) -> str:
+    """Nome de aba reduzido ao essencial: "NFS-e", "NFSe" e "nfs e" sao a mesma."""
+    return re.sub(r"[^a-z0-9]", "", _sem_acento(nome).lower())
+
+
+def _achar_aba(wb, aceitos: tuple, oque: str, constante: str):
+    """A aba da planilha, por QUALQUER um dos nomes aceitos.
+
+    Nao existir e erro. Antes havia um `if ... in wb.sheetnames` aqui, e ele
+    pulava a aba inteira em silencio quando a exportacao mudava o nome -- o
+    painel saia com menos notas do que a base tinha e ninguem descobria olhando
+    a tela. Parar e melhor do que publicar metade: o ATUALIZAR_PAINEL.cmd nao
+    publica nada quando a base falha.
+    """
+    procurados = {_nome_aba(a) for a in aceitos}
+    for nome in wb.sheetnames:
+        if _nome_aba(nome) in procurados:
+            return wb[nome]
+    raise RuntimeError(
+        f"A SEFAZ.xlsx nao tem a aba de {oque}.\n"
+        f"  procurei por: " + " / ".join(repr(a) for a in aceitos) + "\n"
+        f"  a planilha tem: " + " / ".join(repr(n) for n in wb.sheetnames) + "\n"
+        f"Se a exportacao passou a chamar de outro jeito, acrescente o nome novo "
+        f"em {constante} no sefaz.py."
+    )
+
+
 def ler(base: Path) -> list[dict]:
     """As duas abas da SEFAZ.xlsx, ja unificadas e com a Origem marcada."""
     wb, temporaria = _abrir(base)
     try:
-        linhas = []
-        if ABA_NFE in wb.sheetnames:
-            linhas += _ler_aba(wb[ABA_NFE], COLUNAS_NFE, NFE, com_item=True)
-        if ABA_NFS in wb.sheetnames:
-            linhas += _ler_aba(wb[ABA_NFS], COLUNAS_NFS, NFSE, com_item=False)
-        return linhas
+        return (_ler_aba(_achar_aba(wb, ABAS_NFE, "NF-e", "ABAS_NFE"),
+                         COLUNAS_NFE, NFE, com_item=True)
+                + _ler_aba(_achar_aba(wb, ABAS_NFS, "NFS-e", "ABAS_NFS"),
+                           COLUNAS_NFS, NFSE, com_item=False))
     finally:
         wb.close()
         if temporaria:
             shutil.rmtree(temporaria, ignore_errors=True)
+
+
+# ------------------------------------------------------------------ historico
+# 14/08/2026. A base da SEFAZ e ACUMULATIVA: cada exportacao traz as antigas MAIS
+# as novas. Entao nota que estava e deixou de vir NAO e rotina -- ou foi
+# cancelada, ou o arquivo veio incompleto --, e o usuario pediu um alerta para
+# ela. Mesmo desenho do historico do DDA (pendentes_itau.py): apagar este arquivo
+# faz o painel esquecer quais notas ja viu e parar de acusar as removidas.
+#
+# ⚠ A unidade e a NOTA (chave NF-e), nao a linha: a aba de NF-e vem por item x
+# duplicata e uma nota chega a ter 51 linhas. "NF removida" e a nota INTEIRA
+# sumir; se so uma duplicata mudar, a nota continua ali e nao ha alerta nenhum.
+# ⚠ As LINHAS da nota sao guardadas junto. Sem elas a removida viraria so um
+# numero no aviso: nao haveria linha para mostrar na tela, nem o uuid que segura
+# o check e a tratativa que alguem ja tinha feito nela.
+
+
+def _ler_historico(arquivo: Path) -> dict:
+    if not arquivo.exists():
+        return {"versao": 1, "notas": {}}
+    try:
+        guardado = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        # Historico ilegivel nao pode virar historico VAZIO em silencio: seria o
+        # painel esquecendo todas as notas e nunca mais acusando uma removida.
+        raise RuntimeError(
+            f"{arquivo.name} esta ilegivel. Nada foi gerado -- restaure o arquivo "
+            "(ou apague-o de proposito, sabendo que o painel esquecera quais notas "
+            "ja viu e deixara de acusar as removidas)."
+        )
+    guardado.setdefault("notas", {})
+    return guardado
+
+
+def _gravavel(linha: dict) -> dict:
+    """A linha em JSON: as datas viram ISO e a marca interna nao e guardada."""
+    return {campo: (valor.isoformat() if isinstance(valor, (dt.datetime, dt.date)) else valor)
+            for campo, valor in linha.items() if campo != REMOVIDA_EM}
+
+
+def _da_memoria(guardada: dict) -> dict:
+    """O caminho de volta do `_gravavel`: as datas voltam a ser `date`."""
+    linha = dict(guardada)
+    for campo in (EMISSAO, SAIDA, VENC_DUP):
+        valor = linha.get(campo)
+        linha[campo] = dt.date.fromisoformat(valor) if isinstance(valor, str) and valor else None
+    return linha
+
+
+def atualizar_historico(linhas: list[dict], arquivo: Path,
+                        hoje: dt.date | None = None) -> tuple[dict, dict, list[dict]]:
+    """Cruza as notas de hoje com o historico. NADA e apagado do historico.
+
+    Devolve (historico, resumo, linhas das notas removidas).
+    """
+    hoje = hoje or dt.date.today()
+    dia = hoje.isoformat()
+
+    historico = _ler_historico(arquivo)
+    notas = historico["notas"]
+
+    na_base: dict[str, list] = {}
+    for linha in linhas:
+        na_base.setdefault(linha[CHAVE_NFE], []).append(linha)
+
+    novas = voltaram = 0
+    for chave, da_nota in na_base.items():
+        guardada = notas.get(chave)
+        gravaveis = [_gravavel(l) for l in da_nota]
+        if guardada is None:
+            notas[chave] = {"entrou_em": dia, "visto_em": dia, "saiu_em": None,
+                            "linhas": gravaveis}
+            novas += 1
+            continue
+        # Ja conhecida: as linhas sao atualizadas (a nota pode ter ganhado
+        # duplicata), mas `entrou_em` e de quando ela apareceu pela primeira vez.
+        if guardada.get("saiu_em"):
+            voltaram += 1
+        guardada["linhas"] = gravaveis
+        guardada["visto_em"] = dia
+        guardada["saiu_em"] = None
+
+    # Sumiu da base: ganha a data e VOLTA para a tela, com o alerta.
+    # ⚠ Quem ja estava fora nao tem a data reescrita -- senao a nota removida na
+    # semana passada apareceria como removida hoje, a cada rodada do painel.
+    sairam_hoje = 0
+    removidas: list[dict] = []
+    for chave, guardada in notas.items():
+        if chave not in na_base and not guardada.get("saiu_em"):
+            guardada["saiu_em"] = dia
+            sairam_hoje += 1
+        if not guardada.get("saiu_em"):
+            continue
+        saiu = dt.date.fromisoformat(guardada["saiu_em"])
+        for gravada in guardada.get("linhas", []):
+            linha = _da_memoria(gravada)
+            linha[REMOVIDA_EM] = saiu
+            removidas.append(linha)
+
+    historico["versao"] = 1
+    historico["atualizado_em"] = dt.datetime.now().isoformat(timespec="seconds")
+    resumo = {"na_base": len(na_base), "novas": novas, "voltaram": voltaram,
+              "sairam_hoje": sairam_hoje, "conhecidas": len(notas),
+              "removidas": sum(1 for n in notas.values() if n.get("saiu_em"))}
+    return historico, resumo, removidas
+
+
+def gravar_historico(historico: dict, arquivo: Path) -> None:
+    arquivo.parent.mkdir(parents=True, exist_ok=True)
+    arquivo.write_text(json.dumps(historico, ensure_ascii=False, indent=1),
+                       encoding="utf-8")
+
+
+def ler_com_historico(base: Path, arquivo: Path,
+                      hoje: dt.date | None = None) -> tuple[list[dict], dict]:
+    """As linhas da base MAIS as das notas que sumiram dela.
+
+    ⚠ Roda UMA vez por geracao e o resultado e repassado adiante (`preparar()` e
+    `carregar()` recebem as linhas prontas), para as tres abas que leem a SEFAZ
+    enxergarem exatamente o mesmo conjunto. Chamar duas vezes nao corrompe nada
+    -- o segundo passe ve a nota ja com `saiu_em` e nao reconta --, mas o
+    `sairam_hoje` do segundo resumo viria zerado e enganaria quem o lesse.
+    """
+    linhas = ler(base)
+    historico, resumo, removidas = atualizar_historico(linhas, arquivo, hoje)
+    gravar_historico(historico, arquivo)
+    return linhas + removidas, resumo
 
 
 def montar_linhas(linhas: list[dict]) -> list[tuple]:
@@ -398,14 +583,19 @@ def montar_linhas(linhas: list[dict]) -> list[tuple]:
 
 
 def carregar(base: Path, nao_lancadas: set | None = None,
-             hoje: dt.date | None = None) -> tuple[list[str], list[tuple], dict]:
+             hoje: dt.date | None = None,
+             linhas: list[dict] | None = None) -> tuple[list[str], list[tuple], dict]:
     """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador.
 
     `nao_lancadas` sao as chaves NF-e que o cruzamento com a SF1 nao achou. Sem
     elas os alertas 1 e 3 nao tem como existir (ninguem procurou), e so o de
     prazo curto -- que depende apenas da propria nota -- continua valendo.
+
+    `linhas` chega pronto do `ler_com_historico()` para a base ser lida uma vez
+    so e as notas REMOVIDAS virem junto; sem ele a aba leria a base de novo e
+    ficaria sem as removidas, que nao estao la.
     """
-    linhas = ler(base)
+    linhas = ler(base) if linhas is None else linhas
     hoje = hoje or dt.date.today()
     # O alerta e da NOTA: a frase se repete nas linhas dela, como o Vlr Total ja
     # se repete. Sem isso, a linha da duplicata 2 nao avisaria nada.

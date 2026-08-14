@@ -750,9 +750,16 @@ const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
 
 /* `estado` e SEMPRE o que esta na tela, ou seja, o da ABA ATIVA. O que cada uma
    das outras tinha fica guardado em `porAba` -- ver trocarAba(). */
-/* ⚠ `pill` e um MAPA {chave do grupo: valor escolhido}, nao um texto: desde
-   13/08/2026 a aba pode ter mais de uma barra de botoes (a declarada -- Fonte
-   Boleto, Origem -- e a de Situação). Os grupos filtram JUNTOS, em E. */
+/* ⚠ `pill` e um MAPA {chave do grupo: LISTA de valores acesos}, nao um texto:
+   desde 13/08/2026 a aba pode ter mais de uma barra de botoes (a declarada --
+   Fonte Boleto, Origem -- e a de Situação), e desde 14/08/2026 cada barra aceita
+   VARIOS valores ao mesmo tempo (pedido do usuario: "permita selecionar mais de
+   1 filtro na coluna situação").
+   Como se le: DENTRO de uma barra os valores SOMAM (ou CONFIRMADO ou PROVÁVEL);
+   ENTRE barras elas RESTRINGEM (CONFIRMADO e origem SF1).
+   ⚠ Lista vazia nao existe: quando o ultimo botao se apaga a chave SAI do mapa.
+   Assim "nenhum aceso" e sempre a mesma coisa que "Todas", e quem le nao precisa
+   distinguir `undefined` de `[]`. */
 const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:{},
                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
                          realDe:"", realAte:"", bolDe:"", bolAte:"",
@@ -780,8 +787,12 @@ const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:{
 
 // copia, nunca a referencia: `filtros` e `pill` sao mutados in loco (a cada tecla
 // digitada e a cada botao clicado)
+// ⚠ `pill` guarda LISTAS desde 14/08/2026, entao a copia tem de descer um nivel:
+// com `Object.assign` as abas passariam a dividir o MESMO array e acender um
+// botao numa mexeria calada na selecao da outra.
 const copiaVista = v => ({busca:v.busca, ordem:v.ordem, desc:v.desc, sub:v.sub,
-                          pill:Object.assign({}, v.pill),
+                          pill:Object.fromEntries(Object.entries(v.pill)
+                                 .map(([chave, acesos]) => [chave, acesos.slice()])),
                           filtros:Object.assign({}, v.filtros)});
 
 function trocarAba(id){
@@ -1379,6 +1390,11 @@ function pillDeTipo(aba){
 const valorPill = (r, chave) =>
   chave === PILL_TIPO.chave ? situacaoTipo(r) : r.c[chave];
 
+/* Os valores acesos de uma barra. SEMPRE lista -- chave fora do mapa = "Todas".
+   Passa por aqui todo mundo que le a selecao (o filtro, as contagens e o
+   desenho dos botoes), para nenhum deles precisar tratar o `undefined`. */
+const pillsAtivos = chave => estado.pill[chave] || [];
+
 function dentroDoPeriodo(r, de, ate){
   return COLUNAS_VENC.some(chave => {
     const d = dataISO(r, chave);
@@ -1424,11 +1440,11 @@ function linhas(){
     });
   });
 
-  // barras de botoes (fonte/origem, situacao e tipo de pagamento): filtram
-  // juntas, em E
+  // barras de botoes (fonte/origem, situacao e tipo de pagamento): DENTRO de
+  // cada barra os valores acesos somam (OU), e as barras entre si restringem (E)
   (A().pills || []).forEach(grupo => {
-    const escolhido = estado.pill[grupo.chave];
-    if (escolhido) itens = itens.filter(r => valorPill(r, grupo.chave) === escolhido);
+    const acesos = pillsAtivos(grupo.chave);
+    if (acesos.length) itens = itens.filter(r => acesos.includes(valorPill(r, grupo.chave)));
   });
   // o check -- ou a SE2 ja resolvida -- move o titulo de uma sub-aba para a outra
   const tratado = estado.sub === "tratados";
@@ -1580,7 +1596,12 @@ function celulaCompacta(r, col){
   }
   if (col.papel === "alerta"){
     if (!r.alerta.tipo) return `<td class="selo-cel ${zona}"></td>`;
-    const classe = {PARCELA:"parcela", FATURA:"fatura"}[r.alerta.tipo] || "outro";
+    // ⚠ "REMOVIDA DA BASE SEFAZ" sai em VERMELHO (`grave`), e não no âmbar dos
+    // outros: é o único alerta que não fala de atraso, e sim de a nota ter
+    // sumido de uma base que só acumula. Mesma cor do selo no resumo do topo --
+    // duas cores para o mesmo alerta fariam parecer que são dois.
+    const classe = {PARCELA:"parcela", FATURA:"fatura",
+                    "REMOVIDA DA BASE SEFAZ":"grave"}[r.alerta.tipo] || "outro";
     const temDrill = r.alerta.tipo === "PARCELA" && (A().parcelas || {})[r.alerta.nf];
     // sem title: quem explica o alerta agora e o quadro que abre no hover
     return `<td class="selo-cel ${zona}"><span
@@ -2055,30 +2076,40 @@ function desenharPills(){
   if (!grupos.length){ caixa.innerHTML = ""; return; }
   // O botao guardado pode ter sumido da carga nova (empresa sem boleto hoje).
   // Sem isto a aba abriria vazia com nenhum botao aceso -- filtro invisivel.
+  // ⚠ Cai SO o que sumiu: o resto da selecao continua aceso. E lista que esvazia
+  // sai do mapa, para "nenhum aceso" continuar sendo o mesmo que "Todas".
   grupos.forEach(g => {
-    const v = estado.pill[g.chave];
-    if (v && !g.valores.includes(v)) delete estado.pill[g.chave];
+    const vivos = pillsAtivos(g.chave).filter(v => g.valores.includes(v));
+    if (vivos.length) estado.pill[g.chave] = vivos;
+    else delete estado.pill[g.chave];
   });
   // ⚠ A contagem de um grupo respeita o que OS OUTROS filtram: numero que ignora
   // o outro botao aceso promete linhas que a tela nao vai mostrar.
-  const baseDe = chave => A().linhas.filter(r => grupos.every(
-    g => g.chave === chave || !estado.pill[g.chave]
-         || valorPill(r, g.chave) === estado.pill[g.chave]));
+  const baseDe = chave => A().linhas.filter(r => grupos.every(g => {
+    const acesos = pillsAtivos(g.chave);
+    return g.chave === chave || !acesos.length
+           || acesos.includes(valorPill(r, g.chave));
+  }));
 
   caixa.innerHTML = grupos.map(g => {
     const base = baseDe(g.chave);
+    // ⚠ Continua contando UM valor de cada vez, mesmo com varios acesos: o
+    // numero do botao e "quanto ESTE valor traz", e nao o tamanho da selecao --
+    // e ele que faz sentido na hora de decidir se vale somar mais um.
     const conta = v => base.filter(r => valorPill(r, g.chave) === v).length;
-    const escolhido = estado.pill[g.chave] || "";
+    const acesos = pillsAtivos(g.chave);
     return `<div class="pills">` +
       (grupos.length > 1 ? `<span class="pills-rotulo">${esc(g.rotulo)}</span>` : "") +
       `<button type="button" data-chave="${esc(g.chave)}" data-pill=""
-         class="${escolhido ? "" : "ativa"}">Todas<small>${num(base.length)}</small></button>` +
+         title="Mostrar tudo — apaga os botões desta barra"
+         class="${acesos.length ? "" : "ativa"}">Todas<small>${num(base.length)}</small></button>` +
       g.valores.map(v => {
-        const quantas = conta(v);
+        const quantas = conta(v), aceso = acesos.includes(v);
         // botao zerado so existe no grupo `fixo`, que mostra os quatro estados
         // sempre: fica apagado para o olho pular, mas continua clicavel
         return `<button type="button" data-chave="${esc(g.chave)}" data-pill="${esc(v)}"
-         class="${escolhido === v ? "ativa" : quantas ? "" : "vazia"}">${esc(v)}<small>${
+         title="${aceso ? "Clique para TIRAR do filtro" : "Clique para SOMAR ao filtro"}"
+         class="${aceso ? "ativa" : quantas ? "" : "vazia"}">${esc(v)}<small>${
          num(quantas)}</small></button>`;
       }).join("") +
       `</div>`;
@@ -2088,9 +2119,18 @@ function desenharPills(){
 document.getElementById("pills").addEventListener("click", e => {
   const botao = e.target.closest("[data-pill]");
   if (!botao) return;
-  // "Todas" tem data-pill="" -- tirar a chave do mapa, e nao gravar vazio nela
-  if (botao.dataset.pill) estado.pill[botao.dataset.chave] = botao.dataset.pill;
-  else delete estado.pill[botao.dataset.chave];
+  const chave = botao.dataset.chave, valor = botao.dataset.pill;
+  // "Todas" tem data-pill="" e apaga a barra inteira -- tirar a chave do mapa, e
+  // nao gravar vazio nela. Nos outros o clique ALTERNA: soma se estava apagado,
+  // tira se estava aceso. Tirar o ultimo volta sozinho para "Todas", porque a
+  // chave sai do mapa em vez de virar `[]`.
+  if (!valor) delete estado.pill[chave];
+  else {
+    const acesos = pillsAtivos(chave), resto = acesos.filter(v => v !== valor);
+    if (resto.length === acesos.length) estado.pill[chave] = acesos.concat([valor]);
+    else if (resto.length) estado.pill[chave] = resto;
+    else delete estado.pill[chave];
+  }
   desenharPills();
   desenhar();
 });
@@ -2185,8 +2225,10 @@ function avisoSE2(){
 function avisoTipoPgto(){
   if (!A().compacta.some(c => c.tipo === "tipo_pgto")) return "";
   const divergem = A().linhas.filter(tipoDiverge).length;
-  return `<div class="linha-aviso calmo">📌 <b>Tipo (SE2)</b> é o tipo de pagamento gravado no
-    título no TOTVS. Ao lado, <b>Tipo real</b> é onde você informa como o pagamento realmente
+  return `<div class="linha-aviso calmo">📌 <b>Tipo Pgto</b> é o tipo de pagamento gravado no
+    TOTVS: no <b>título</b> quando a linha vem da SE2, na <b>nota</b> quando vem da SF1 (a
+    coluna <b>Origem</b> diz qual é qual).
+    Ao lado, <b>Tipo real</b> é onde você informa como o pagamento realmente
     foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
     coluna <b>Confere?</b> acusa <span class="selo tipo-diverge">DIVERGE</span>: é título para
     corrigir no TOTVS. Enquanto o tipo real não for informado, a coluna fica vazia.
@@ -2223,14 +2265,19 @@ function linhaAlertasSefaz(){
     .map(r => r.c.chave_nf_e || r.uuid)).size;
   const vence = notasCom("VENCE EM ATÉ"),
         semLancar = notasCom("SEM LANÇAMENTO NA SF1"),
-        prazo = notasCom("PRAZO CURTO");
-  if (!vence && !semLancar && !prazo) return "";
-  const item = (quantas, selo, texto) => quantas
-    ? `<li><span class="selo outro">${selo}</span> <b>${num(quantas)}</b> ${texto}</li>` : "";
+        prazo = notasCom("PRAZO CURTO"),
+        // 14/08/2026: a base da SEFAZ é acumulativa, então nota que ESTAVA e
+        // deixou de vir é anomalia -- ela continua no painel, com este alerta.
+        removidas = notasCom("REMOVIDA DA BASE SEFAZ");
+  if (!vence && !semLancar && !prazo && !removidas) return "";
+  const item = (quantas, selo, texto, classe) => quantas
+    ? `<li><span class="selo ${classe || "outro"}">${selo}</span> <b>${num(quantas)}</b> ${texto}</li>` : "";
   return `<div class="linha-aviso">⚠ <b>Notas em alerta</b> (o selo da linha abre o texto inteiro):
     <ul class="alertas-sefaz">
+      ${item(removidas, "REMOVIDA DA BASE SEFAZ", `estavam no painel e <b>não vieram</b> na última
+        exportação da SEFAZ — confira se foram <b>canceladas</b> ou se o arquivo veio incompleto`, "grave")}
       ${item(vence, "VENCE ≤ 5D", "vencem em <b>5 dias ou menos</b> e <b>não estão lançadas</b> na SF1")}
-      ${item(semLancar, "NÃO LANÇADA", "emitidas há <b>mais de 3 dias</b> e ainda <b>não lançadas</b> na SF1")}
+      ${item(semLancar, "PENDENTE A MAIS DE 3 DIAS", "emitidas há <b>mais de 3 dias</b> e ainda <b>não lançadas</b> na SF1")}
       ${item(prazo, "PRAZO CURTO", "emitidas com vencimento a <b>menos de 15 dias</b> da emissão")}
     </ul></div>`;
 }
@@ -2295,7 +2342,7 @@ const LEGENDAS = {
          um selo quer dizer. */
       ["tipo-diverge", "DIVERGE",
        `O <b>tipo real</b> informado não é o que está gravado no título no TOTVS
-        (<b>Tipo (SE2)</b>). É título para <b>corrigir o tipo de pagamento</b> na SE2.`],
+        (<b>Tipo Pgto</b>). É título para <b>corrigir o tipo de pagamento</b> no TOTVS.`],
       ["tipo-ok", "CONFERE",
        `O tipo real informado é <b>igual</b> ao do título. Nada a fazer — o selo existe para
         separar "conferi e bate" de "ninguém olhou ainda", que é a célula vazia.`],

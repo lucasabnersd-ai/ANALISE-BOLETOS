@@ -106,6 +106,12 @@ VLR_TITULO = "Vlr.Título"
 VENCIMENTO = "Vencimento"
 EMISSAO = "Emissão"
 UUID_NF = "Campo UUID"
+# Tipo de pagamento gravado na NF (SF1, coluna K). O nome carrega o "SF1" de
+# proposito: na aba fundida existe uma coluna VIRTUAL "@tipo_pgto" (o tipo que
+# vem da SE2) e `chave_de` reduziria as duas a `tipo_pgto` -- uma apagaria a
+# outra. Esta coluna nao e desenhada: o valor viaja para o painel pelo mapa
+# `se2.tipos`, que e por onde o navegador ja preenche essa celula.
+TIPO_PGTO = "Tipo Pgto SF1"
 # lado do boleto
 NF_BOLETO = "NF/Doc Boleto"
 FORN_BOLETO = "Fornecedor Boleto"
@@ -121,7 +127,7 @@ DIGITAVEL = "Linha Digitável"
 CABECALHO = [CHAVE, SITUACAO, ENTROU, CLASSIFICADO, FILIAL, NF, NF_BOLETO,
              SERIE, FORNECEDOR, RAZAO, FORN_BOLETO, VLR_TITULO, VLR_BOLETO,
              VENCIMENTO, VENC_BOLETO, EMISSAO, PARCELA, CANDIDATOS, CRITERIO,
-             FONTE, ALERTA, DIGITAVEL, UUID_NF]
+             FONTE, ALERTA, DIGITAVEL, UUID_NF, TIPO_PGTO]
 
 # Selos. Curtos de proposito: a celula corta o que nao couber.
 FORTE = "MATCH FORTE"
@@ -292,7 +298,7 @@ def ler_sf1(base: Path) -> list[dict]:
                 VLR_TITULO: _moeda(linha[SF1_VLR_BRUTO]),
                 VENCIMENTO: _data(linha[SF1_PRIMEIRO_VENC]),
                 EMISSAO: _data(linha[SF1_EMISSAO]),
-                "tipo_pgto": _texto(linha[SF1_TIPO_PGTO]),
+                TIPO_PGTO: _texto(linha[SF1_TIPO_PGTO]),
                 "especie": _texto(linha[SF1_ESPECIE]),
                 "chave_nfe": _texto(linha[SF1_CHAVE_NFE]),
                 "loja": _texto(linha[SF1_LOJA]),
@@ -590,6 +596,20 @@ def atualizar_historico(base: Path, arquivo: Path, linhas_futuros: list[dict],
         guardados[chave] = {"entrou_em": hoje.isoformat(), "titulo": gravavel}
         novos += 1
 
+    # ⚠ Preenchimento RETROATIVO do Tipo Pgto. A NF so e regravada no dia em que
+    # e lida (o `continue` logo acima), entao uma coluna NOVA nasceria vazia em
+    # todo mundo que ja estava no historico -- ela so passaria a valer para quem
+    # chegasse depois, e a aba mostraria 95 celulas em branco sem explicacao.
+    # A base ja foi lida INTEIRA em `ler_sf1` (sem filtro de dia), entao a volta
+    # custa nada e o problema se resolve sozinho na primeira rodada.
+    da_base_por_chave = {chave_do_titulo(t): t for t in da_base}
+    for chave, guardado in guardados.items():
+        if guardado["titulo"].get(TIPO_PGTO):
+            continue
+        origem = da_base_por_chave.get(chave)
+        if origem and origem.get(TIPO_PGTO):
+            guardado["titulo"][TIPO_PGTO] = origem[TIPO_PGTO]
+
     # O cruzamento e refeito para TODOS, nao so para os novos: o boleto de um
     # titulo antigo pode ter chegado hoje.
     indice = indexar(boletos_do_dda(linhas_futuros) + boletos_do_itau(historico_itau))
@@ -692,6 +712,9 @@ def montar_linhas(historico: dict) -> list[tuple]:
             ALERTA: b.get("alerta", ""),
             DIGITAVEL: b.get("digitavel", ""),
             UUID_NF: (t.get("uuid") or ""),
+            # `.get` com padrao: o historico gravado antes desta coluna existir
+            # nao tem a chave, e um KeyError aqui derrubaria a aba inteira.
+            TIPO_PGTO: t.get(TIPO_PGTO, ""),
         })
 
     # sem boleto primeiro (e o que precisa de acao), depois por classificacao

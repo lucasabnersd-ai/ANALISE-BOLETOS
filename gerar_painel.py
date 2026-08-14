@@ -62,6 +62,12 @@ HISTORICO_PENDENTES = PASTA / "DADOS" / "pendentes_itau_historico.json"
 # novos, e ele tambem guarda ate que DIA a SF1 ja foi lida.
 HISTORICO_CRUZAMENTO = PASTA / "DADOS" / "cruzamento_classificacao_historico.json"
 
+# A base da SEFAZ e ACUMULATIVA (traz as antigas mais as novas), entao nota que
+# ESTAVA e deixou de vir e anomalia -- ver sefaz.py. Este arquivo e quem lembra
+# quais notas o painel ja viu; apagar faz o painel esquecer todas e parar de
+# acusar as removidas (as novas nao sao afetadas: elas vem da base).
+HISTORICO_SEFAZ = PASTA / "DADOS" / "sefaz_historico.json"
+
 ABA_ASSOCIACOES = "Associações Encontradas"
 ABA_CORRESPONDENCIAS = "Tratar Correspondências"
 ABA_FUTUROS = "Futuros NF Não Associada"
@@ -144,8 +150,17 @@ ALERTAS = ((("FATURA",), "FATURA"),
            # aparece quando a nota cai em mais de uma condicao -- e por isso vao
            # do mais urgente para o menos. O texto de TODOS continua no quadro
            # que abre no selo, nenhum se perde.
+           # ⚠ ANTES dos outros tres: a nota removida pode estar tambem atrasada,
+           # e das duas coisas e esta que muda o que fazer -- as outras dizem que
+           # a nota esta parada, esta diz que ela sumiu da base. O texto das
+           # demais continua inteiro no quadro que abre no selo.
+           ((sefaz.PREFIXO_REMOVIDA,), "REMOVIDA DA BASE SEFAZ"),
            ((sefaz.PREFIXO_VENCE,), "VENCE ≤ 5D"),
-           ((sefaz.PREFIXO_SEM_LANCAR,), "NÃO LANÇADA"),
+           # 14/08/2026, pedido do usuario: era "NÃO LANÇADA", que dizia o efeito
+           # mas nao o que o alerta cobra -- o tempo parado. O numero sai da
+           # constante da regra, e nao escrito aqui: mudar o corte em `sefaz.py`
+           # mudaria o criterio e deixaria o selo mentindo.
+           ((sefaz.PREFIXO_SEM_LANCAR,), f"PENDENTE A MAIS DE {sefaz.DIAS_SEM_LANCAR} DIAS"),
            ((sefaz.PREFIXO_PRAZO,), "PRAZO CURTO"))
 
 # Confrontos que viram destaque na celula do boleto.
@@ -161,8 +176,41 @@ CONFRONTOS = {
 #   (rotulo, lado, grupo, largura relativa)
 # Empresa pagadora e contraparte NAO entram aqui: elas sao colunas do drill
 # (o usuario corrigiu isso em 04/08/2026). A tabela principal segue enxuta.
+# ------------------------------------------------------- fusao SE2 x SF1
+# 14/08/2026, pedido do usuario: "as analises sao as mesmas, iremos levar a aba
+# titulos associados na classificacao para junto da aba titulos associados". As
+# NFs recem classificadas passaram a viver DENTRO da aba de titulos associados,
+# para a conferencia acontecer num lugar so. Ver `fundir_classificacao`.
+COLUNA_ORIGEM = "Origem"
+ORIGEM_SE2 = "SE2"
+ORIGEM_SF1 = "SF1"
+
+# ⚠ Coluna interna (nao desenhada): guarda a chave que amarra check e tratativa
+# ao registro. NAO da para usar o "Campo UUID" para isso depois da fusao -- as
+# linhas da SF1 se identificam pela chave com prefixo "SF1:", e trocar por o
+# uuid cru desligaria as marcacoes que ja existem no banco. O Campo UUID, por
+# sua vez, precisa continuar cru: e ele que o botao de copiar leva ao TOTVS.
+COLUNA_CHAVE_PAINEL = "Chave Painel"
+
+# Os dois lados dizem a mesma coisa com nomes diferentes. Sem este mapa a fusao
+# criaria colunas GEMEAS -- "Status" vazio nas linhas da SF1 e "Situação" vazio
+# nas da SE2 -- e nenhum filtro, ordenacao ou selo pegaria as duas metades.
+SF1_PARA_BASE = {
+    "Nº NF": "No. Titulo",
+    "Vlr.Título": "Vlr.Titulo",    # ⚠ o acento e a UNICA diferenca entre os dois
+    "Situação": "Status",
+    "Critério": "Critério Match",
+    "Emissão": "DT Emissao",
+}
+
 COMPACTA = [
     ("CHECK (FEITO)",     "",       "",           2.5),
+    # De qual base a linha veio (14/08/2026, pedido do usuario). A aba passou a
+    # somar os titulos ja associados (SE2) com as NFs recem classificadas (SF1);
+    # sem esta coluna as duas metades ficariam indistinguiveis na mesma grade --
+    # e elas nao querem dizer a mesma coisa (uma tem titulo, a outra ainda nao).
+    # Estreita de proposito: o valor e sempre "SE2" ou "SF1".
+    ("Origem",            "",       "",           3.5),
     ("Campo UUID",        "",       "",           4),
     ("Filial",            "",       "",           3.5),
     ("Prefixo",           "",       "",           3.5),
@@ -323,7 +371,7 @@ COMPACTA_SEFAZ = [
     ("Origem",            "",       "",           5),
     # Alerta da NOTA (venc perto sem lancamento / sem lancar / prazo curto): o
     # selo mostra o rotulo curto e o texto inteiro abre no quadro.
-    ("Alerta",            "",       "",           7),
+    ("Alerta",            "",       "",          15),
     ("Nº NF",             "titulo", "NF",         4.5),
     ("Emissão",           "titulo", "",           5),
     ("Saída/Entrada",     "titulo", "",           5),
@@ -365,7 +413,7 @@ ROTULOS_PLANILHA_SEFAZ = {
 COMPACTA_SEFAZ_SF1 = [
     ("CHECK (FEITO)",     "",       "",           3),
     ("Situação",          "",       "",           9.5),
-    ("Alerta",            "",       "",           7),
+    ("Alerta",            "",       "",          15),
     ("Origem",            "",       "",           4.5),
     ("Nº NF",             "titulo", "NF",         5),
     ("Nº NF SF1",         "boleto", "NF",         5.5),
@@ -444,7 +492,10 @@ COMPACTA_PEDIDOS = [
     # resto do pedido. Duas colunas com a mesma `chave` sao inofensivas: a
     # celula e a mesma e ordenar por qualquer uma das duas ordena igual.
     ("Numero PC",         "",       "",             5),
-    ("Alerta",            "",       "",             6.5),
+    # ⚠ 15 pontos (≈187px) porque o selo mais longo desta coluna passou a ser
+    # "PENDENTE A MAIS DE 3 DIAS": `.selo` e nowrap + ellipsis, entao com os 6,5
+    # de antes ele sairia cortado ("PENDENTE A M…") sem erro nenhum aparecer.
+    ("Alerta",            "",       "",            15),
     # o veredito da OUTRA aba, de proposito: "achei o pedido MAS a nota nunca
     # foi lancada" e justamente o caso que esta aba serve para achar
     ("Lançada na SF1",    "",       "",             6.5),
@@ -547,10 +598,18 @@ ABAS = {
         "col_status": "Status",
         "col_criterio": "Critério Match",
         "col_score": "Score Match",
-        "col_uuid": "Campo UUID",
+        # ⚠ NAO e o "Campo UUID": depois da fusao com a SF1 a aba tem duas
+        # especies de linha, e a da SF1 se identifica pela chave com prefixo
+        # "SF1:". Ver COLUNA_CHAVE_PAINEL.
+        "col_uuid": COLUNA_CHAVE_PAINEL,
         "prefixo_uuid": "",
+        # Botao de filtro por base de origem. O grupo de status entra sozinho
+        # (ver grupos_de_pills), entao a aba fica com as duas barras.
+        "pills": COLUNA_ORIGEM,
         # Confere cada titulo na SE2 a cada rodada: quem ja tem boleto lancado
         # (ou ja foi baixado) sai da fila. Ver verificacao_se2.py.
+        # ⚠ As linhas da SF1 nao estao na SE2 (sao NF, nao titulo): elas caem no
+        # `sem_se2` do conferir_na_se2 e FICAM -- que e o fail-open de sempre.
         "conferir_se2": True,
     },
     "correspondencias": {
@@ -661,6 +720,14 @@ ABAS = {
         "fonte": "cruzamento",
         "nome": "Títulos Associados na Classificação",
         "guia": "Titulos Assoc Classificacao",
+        # ⚠ DESLIGADA em 14/08/2026: as linhas passaram a viver na aba de
+        # titulos associados (ver fundir_classificacao). A aba continua aqui,
+        # e continua sendo ENVIADA na carga, porque a lista de abas do painel
+        # sai das linhas `#meta:` que estao no Postgres -- parar de mandar nao
+        # a apaga, so deixa o cabecalho velho no ar. E este `oculta` que a tira
+        # da tela. O resto do cfg fica intacto: e o caminho de volta se ele
+        # quiser as duas abas separadas outra vez.
+        "oculta": True,
         # ambar: cor que ficou livre com a saida da "visao passado" (12/08/2026)
         "cor": "ambar",
         "compacta": COMPACTA_CRUZAMENTO,
@@ -802,7 +869,11 @@ ABAS = {
 ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "Alerta Fatura": "Alerta", "Campo UUID": "UUID",
                     "Linha Digitável": "Linha", "@tratativa": "Nota",
-                    "@tipo_pgto": "Tipo (SE2)", "@tipo_real": "Tipo real",
+                    # ⚠ era "Tipo (SE2)". Depois da fusao com a SF1 (14/08/2026)
+                    # a coluna carrega DUAS origens -- o tipo do titulo (SE2,
+                    # coluna IK) e o da NF (SF1, coluna K) -- e o nome antigo
+                    # mentia na metade das linhas.
+                    "@tipo_pgto": "Tipo Pgto", "@tipo_real": "Tipo real",
                     "@alerta_tipo": "Confere?",
                     "CHECK (FEITO)": "OK", "No. Titulo": "Nº título",
                     "NF/Doc Boleto": "NF boleto", "Prefixo": "Pref.",
@@ -981,13 +1052,55 @@ def diferenca(origem: dict, coluna_boleto: str, confrontos: dict) -> str:
 
 
 def ler_aba(wb, cfg: dict):
-    """Le uma aba da base no formato do painel. As duas abas passam por aqui --
-    o que muda entre elas vem do cfg (colunas, confrontos, nomes de campo)."""
+    """Cabecalho + linhas CRUAS de uma aba da base.
+
+    ⚠ Devolve o PAR, e nao o resultado do `montar_aba`. A aba de titulos
+    associados so pode ser montada depois da SF1 -- as duas viraram uma aba so
+    (14/08/2026) e o `montar_aba` precisa do cabecalho ja unificado. Quem
+    monta agora e o `gerar`, que sabe quando as duas fontes estao prontas.
+    """
     ws = wb[cfg["planilha"]]
     linhas = list(ws.iter_rows(values_only=True))
     cabecalho = [texto(c) for c in linhas[0]]
     brutas = [b for b in linhas[1:] if not all(v in (None, "") for v in b)]
-    return montar_aba(cabecalho, brutas, cfg)
+    return cabecalho, brutas
+
+
+def fundir_classificacao(cab_base: list[str], brutas_base: list,
+                         cab_sf1: list[str], brutas_sf1: list):
+    """Une as linhas da SF1 a aba dos titulos associados.
+
+    Devolve (cabecalho, linhas) no mesmo formato que o `montar_aba` espera de
+    qualquer aba: uma lista de colunas so, com `Origem` dizendo de qual base
+    cada linha veio.
+    """
+    renomeado = [SF1_PARA_BASE.get(c, c) for c in cab_sf1]
+
+    # Ordem: Origem primeiro, depois a base do associador inteira, e por fim o
+    # que so a SF1 traz (na ordem dela). A chave interna fecha a lista.
+    unico = [COLUNA_ORIGEM] + list(cab_base)
+    for coluna in renomeado:
+        if coluna and coluna not in unico:
+            unico.append(coluna)
+    unico.append(COLUNA_CHAVE_PAINEL)
+    posicao = {c: i for i, c in enumerate(unico)}
+
+    linhas = []
+    for cabecalho, brutas, marca, coluna_chave in (
+            (cab_base, brutas_base, ORIGEM_SE2, "Campo UUID"),
+            (renomeado, brutas_sf1, ORIGEM_SF1, "Chave")):
+        for bruta in brutas:
+            linha = [""] * len(unico)
+            linha[posicao[COLUNA_ORIGEM]] = marca
+            for coluna, valor in zip(cabecalho, bruta):
+                if coluna:
+                    linha[posicao[coluna]] = valor
+            # SE2: o proprio Campo UUID. SF1: a "Chave", que ja vem com o
+            # prefixo "SF1:" embutido pelo cruzamento_classificacao.
+            linha[posicao[COLUNA_CHAVE_PAINEL]] = texto(
+                dict(zip(cabecalho, bruta)).get(coluna_chave))
+            linhas.append(tuple(linha))
+    return unico, linhas
 
 
 def ler_cruas(wb, nome_aba: str) -> list[dict]:
@@ -1373,6 +1486,43 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
     return saida_meta
 
 
+# chave da coluna interna que traz o Tipo Pgto da SF1 (ver cruzamento_classificacao)
+CHAVE_TIPO_SF1 = chave_de("Tipo Pgto SF1")
+
+
+def meta_se2(cfg: dict, compacta: list[dict], registros: list[dict],
+             conferencia) -> dict | None:
+    """O `se2` do cabecalho da aba: veredito da SE2 MAIS o mapa de Tipo Pgto.
+
+    ⚠ O Tipo Pgto das linhas da SF1 (coluna K) entra AQUI, no mesmo mapa
+    `tipos` que ja carrega o da SE2 (coluna IK). Nao e atalho: a coluna da tela
+    e VIRTUAL (`@tipo_pgto`) e o navegador a preenche lendo
+    `aba.se2.tipos[uuid]` -- ver `processarAba` no painel_modelo.html. Por o
+    valor dentro da linha nao resolveria pelo motivo de sempre: a carga nao
+    regrava titulo que ja tem check, entao o campo novo nunca chegaria
+    justamente em quem ja foi tratado.
+
+    A NF da SF1 nao esta na SE2 (e nota, nao titulo), entao este e o unico
+    caminho do tipo dela ate a tela.
+    """
+    com_tipo = any(c["tipo"] == "tipo_pgto" for c in compacta)
+    saida = (conferir_na_se2(registros, conferencia, com_tipo)
+             if cfg.get("conferir_se2") and conferencia else None)
+    if not com_tipo:
+        return saida
+    da_sf1 = {r["uuid"]: r["c"][CHAVE_TIPO_SF1] for r in registros
+              if r["c"].get(CHAVE_TIPO_SF1)}
+    if not da_sf1:
+        return saida
+    if saida is None:
+        # SE2 ausente ou ilegivel: o mapa de tipos ainda vale. Vai SEM `fora`
+        # de proposito -- o navegador so corta linha quando esse mapa existe
+        # (`if (fora)`), entao ninguem some por causa de uma leitura que falhou.
+        saida = {}
+    saida.setdefault("tipos", {}).update(da_sf1)
+    return saida
+
+
 # Teto de botoes de um grupo de filtro. Acima disso a barra vira parede -- a aba
 # Nao Associados tem 40 "Motivo Revisao" distintos -- e clicar deixa de ser mais
 # rapido que digitar na busca. Abaixo de 2 o botao nao filtra nada.
@@ -1429,12 +1579,17 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     wb, temporaria = abrir_planilha(base)
     try:
         lidas = {}
+        # cabecalho+linhas cruas, por aba. A de associados fica guardada aqui
+        # ate a SF1 estar pronta: as duas viram uma aba so (fundir_classificacao).
+        cruas = {}
         for ident, cfg in ABAS.items():
             if cfg.get("fonte"):
                 continue  # nao sai desta planilha; e lida logo abaixo
             if cfg["planilha"] not in wb.sheetnames:
                 continue  # aba renomeada na base: melhor faltar do que quebrar
-            lidas[ident] = ler_aba(wb, cfg)
+            cruas[ident] = ler_aba(wb, cfg)
+            if ident != "associacoes":
+                lidas[ident] = montar_aba(*cruas[ident], cfg)
         resumo = ler_resumo(wb)
         parcelas = ler_parcelas(wb)
         # Linhas CRUAS dos boletos que nao acharam titulo: e o acervo contra o
@@ -1481,7 +1636,10 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         cabecalho, brutas, cruzamento_resumo = cruzamento_classificacao.carregar(
             caminho_sf1, HISTORICO_CRUZAMENTO, boletos_nao_associados, historico_itau)
         if brutas:
+            # A aba continua sendo MONTADA e enviada, so que oculta: e o
+            # cabecalho dela que apaga do painel a aba que ja esta no banco.
             lidas["cruzamento"] = montar_aba(cabecalho, brutas, cfg)
+            cruas["cruzamento"] = (cabecalho, brutas)
         cruzamento_resumo["base"] = str(caminho_sf1)
         cruzamento_resumo["salva_em"] = dt.datetime.fromtimestamp(
             caminho_sf1.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
@@ -1490,6 +1648,17 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     else:
         print(f"AVISO: base SF1 nao encontrada, aba de classificacao nao atualizada:\n"
               f"       {caminho_sf1}", file=sys.stderr)
+
+    # Fusao das duas analises numa aba so (14/08/2026). Acontece AQUI, e nao
+    # junto com a leitura da planilha, porque a SF1 depende do historico do Itau
+    # -- so agora as duas fontes existem. Sem a SF1 a aba sai so com os titulos
+    # da SE2, que e o comportamento antigo: falta de base nunca derruba a aba.
+    if "associacoes" in cruas:
+        cab_base, brutas_base = cruas["associacoes"]
+        cab_sf1, brutas_sf1 = cruas.get("cruzamento", ([], []))
+        lidas["associacoes"] = montar_aba(
+            *fundir_classificacao(cab_base, brutas_base, cab_sf1, brutas_sf1),
+            ABAS["associacoes"])
 
     # Abas da SEFAZ: a base como ela e (so as colunas marcadas) e o cruzamento
     # dela com a SF1. Mesma regra das outras bases de fora -- falhar aqui nao
@@ -1509,12 +1678,27 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # O cruzamento precisa das DUAS bases; sem a SF1 a aba simplesmente nao
         # existe (em vez de existir dizendo que nada foi achado, o que seria
         # mentira -- ninguem procurou).
+        # A base e lida UMA vez aqui, e ja com o historico: `linhas_sefaz` e a
+        # base de hoje MAIS as notas que sumiram dela (marcadas). As tres abas
+        # que leem a SEFAZ recebem esse mesmo conjunto -- se cada uma relesse o
+        # arquivo, as removidas apareceriam em nenhuma.
+        linhas_sefaz, sefaz_hist = sefaz.ler_com_historico(caminho_sefaz, HISTORICO_SEFAZ)
+        print(f"           notas: {sefaz_hist['na_base']} na base | "
+              f"{sefaz_hist['novas']} NOVAS | {sefaz_hist['sairam_hoje']} sairam hoje | "
+              f"{sefaz_hist['voltaram']} voltaram")
+        if sefaz_hist["removidas"]:
+            print(f"           ⚠ {sefaz_hist['removidas']} nota(s) REMOVIDAS da base "
+                  f"continuam no painel, com alerta")
+        print(f"           historico: {sefaz_hist['conhecidas']} notas conhecidas "
+              f"-> {HISTORICO_SEFAZ.name}")
+
         nao_lancadas = None
         if caminho_sf1.exists():
             # ⚠ `preparar()` le SEFAZ + SF1 UMA vez e as duas abas que dependem
             # do cruzamento reusam o resultado. Sem isso, a aba de pedidos releria
             # os 8.011 titulos da SF1 so para mostrar o mesmo veredito ao lado.
-            pronto = cruzamento_sefaz_sf1.preparar(caminho_sefaz, caminho_sf1)
+            pronto = cruzamento_sefaz_sf1.preparar(caminho_sefaz, caminho_sf1,
+                                                   linhas=linhas_sefaz)
             cabecalho, brutas, cruz_sefaz_resumo = cruzamento_sefaz_sf1.carregar(
                 caminho_sefaz, caminho_sf1, pronto=pronto)
             if brutas:
@@ -1539,7 +1723,9 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
                 print(f"AVISO: SC7 nao encontrada, aba de pedidos nao criada:\n"
                       f"       {sc7.BASE_SC7}", file=sys.stderr)
 
-        cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas)
+        cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas,
+                                                         linhas=linhas_sefaz)
+        sefaz_resumo.update({f"hist_{k}": v for k, v in sefaz_hist.items()})
         if brutas:
             lidas["sefaz"] = montar_aba(cabecalho, brutas, ABAS["sefaz"])
         sefaz_resumo["base"] = str(caminho_sefaz)
@@ -1602,9 +1788,7 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             # Veredito da SE2 (so nas abas que declaram `conferir_se2`). None
             # quando a base nao foi lida -- o painel entende como "nao conferi"
             # e nao esconde ninguem.
-            "se2": (conferir_na_se2(registros, conferencia_se2,
-                                    any(c["tipo"] == "tipo_pgto" for c in compacta))
-                    if cfg.get("conferir_se2") and conferencia_se2 else None),
+            "se2": meta_se2(cfg, compacta, registros, conferencia_se2),
             "ocr": sum(1 for r in registros if r["ocr"]),
             # pelo PAPEL, nao pela chave: nas abas da SEFAZ a coluna do alerta se
             # chama "Alerta" (chave `alerta`), nao "Alerta Fatura"
