@@ -243,8 +243,11 @@
         // que o desenho consulta para mostrar "carregando" em vez de "vazio".
         linhas: [], carregada: false,
         total: m.total || 0,
+        // aba desligada no gerador: o cabecalho continua aqui so para APAGAR do
+        // painel a que ja estava no banco -- ver publicar_dados.cabecalho_da_aba
+        oculta: !!m.oculta,
       };
-    }).filter(function (a) { return a.compacta.length; });
+    }).filter(function (a) { return a.compacta.length && !a.oculta; });
     if (!geral) throw new Error("carteira sem cabeçalho (_meta)");
 
     // os titulos vem ordenados por uuid; a ordem das abas e a do gerador

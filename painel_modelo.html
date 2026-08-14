@@ -2208,8 +2208,13 @@ function avisoTipoPgto(){
    condicao o selo mostra so a mais urgente, entao contar por selo perderia as
    outras. Fica FORA do bloco recolhivel -- e aviso sobre as notas de hoje, nao
    explicacao de como a aba funciona. */
+const ABAS_COM_ALERTA_SEFAZ = ["sefaz", "sefaz_sf1", "pedidos"];
+
 function linhaAlertasSefaz(){
-  if (estado.aba !== "sefaz" && estado.aba !== "sefaz_sf1") return "";
+  // 14/08/2026: entrou "pedidos". Com a SEFAZ x SF1 desligada, e nela que os
+  // tres alertas passam a ser lidos -- a coluna Alerta ja estava la desde o
+  // comeco, faltava o resumo que conta as notas de cada condicao.
+  if (!ABAS_COM_ALERTA_SEFAZ.includes(estado.aba)) return "";
   // ⚠ A chave da nota e `c.chave_nf_e`. `copia` so tem a linha digitavel -- usar
   // `copia.chave_nf_e` cai no `uuid`, que e por LINHA, e a aba da base viraria
   // 1.188 "notas" em vez de 617.
@@ -2237,6 +2242,9 @@ function avisoSefaz(){
     <b>não cruza com nada</b> e não olha a SE2.</div>`;
 }
 
+/* ⚠ A aba SEFAZ x SF1 foi DESLIGADA em 14/08/2026 (`oculta` no ABAS do
+   gerar_painel.py) -- a de pedidos e um superconjunto dela. Este aviso fica:
+   se a aba voltar, ele volta com ela. */
 function avisoSefazSf1(){
   if (estado.aba !== "sefaz_sf1") return "";
   return `<div class="linha-aviso calmo">📌 Confere, nota por nota, se o que a <b>SEFAZ</b> registrou
@@ -2249,7 +2257,8 @@ function avisoPedidos(){
   return `<div class="linha-aviso calmo">📌 De qual <b>pedido de compra</b> veio cada nota da
     <b>SEFAZ</b>. O número do pedido é lido do texto da nota e <b>só vale quando algo o
     confirma</b> — fornecedor, valor ou emissão. Quando a nota não cita pedido, o painel
-    procura pelo <b>fornecedor + valor</b>. A coluna <b>Situação</b> diz o quanto confiar.</div>`;
+    procura pelo <b>fornecedor + valor</b>. A coluna <b>Situação</b> diz o quanto confiar.
+    A coluna <b>Lançada na SF1</b> responde, na mesma linha, se a nota já entrou no TOTVS.</div>`;
 }
 
 /* ---------- legenda dos selos ----------
@@ -2788,6 +2797,10 @@ function iniciar(dados){
   }));
   if (noBanco()) aplicarFila();
 
+  // Aba desligada no gerador (`oculta` no ABAS) nao entra na barra. O supa.js
+  // ja filtra na carga; aqui e o mesmo corte para o dev.html, que le o JSON
+  // direto -- sem os dois, a aba aparecia local e sumia publicada.
+  dados.abas = dados.abas.filter(a => !a.oculta);
   // As particoes viram abas ja aqui: elas saem do CABECALHO, nao das linhas.
   dados.abas = partirAbas(dados.abas);
   // Quem ja veio com linhas (dev.html) passa pelo tratamento agora; as demais

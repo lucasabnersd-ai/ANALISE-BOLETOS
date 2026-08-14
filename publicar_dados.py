@@ -51,6 +51,12 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 # quem tiver o menor uuid
                 "ordem": posicao,
                 "nome": aba["nome"],
+                # ⚠ Aba DESLIGADA. Precisa viajar (e nao simplesmente sumir da
+                # carga) porque a lista de abas do painel sai das linhas
+                # `#meta:` que estao no Postgres: uma aba que para de ser
+                # enviada continua la, com o cabecalho antigo, e voltaria a
+                # aparecer. Esta e a marca que a apaga da tela.
+                "oculta": aba.get("oculta", False),
                 # nome da aba no .xlsx exportado
                 "guia": aba["guia"],
                 "cor": aba["cor"],

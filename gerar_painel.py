@@ -743,6 +743,17 @@ ABAS = {
         "col_alerta": "Alerta",
         "resumo": {"alerta": "com alerta", "divergentes": "valor difere da SF1"},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ_SF1,
+        # ⚠ DESLIGADA em 14/08/2026, a pedido do usuario: a aba `pedidos` e um
+        # superconjunto dela (leva o mesmo veredito de lancamento na coluna
+        # `Lançada na SF1`, as mesmas colunas da nota e os mesmos 3 alertas).
+        # `oculta` NAO e o mesmo que apagar a entrada: o cruzamento continua
+        # rodando (a aba de pedidos depende dele) e o CABECALHO continua sendo
+        # publicado -- e ele que sobrescreve, com a marca de oculta, o cabecalho
+        # que ja esta no banco. Sem isso a aba voltaria sozinha: desde o
+        # carregamento sob demanda, a lista de abas sai das linhas `#meta:` do
+        # Postgres, e nao do que este arquivo gerou hoje.
+        # Para trazer de volta: apagar esta linha.
+        "oculta": True,
     },
     # De qual PEDIDO DE COMPRA veio esta nota? Junta SEFAZ + SF1 + SC7/SC1.
     # Ver pedidos_sefaz.py -- inclusive por que o veredito tem cinco degraus.
@@ -1566,9 +1577,16 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # `colunas` nao vai para o HTML: o painel so desenha `compacta`. A lista
         # continua servindo para montar as celulas de cada registro.
         _colunas, compacta, registros = lidas[ident]
+        # Aba oculta viaja SO com o cabecalho, sem uma linha sequer: e o
+        # cabecalho que apaga do painel a aba que ja esta no banco. Zerar aqui
+        # tambem tira o peso dela da carga (a SEFAZ x SF1 eram 617 linhas).
+        oculta = bool(cfg.get("oculta"))
+        if oculta:
+            registros = []
         abas.append({
             "id": ident,
             "nome": cfg["nome"],
+            "oculta": oculta,
             # aba do .xlsx exportado (o Excel corta em 31 caracteres)
             "guia": cfg.get("guia", cfg["nome"])[:31],
             "cor": cfg["cor"],
