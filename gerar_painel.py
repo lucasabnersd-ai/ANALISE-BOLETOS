@@ -1451,8 +1451,13 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
 
     Pelo MESMO motivo o `Tipo Pgto` do titulo (coluna IK) viaja aqui, no mapa
     `tipos`, e nao em `c`: a coluna nova nasceria vazia justamente nos titulos
-    que alguem ja tratou. `opcoes` e o vocabulario do campo na SE2 inteira --
-    vira o menu do "tipo real" no painel.
+    que alguem ja tratou.
+
+    ⚠ O vocabulario da SE2 (`conferencia.tipos`, 18 valores) NAO e mais enviado:
+    em 14/08/2026 o menu do "tipo real" virou lista fechada, ditada pelo usuario
+    (`TIPOS_INFORMAVEIS`, no painel_modelo.html). Mandar os 18 significava
+    oferecer no menu os erros de digitacao que existem no TOTVS
+    ("TRANFERENCIA", "TRASFERENCIA", "TRANSFERENCIA - TESTE").
 
     `com_tipo` vem de a aba TER a coluna, e nao de um id fixo: sem isso a aba
     Nao Associados -- que tambem confere a SE2 e nao mostra tipo nenhum --
@@ -1482,7 +1487,6 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
                   "abertos": abertos, "sem_se2": sem_se2}
     if com_tipo:
         saida_meta["tipos"] = tipos
-        saida_meta["opcoes"] = conferencia.tipos
     return saida_meta
 
 

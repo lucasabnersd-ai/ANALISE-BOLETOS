@@ -515,6 +515,13 @@ td.tipo-real{padding:2px 4px}
 .sel-tipo:hover{border-color:var(--azul-2); color:var(--azul-2); border-style:solid}
 .sel-tipo.tem{background:var(--sel); color:var(--azul-2); border:1px solid var(--azul-2)}
 .sel-tipo:focus{outline:2px solid var(--azul-2); outline-offset:-1px}
+/* trava do BOLETO S/C: mesma caixa do menu, sem nada de clicavel -- borda
+   solida discreta e o cadeado. O `cursor:default` importa: sem ele a celula
+   ainda convidaria ao clique de quem vem das linhas de cima. */
+.tipo-fixo{display:block; font-size:10.5px; font-weight:700; padding:3px 3px;
+  border-radius:5px; background:var(--surface-2); color:var(--txt-2);
+  border:1px solid var(--line-forte); cursor:default;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
 /* Selos da conferencia na SE2. Aparecem so nas linhas que JA foram resolvidas
    no TOTVS e que continuam na tela porque alguem daqui tratou -- as demais
@@ -1047,7 +1054,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608141215"></script>
+<script src="supa.js?v=202608141449"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1603,7 +1610,25 @@ const encerrado = r => feitos.has(r.uuid) || !!r.se2;
    isso e o `processarAba`, junto com os cortes. */
 
 const tipoSE2 = r => r.tipo_se2 || "";
-const tipoReal = r => tiposReais[r.uuid] || "";
+
+/* ---------- BOLETO S/C nao se informa: ja e a resposta ----------
+   14/08/2026, pedido do usuario. Quando a SE2 diz BOLETO S/C o titulo esta
+   certo por definicao -- nao ha o que a pessoa possa acrescentar, so o que ela
+   pode errar. O menu sai do ar e o tipo real vale BOLETO S/C, o que faz a
+   coluna Confere? dizer CONFERE sozinha (sao 128 das 167 linhas da aba).
+
+   ⚠ O tipo travado e DERIVADO, nunca gravado. Gravar seria escrever ~128
+   linhas no banco (e outras tantas no historico) para repetir o que a SE2 ja
+   diz, e no dia em que o tipo mudar no TOTVS o painel ficaria com a copia
+   velha. Como sai de `tipoSE2`, ele acompanha a base a cada rodada.
+
+   ⚠ `tiposReais[uuid]` NAO e apagado quando a linha trava: o que alguem gravou
+   continua no banco (e volta a valer se a SE2 deixar de dizer BOLETO S/C).
+   Por isso o valor escondido aparece no tooltip da celula -- sobrescrever a
+   escolha de alguem sem dizer seria pior do que a trava. */
+const TIPO_TRAVADO = "BOLETO S/C";
+const tipoTravado = r => tipoSE2(r) === TIPO_TRAVADO;
+const tipoReal = r => tipoTravado(r) ? TIPO_TRAVADO : (tiposReais[r.uuid] || "");
 
 /* Os QUATRO estados da coluna Confere?, num lugar so: a celula, o filtro de
    botao, a ordenacao e o .xlsx tem de dizer todos a mesma coisa -- repetir a
@@ -1625,23 +1650,34 @@ const ORDEM_TIPO = {"DIVERGE":1, "CONFERE":2, "SEM SE2":3, [TIPO_A_INFORMAR]:4};
 const DICA_TIPO = {
   "DIVERGE": r => `Na SE2 o título está como ${tipoSE2(r)}, mas o pagamento real foi informado
     como ${tipoReal(r)}. Corrigir o tipo no TOTVS.`,
-  "CONFERE": r => `O tipo informado é o mesmo que está no título (SE2): ${tipoSE2(r)}.`,
+  // na linha travada ninguem "informou" nada -- dizer que informou seria atribuir
+  // a uma pessoa uma conferencia que o painel fez sozinho
+  "CONFERE": r => tipoTravado(r)
+    ? `O título está como ${TIPO_TRAVADO} na SE2: está correto, nada a informar.`
+    : `O tipo informado é o mesmo que está no título (SE2): ${tipoSE2(r)}.`,
   "SEM SE2": () => "Não dá para comparar: este título não veio na SE2 lida nesta rodada.",
 };
 
-/* Menu do tipo real: o vocabulario vem da PROPRIA SE2 (`opcoes`, do mais usado
-   para o menos), porque so vale escolher o que o TOTVS de fato usa.
-   ⚠ O valor ja gravado entra na lista mesmo que nao esteja mais no vocabulario
-   -- senao o menu abriria sem a opcao que esta selecionada e a primeira mexida
-   apagaria calada o que alguem escolheu. */
-const TIPOS_PADRAO = ["BOLETO", "BOLETO S/C", "TRANSFERENCIA", "PIX", "CONVENIO",
-                      "IMPOSTO", "DEBITO EM CONTA", "CARTÃO DE CREDITO",
-                      "AMARRAR ADIANTAMENTO", "NÃO DEFINIDO"];
-function opcoesTipo(atual){
-  // sem `opcoes` a SE2 nao foi lida na geracao; a lista fixa e so o plano B
-  const base = ((A().se2 || {}).opcoes || []).slice();
-  const lista = base.length ? base : TIPOS_PADRAO.slice();
-  if (atual && !lista.includes(atual)) lista.push(atual);
+/* Menu do tipo real: LISTA FECHADA, ditada pelo usuario (14/08/2026).
+   Antes o vocabulario vinha da propria SE2 (`opcoes`, os 18 valores do campo no
+   TOTVS) -- o que trazia para o menu os erros de digitacao que existem la
+   ("TRANFERENCIA", "TRASFERENCIA", "TRANSFERENCIA - TESTE"). Aqui nao se
+   descreve o que o TOTVS tem: escolhe-se como o titulo foi pago de verdade.
+   Por isso `FATURA` entra mesmo sem existir na SE2, e `BOLETO S/C` fica de
+   fora -- quem e BOLETO S/C nao chega a abrir menu nenhum (`tipoTravado`).
+
+   ⚠ Duas coisas entram fora da lista, e nenhuma e enfeite:
+   - o tipo da PROPRIA SE2 desta linha, senao um valor que so exista la (IMPOSTO,
+     PIX...) tornaria o CONFERE inalcancavel: a pessoa concordaria com o TOTVS e
+     mesmo assim o painel acusaria DIVERGE.
+   - o valor JA GRAVADO, senao o menu abriria sem a opcao que esta selecionada e
+     a primeira mexida apagaria calada o que alguem escolheu. */
+const TIPOS_INFORMAVEIS = ["BOLETO", "TRANSFERENCIA", "AMARRAR ADIANTAMENTO",
+                           "CONVENIO", "CARTÃO DE CREDITO", "FATURA"];
+function opcoesTipo(r, atual){
+  const lista = TIPOS_INFORMAVEIS.slice();
+  for (const extra of [tipoSE2(r), atual])
+    if (extra && !lista.includes(extra)) lista.push(extra);
   return lista;
 }
 
@@ -1852,12 +1888,23 @@ function celulaCompacta(r, col){
   }
   if (col.tipo === "tipo_real"){
     const atual = tipoReal(r);
+    // BOLETO S/C na SE2: sem menu nenhum. Um <select> desabilitado ainda pareceria
+    // um campo a preencher que "nao esta funcionando" -- o texto fixo com o cadeado
+    // diz que nao ha nada a fazer aqui, que e o caso.
+    if (tipoTravado(r)){
+      const guardado = tiposReais[r.uuid];   // o que alguem chegou a gravar antes de travar
+      return `<td class="${zona} tipo-real"><span class="tipo-fixo" title="${esc(
+        `O título está como ${TIPO_TRAVADO} na SE2 — está correto, não há tipo real a informar.`
+        + (guardado && guardado !== TIPO_TRAVADO
+             ? `\nHavia "${guardado}" informado aqui; continua gravado, mas não vale enquanto a SE2 disser ${TIPO_TRAVADO}.`
+             : ""))}">🔒 ${esc(atual)}</span></td>`;
+    }
     // o title mostra a escolha inteira: "AMARRAR ADIANTAMENTO" nao cabe em
     // nenhuma largura razoavel e o <select> corta sem aviso
     return `<td class="${zona} tipo-real"><select class="sel-tipo${atual ? " tem" : ""}"
       data-tipo-real="${esc(r.uuid)}" title="${atual ? "Tipo real: " + esc(atual)
         : "Informe como este título foi (ou vai ser) pago de verdade"}">
-      <option value="">—</option>${opcoesTipo(atual).map(o =>
+      <option value="">—</option>${opcoesTipo(r, atual).map(o =>
         `<option value="${esc(o)}"${o === atual ? " selected" : ""}>${esc(o)}</option>`).join("")
       }</select></td>`;
   }
@@ -2539,6 +2586,9 @@ function avisoSE2(){
 function avisoTipoPgto(){
   if (!A().compacta.some(c => c.tipo === "tipo_pgto")) return "";
   const divergem = A().linhas.filter(tipoDiverge).length;
+  // quantas linhas o painel resolve sozinho: e o numero que explica por que a
+  // maior parte da coluna aparece travada em vez de vazia esperando alguem
+  const travados = A().linhas.filter(tipoTravado).length;
   return `<div class="linha-aviso calmo">📌 <b>Tipo Pgto</b> é o tipo de pagamento gravado no
     TOTVS: no <b>título</b> quando a linha vem da SE2, na <b>nota</b> quando vem da SF1 (a
     coluna <b>Origem</b> diz qual é qual).
@@ -2546,6 +2596,10 @@ function avisoTipoPgto(){
     foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
     coluna <b>Confere?</b> acusa <span class="selo tipo-diverge">DIVERGE</span>: é título para
     corrigir no TOTVS. Enquanto o tipo real não for informado, a coluna fica vazia.
+    <b>Título que está como ${TIPO_TRAVADO} no TOTVS já está certo</b>: o painel trava a coluna
+    (🔒) e marca <span class="selo tipo-ok">CONFERE</span> sozinho${
+      travados ? ` — são <b>${num(travados)}</b> ${travados === 1 ? "linha" : "linhas"} desta aba` : ""}.
+    Você preenche só as demais.
     Os botões <b>Tipo de pagamento</b>, lá em cima, filtram a aba por esses estados.
     ${divergem ? `Hoje <b>${num(divergem)}</b> ${divergem === 1 ? "título diverge" : "títulos divergem"}.`
                : ""}</div>`;
@@ -2658,8 +2712,11 @@ const LEGENDAS = {
        `O <b>tipo real</b> informado não é o que está gravado no título no TOTVS
         (<b>Tipo Pgto</b>). É título para <b>corrigir o tipo de pagamento</b> no TOTVS.`],
       ["tipo-ok", "CONFERE",
-       `O tipo real informado é <b>igual</b> ao do título. Nada a fazer — o selo existe para
-        separar "conferi e bate" de "ninguém olhou ainda", que é a célula vazia.`],
+       `O tipo real é <b>igual</b> ao do título — nada a fazer. Vem sozinho em todo título que
+        está como <b>BOLETO S/C</b> no TOTVS: esse já é o tipo certo, então o painel
+        <b>trava</b> a coluna <b>Tipo real</b> (🔒) em vez de pedir que alguém repita a
+        informação. Nas demais linhas o selo separa "conferi e bate" de "ninguém olhou
+        ainda", que é a célula vazia.`],
       ["sem-se2", "SEM SE2",
        `Há tipo real informado, mas o título <b>não veio na SE2</b> desta rodada — não há com o
         que comparar. Costuma ser título de fora da base exportada.`],
