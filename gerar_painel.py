@@ -190,8 +190,14 @@ CONFRONTOS = {
 # NFs recem classificadas passaram a viver DENTRO da aba de titulos associados,
 # para a conferencia acontecer num lugar so. Ver `fundir_classificacao`.
 COLUNA_ORIGEM = "Origem"
-ORIGEM_SE2 = "SE2"
-ORIGEM_SF1 = "SF1"
+# ⚠ Nomes do NEGOCIO, nao das tabelas do TOTVS (14/08/2026, pedido do usuario:
+# "SE2 = CONTA A PAGAR, SF1 = CLASSIFICAÇÃO"). Trocar aqui basta: e o TEXTO da
+# celula, entao o botao de filtro, a grade e o .xlsx exportado mudam juntos.
+# ⚠ O navegador NAO depende destes textos para saber de que lado a linha veio --
+# ele olha o prefixo "SF1:" da chave (ver `daClassificacao` no painel_modelo).
+# Foi de proposito: rotulo e coisa que o usuario renomeia, chave nao.
+ORIGEM_SE2 = "CONTA A PAGAR"
+ORIGEM_SF1 = "CLASSIFICAÇÃO"
 
 # ⚠ Coluna interna (nao desenhada): guarda a chave que amarra check e tratativa
 # ao registro. NAO da para usar o "Campo UUID" para isso depois da fusao -- as
@@ -217,8 +223,11 @@ COMPACTA = [
     # somar os titulos ja associados (SE2) com as NFs recem classificadas (SF1);
     # sem esta coluna as duas metades ficariam indistinguiveis na mesma grade --
     # e elas nao querem dizer a mesma coisa (uma tem titulo, a outra ainda nao).
-    # Estreita de proposito: o valor e sempre "SE2" ou "SF1".
-    ("Origem",            "",       "",           3.5),
+    # ⚠ Largura medida contra os valores REAIS: eram "SE2"/"SF1" e cabiam em
+    # 3.5, mas em 14/08/2026 viraram "CONTA A PAGAR"/"CLASSIFICAÇÃO" (13
+    # caracteres). Na largura antiga sairia "CONTA A P…" -- a celula corta com
+    # ellipsis e NAO acusa erro nenhum.
+    ("Origem",            "",       "",           8.5),
     ("Campo UUID",        "",       "",           4),
     ("Filial",            "",       "",           3.5),
     ("Prefixo",           "",       "",           3.5),
@@ -1473,6 +1482,14 @@ def ler_resumo(wb) -> dict:
     return resumo
 
 
+# Identidade do titulo sem o uuid, para alcancar as linhas da SF1 na SE2
+# (14/08/2026). ⚠ Sao as chaves das CELULAS do painel, e as duas existem nos
+# dois lados da aba fundida: a da SE2 traz o numero do titulo, a da SF1 traz o
+# numero da nota -- que no TOTVS e o mesmo numero.
+CHAVE_FORNECEDOR = chave_de("Fornecedor")
+CHAVE_NO_TITULO = chave_de("No Titulo")
+
+
 def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) -> dict:
     """Veredito da SE2 para os titulos de uma aba, pronto para o `_meta`.
 
@@ -1499,10 +1516,26 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
     `com_tipo` vem de a aba TER a coluna, e nao de um id fixo: sem isso a aba
     Nao Associados -- que tambem confere a SE2 e nao mostra tipo nenhum --
     carregaria o mapa inteiro na carga para ninguem ler.
+
+    ⚠ **Quem nao esta na SE2 pelo uuid e procurado pelo NUMERO do titulo**
+    (14/08/2026). Isso existe pelas linhas da SF1, que entraram nesta aba com a
+    fusao: o uuid delas e o da NOTA e nunca aparece na SE2, entao `olhar()`
+    devolvia None para todas e as 95 escapavam do corte -- 60 pediam boleto para
+    titulo que ja tinha a linha digitavel lancada e 7 ja estavam baixadas. O
+    `por_nota` no `_meta` conta quantas sairam por esse caminho.
     """
-    fora, tipos, abertos, sem_se2 = {}, {}, 0, 0
+    fora, tipos, abertos, sem_se2, por_nota = {}, {}, 0, 0, 0
     for registro in registros:
         situacao = conferencia.olhar(registro["uuid"])
+        se2_pelo_uuid = situacao is not None
+        if situacao is None:
+            # Linha da SF1: o uuid dela e o da NOTA e nao existe na SE2. Acha o
+            # titulo pelo NUMERO -- so assim ela passa pelo mesmo corte das
+            # outras. Ver `olhar_nota`: exige a nota INTEIRA resolvida.
+            situacao = conferencia.olhar_nota(registro["c"].get(CHAVE_FORNECEDOR),
+                                              registro["c"].get(CHAVE_NO_TITULO))
+            if situacao is not None:
+                por_nota += 1
         if situacao is None:
             sem_se2 += 1          # nao esta na SE2: fica no painel, na duvida
             continue
@@ -1514,6 +1547,12 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
             abertos += 1          # em aberto e sem boleto: e o trabalho da aba
             continue
         saida = {"m": situacao["m"], "d": situacao["d"]}
+        if not se2_pelo_uuid:
+            # ⚠ Achado pelo NUMERO do titulo, nao pelo uuid. Sem esta marca o
+            # selo diria "OUTRO" ("lancaram um boleto diferente do indicado"),
+            # que e falso: a linha da SF1 nao indicou boleto nenhum -- o `igual`
+            # abaixo daria False so porque nao ha o que comparar.
+            saida["nota"] = True
         if situacao["m"] == "BOLETO":
             # Lancaram o boleto que o painel indicou ou um outro? A resposta
             # muda o que a pessoa precisa conferir, entao vai junto.
@@ -1521,7 +1560,7 @@ def conferir_na_se2(registros: list[dict], conferencia, com_tipo: bool = False) 
             saida["igual"] = bool(indicado) and situacao["dig"] == indicado
         fora[registro["uuid"]] = saida
     saida_meta = {"lido_em": conferencia.lido_em, "fora": fora,
-                  "abertos": abertos, "sem_se2": sem_se2}
+                  "abertos": abertos, "sem_se2": sem_se2, "por_nota": por_nota}
     if com_tipo:
         saida_meta["tipos"] = tipos
     return saida_meta

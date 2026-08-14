@@ -206,7 +206,7 @@ body[data-aba="pedidos"] .subabas button.ativa{background:#475569;
 body[data-aba="pedidos"] tr.grupos th.g-pedido{background:var(--acento-bg); color:var(--acento)}
 
 /* ---------- sub-abas: a tratar x tratados ---------- */
-.subabas{display:flex; gap:6px; margin:10px 0 8px}
+.subabas{display:flex; gap:6px; margin:12px 0 6px}
 .subabas button{font:inherit; font-size:12px; font-weight:600; color:var(--txt-2); cursor:pointer;
   background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 14px;
   display:inline-flex; align-items:center; gap:7px}
@@ -651,11 +651,6 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 
   <div class="resumo" id="resumo"></div>
 
-  <div class="subabas" id="subabas">
-    <button type="button" data-sub="tratar" class="ativa">A tratar <span>0</span></button>
-    <button type="button" data-sub="tratados">Tratados <span>0</span></button>
-  </div>
-
   <div class="filtros" id="filtros">
     <label>Fornecedor<input type="search" data-filtro="fornecedor" placeholder="nome ou código" autocomplete="off"></label>
     <label>Valor<input type="search" data-filtro="valor" placeholder="5.427 ou 5427" autocomplete="off"></label>
@@ -685,6 +680,15 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 
   <div class="pills-caixa" id="pills"></div>
   <div class="aviso-aba" id="avisoAba" hidden></div>
+
+  <!-- ⚠ As sub-abas ficam AQUI, coladas na tabela (pedido do usuario,
+       14/08/2026: "desca mais o filtro ... e deixe mais proximo da tabela").
+       Antes moravam logo abaixo do resumo, a uma parede de filtros e avisos de
+       distancia da grade que elas comandam. -->
+  <div class="subabas" id="subabas">
+    <button type="button" data-sub="tratar" class="ativa">A tratar <span>0</span></button>
+    <button type="button" data-sub="tratados">Tratados <span>0</span></button>
+  </div>
 
   <div class="planilha"><table id="grade"></table></div>
 
@@ -1054,7 +1058,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608141532"></script>
+<script src="supa.js?v=202608141659"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1100,11 +1104,33 @@ const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:{},
    sobrevivente de outro dia faria a aba parecer vazia sem motivo visivel. */
 const porAba = {};
 
-const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:{},
-                          filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
-                                   realDe:"", realAte:"", bolDe:"", bolAte:"",
-                                   titulo:"", nf:"", uuid:"",
-                                   natureza:"", solicitante:"", comprador:"", pc:""}});
+/* Como a aba ABRE, na primeira vez que alguem entra nela (14/08/2026, pedido do
+   usuario: "quando abrir nessa aba, ajuste para sempre abrir o titulo a tratar
+   da classificacao"). Dai em diante vale o que a pessoa deixou -- o estado por
+   aba de 13/08 continua mandando (ver `porAba`), senao voltar de outra aba
+   desfaria o filtro que ela acabou de montar.
+   ⚠ O valor e o TEXTO da celula da coluna Origem, escrito pelo Python
+   (`ORIGEM_SF1` no gerar_painel.py). Renomear la sem mexer aqui NAO quebra: a
+   poda de valores que sumiram da carga tira a chave e a aba abre com tudo. */
+const ABERTURA_PADRAO = {
+  associacoes: {sub: "tratar", pill: {origem: ["CLASSIFICAÇÃO"]}},
+};
+
+const semFiltro = (id) => {
+  const vista = {busca:"", ordem:null, desc:false, sub:"tratar", pill:{},
+                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
+                          realDe:"", realAte:"", bolDe:"", bolAte:"",
+                          titulo:"", nf:"", uuid:"",
+                          natureza:"", solicitante:"", comprador:"", pc:""}};
+  const inicio = ABERTURA_PADRAO[id];
+  if (!inicio) return vista;
+  if (inicio.sub) vista.sub = inicio.sub;
+  // ⚠ copia dos arrays, nunca a referencia: sem isso todas as visitas a aba
+  // dividiriam a MESMA lista e acender um botao mexeria na proxima abertura.
+  vista.pill = Object.fromEntries(Object.entries(inicio.pill || {})
+                 .map(([chave, valores]) => [chave, valores.slice()]));
+  return vista;
+};
 
 // copia, nunca a referencia: `filtros` e `pill` sao mutados in loco (a cada tecla
 // digitada e a cada botao clicado)
@@ -1119,7 +1145,7 @@ const copiaVista = v => ({busca:v.busca, ordem:v.ordem, desc:v.desc, sub:v.sub,
 function trocarAba(id){
   if (estado.aba) porAba[estado.aba] = copiaVista(estado);
   const guardada = porAba[id];
-  Object.assign(estado, guardada ? copiaVista(guardada) : semFiltro());
+  Object.assign(estado, guardada ? copiaVista(guardada) : semFiltro(id));
   estado.aba = id;
   refletirFiltros();
 }
@@ -1525,6 +1551,10 @@ function partirAbas(abas){
    ⚠ O tipo da SE2 e aplicado ANTES do corte: a linha escondida por ele nao
    passaria mais por aqui, e ela reaparece na sub-aba Tratados. */
 function processarAba(aba){
+  // ⚠ ANTES do corte da SE2: e o `tratadoPorAqui` do corte que pergunta se a
+  // gemea foi tratada, e sem o indice ele responderia "nao" para todas.
+  indexarNotas(aba);
+
   const tipos = (aba.se2 || {}).tipos;
   if (tipos) aba.linhas.forEach(r => {
     const t = tipos[r.uuid];
@@ -1540,7 +1570,7 @@ function processarAba(aba){
       const saiu = fora[r.uuid];
       if (!saiu) return true;
       r.se2 = saiu;                       // vira selo e manda para Tratados
-      if (tratadoPorAqui(r)) return true;
+      if (tratadoPorAqui(r, aba)) return true;
       aba.se2.escondidos++;
       return false;
     });
@@ -1577,10 +1607,92 @@ function processarAba(aba){
 
    ⚠ Sem `aba.se2` (base SE2 fora da maquina na hora de gerar) NINGUEM e
    escondido -- na duvida, mostrar de novo e melhor do que sumir com trabalho. */
-function tratadoPorAqui(r){
+function tratadoPorAqui(r, aba){
   // aqui a NOTA conta, diferente das sub-abas A tratar/Tratados, que olham so o
   // check: quem escreveu uma nota trabalhou o titulo e nao pode ve-lo sumir.
-  return feitos.has(r.uuid) || !!(tratativas[r.uuid] || r.tratativa);
+  return feitoDe(r, aba) || !!notaDe(r, aba);
+}
+
+/* ---------- a mesma NF nos dois lados da aba: UMA marcacao ----------
+   14/08/2026, pedido do usuario: "quando um dos dois forem tratados eles irem
+   para a aba tratado agrupados junto com a mesma observacao".
+
+   Depois da fusao, a mesma nota aparece duas vezes na aba: a linha de CONTA A
+   PAGAR (o titulo, vindo da SE2) e a da CLASSIFICACAO (a nota, vinda da SF1).
+   Elas nao se conheciam -- o uuid de uma e o do titulo e o da outra e o da
+   nota, com prefixo "SF1:" -- entao tratar uma deixava a gemea em "A tratar"
+   para sempre, e a mesma NF aparecia nas duas sub-abas ao mesmo tempo. Foi o
+   que ele viu na NF 000002117.
+
+   A amarracao e o NUMERO DO TITULO + fornecedor: o unico dado que os dois lados
+   escrevem igual (o uuid nunca casa, e por isso a conferencia da SE2 tambem
+   passou a procurar por numero -- ver `olhar_nota` no verificacao_se2.py).
+
+   ⚠ NADA disso e gravado. A marcacao continua uma linha por uuid, no uuid de
+   quem foi clicado; o que a gemea mostra e derivado na hora, toda vez. Gravar
+   as duas dobraria as linhas no banco e, no dia em que uma mudasse, a outra
+   ficaria mentindo -- a mesma razao do `BOLETO S/C` travado ser derivado. */
+const soDigitos = v => String(v == null ? "" : v).replace(/\D/g, "");
+const semZeros = v => soDigitos(v).replace(/^0+/, "");
+function chaveNota(r){
+  // ⚠ Sem tirar os zeros a esquerda nao casa NADA e nao ha erro nenhum: a SE2
+  // escreve "000002117" e a SF1, "2117".
+  const forn = semZeros(r.c.fornecedor), titulo = semZeros(r.c.no_titulo);
+  return forn && titulo ? forn + "|" + titulo : "";
+}
+
+/* De que lado a linha veio. ⚠ Sai do PREFIXO da chave, nunca do texto da coluna
+   Origem: "CONTA A PAGAR"/"CLASSIFICAÇÃO" sao rotulos, e rotulo o usuario
+   renomeia (ja renomeou uma vez, em 14/08/2026). O prefixo "SF1:" e o que
+   amarra a marcacao no banco -- esse nao muda. */
+const daClassificacao = r => String(r.uuid || "").startsWith("SF1:");
+
+const SEM_GEMEA = [];
+/* Os uuids da mesma NF do OUTRO lado da aba. Vazio nas abas que nao sao
+   fundidas: la todas as linhas caem do mesmo lado e nunca ha com quem casar. */
+function gemeas(r, aba){
+  const notas = (aba || A()).notas;
+  if (!notas) return SEM_GEMEA;
+  const nota = notas.get(chaveNota(r));
+  if (!nota) return SEM_GEMEA;
+  return daClassificacao(r) ? nota.titulo : nota.classificacao;
+}
+
+/* ⚠ UM pulo so, e sempre para a marcacao PROPRIA da gemea. Se o que a gemea
+   herdou tambem contasse, marcar a parcela 1 marcaria a nota, e a nota marcaria
+   as parcelas 2 e 3 -- que ninguem tratou. */
+const feitoDe = (r, aba) =>
+  feitos.has(r.uuid) || gemeas(r, aba).some(u => feitos.has(u));
+const notaDe = (r, aba) =>
+  tratativas[r.uuid] || r.tratativa
+  || gemeas(r, aba).map(u => tratativas[u]).find(Boolean) || "";
+// true quando a marcacao que aparece na linha e da gemea, e nao dela
+const herdada = (r, aba) => !feitos.has(r.uuid) && feitoDe(r, aba);
+// a gemea que de fato carrega a marcacao (check ou nota), se houver alguma
+const gemeaComMarca = (r, aba) =>
+  gemeas(r, aba).find(u => feitos.has(u) || tratativas[u]) || "";
+
+/* Quem tratou e quando, aceitando a marcacao da gemea. Sem isto a linha herdada
+   chegaria em Tratados com a coluna "Tratado em / quem" vazia -- parecendo que
+   ninguem mexeu nela, justamente na sub-aba que existe para mostrar quem mexeu. */
+function quemQuando(r, aba){
+  const quando = tratadoEm[r.uuid] || r.tratado_em || "";
+  const quem = responsaveis[r.uuid] || r.tratado_por || r.quem || "";
+  if (quando || quem) return {quando, quem};
+  const gemea = gemeaComMarca(r, aba);
+  return gemea ? {quando: tratadoEm[gemea] || "", quem: responsaveis[gemea] || ""}
+               : {quando, quem};
+}
+
+function indexarNotas(aba){
+  aba.notas = new Map();
+  aba.linhas.forEach(r => {
+    const chave = chaveNota(r);
+    if (!chave) return;
+    let nota = aba.notas.get(chave);
+    if (!nota) aba.notas.set(chave, nota = {classificacao: [], titulo: []});
+    (daClassificacao(r) ? nota.classificacao : nota.titulo).push(r.uuid);
+  });
 }
 
 /* ⚠ O corte da SE2, o do SAIU DA BASE e o da particao moram no `processarAba`
@@ -1591,7 +1703,7 @@ function tratadoPorAqui(r){
 /* "Tratados" = o check OU a propria SE2 ja resolvida. Um titulo com o boleto
    lancado no TOTVS nao pode ficar na fila de A tratar so porque ninguem marcou
    a caixinha -- nao ha mais o que fazer com ele. */
-const encerrado = r => feitos.has(r.uuid) || !!r.se2;
+const encerrado = r => feitoDe(r) || !!r.se2;
 
 /* ---------- tipo de pagamento (SE2 x real) ----------
    13/08/2026, pedido do usuario. Tres colunas: o `Tipo Pgto` gravado no titulo
@@ -1915,6 +2027,13 @@ function seloSE2(r){
     return `<span class="selo se2-baixa" title="Título já BAIXADO no TOTVS em ${
       esc(r.se2.d)} — não há boleto a lançar.">BAIXADO</span>`;
   }
+  // ⚠ `nota`: o titulo foi achado pelo NUMERO, nao pelo uuid (linha da SF1).
+  // Aqui nao existe boleto indicado para comparar, entao cair no "OUTRO" abaixo
+  // acusaria divergencia onde nao ha nada divergindo.
+  if (r.se2.nota){
+    return `<span class="selo se2-boleto" title="A NF desta linha já virou título no TOTVS e o
+      boleto já está lançado nele (${esc(r.se2.d)}). Resolvido — está aqui só como registro.">BOLETO</span>`;
+  }
   return r.se2.igual
     ? `<span class="selo se2-boleto" title="Boleto já lançado no título, e é exatamente o que o
         painel indicou. Resolvido — está aqui só como registro.">BOLETO</span>`
@@ -1926,16 +2045,24 @@ function celulaCompacta(r, col){
   const zona = col.lado ? `z-${col.lado === "delta" ? "delta" : col.lado}` : "z-titulo";
 
   if (col.check){
+    // ⚠ Marcacao HERDADA da gemea (a mesma NF do outro lado da aba) vem marcada
+    // e DESLIGADA: quem desmarca e quem marcou. Clicavel, o clique gravaria uma
+    // marcacao nova nesta linha ou tentaria apagar a do vizinho -- e a caixa
+    // continuaria marcada, porque a heranca nao mudou. Ver `feitoDe`.
+    const herda = herdada(r);
+    const dica = herda
+      ? `Já tratado pela linha de ${daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO"} `
+        + `da mesma NF. Para reabrir os dois, desmarque lá.`
+      : "Marcar como tratado";
     return `<td class="check ${zona}"><input type="checkbox" data-feito="${esc(r.uuid)}"
-      ${feitos.has(r.uuid) ? "checked" : ""} title="Marcar como tratado"></td>`;
+      ${feitoDe(r) ? "checked" : ""} ${herda ? "disabled" : ""} title="${esc(dica)}"></td>`;
   }
   if (col.tipo === "delta"){
     const chave = col.chave === "delta_valor" ? "valor" : "dias";
     return `<td class="${zona}">${marca(r.delta[chave], chave === "valor" ? "moeda" : "dias")}</td>`;
   }
   if (col.tipo === "quando"){
-    const quando = tratadoEm[r.uuid] || r.tratado_em || "";
-    const quem = responsaveis[r.uuid] || r.tratado_por || r.quem || "";
+    const {quando, quem} = quemQuando(r);
     return `<td class="${zona} quando" title="${esc(quem)}">${esc(dataHora(quando)) || "—"}${
       quem ? `<span class="por">${esc(quem)}</span>` : ""}</td>`;
   }
@@ -1975,13 +2102,19 @@ function celulaCompacta(r, col){
       title="${esc(DICA_TIPO[st](r))}">${st}</span></td>`;
   }
   if (col.tipo === "tratativa"){
-    const nota = tratativas[r.uuid] || "";
+    // ⚠ `notaDe`, e nao a nota propria: as duas linhas da mesma NF mostram a
+    // MESMA observacao (pedido do usuario, 14/08/2026). Escrever numa e ver a
+    // outra em branco era o mesmo problema do check.
+    const nota = notaDe(r);
     // A coluna "Tratado em / quem" so existe na sub-aba Tratados. Sem isto aqui,
     // quem escreve a tratativa sem marcar o check some da tela: o nome fica
     // gravado no banco e nao aparece em lugar nenhum.
-    const quem = responsaveis[r.uuid] || r.tratado_por || "";
+    const quem = quemQuando(r).quem;
+    const daGemea = nota && !(tratativas[r.uuid] || r.tratativa);
     const dica = nota
       ? nota + (quem ? `\n— ${quem}` : "")
+        + (daGemea ? `\n(observação da linha de ${
+             daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO"} da mesma NF)` : "")
       : (quem ? `Em tratamento por ${quem}` : "Registrar tratativa");
     return `<td class="trat ${zona}"><button class="btn-trat ${nota ? "tem" : ""}" type="button"
       data-trat="${esc(r.uuid)}" title="${esc(dica)}">${nota ? "✎ nota" : "+ nota"}${
@@ -2110,7 +2243,7 @@ function desenharConferencia(itens){
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
-    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitos.has(r.uuid) ? "feita" : ""} ${
+    ? itens.map((r, i) => `<tr class="${i % 2 ? "zebrada" : ""} ${feitoDe(r) ? "feita" : ""} ${
         r.se2 ? "resolvida" : ""}">
         ${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`).join("")
     : `<tr><td class="vazio" colspan="${cols.length}">Nenhuma linha encontrada.</td></tr>`;
@@ -2199,11 +2332,12 @@ function abrirCartaoTexto(alvo, uuid, chave){
 }
 
 function abrirCartaoTratativa(alvo, uuid){
-  const nota = tratativas[uuid];
-  if (!nota) return;
   const r = A().linhas.find(l => l.uuid === uuid) || {};
-  const quem = responsaveis[uuid] || r.tratado_por || "";
-  const quando = tratadoEm[uuid] || r.tratado_em || "";
+  // a observacao da gemea tambem abre o cartao: e a mesma que o botao mostra
+  const nota = r.uuid ? notaDe(r) : tratativas[uuid];
+  if (!nota) return;
+  const {quem, quando} = r.uuid ? quemQuando(r)
+                                : {quem: responsaveis[uuid] || "", quando: tratadoEm[uuid] || ""};
   const rodape = [quem && "por " + quem, quando && "em " + dataHora(quando)]
     .filter(Boolean).join(" · ");
   cartao.className = "cartao nota";
@@ -2249,10 +2383,11 @@ function colunasExportacao(){
 }
 
 function valorExportacao(r, c){
-  if (c.chave === "@feito")  return feitos.has(r.uuid) ? "SIM" : "NAO";
-  if (c.chave === "@quando") return dataHora(tratadoEm[r.uuid] || r.tratado_em || "");
-  if (c.chave === "@quem")   return responsaveis[r.uuid] || r.tratado_por || "";
-  if (c.chave === "@nota")   return tratativas[r.uuid] || "";
+  // a exportacao le exatamente o que a tela mostra, heranca da gemea incluida
+  if (c.chave === "@feito")  return feitoDe(r) ? "SIM" : "NAO";
+  if (c.chave === "@quando") return dataHora(quemQuando(r).quando);
+  if (c.chave === "@quem")   return quemQuando(r).quem;
+  if (c.chave === "@nota")   return notaDe(r);
   // as tres colunas de tipo de pagamento nao estao em `c`: uma vem da SE2 pelo
   // cabecalho da aba e as outras duas nascem aqui no navegador
   if (c.tipoPainel === "tipo_pgto") return tipoSE2(r);
@@ -2377,20 +2512,26 @@ let notaAberta = null;
 
 function abrirNota(uuid){
   const r = A().linhas.find(l => l.uuid === uuid);
-  const texto = tratativas[uuid] || "";
+  const proprio = tratativas[uuid] || "";
+  // ⚠ Sem a nota da gemea aqui, a caixa abriria VAZIA numa linha que mostra
+  // observacao na grade -- e salvar por cima pareceria ter apagado o texto.
+  const texto = proprio || (r ? notaDe(r) : "");
   notaAberta = uuid;
   document.getElementById("notaSub").textContent = r
-    ? [r.c.no_titulo && "Título " + r.c.no_titulo, r.c.razao_social].filter(Boolean).join(" · ")
+    ? [r.c.no_titulo && "Título " + r.c.no_titulo, r.c.razao_social,
+       !proprio && texto && "observação vinda da linha de "
+         + (daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO")].filter(Boolean).join(" · ")
     : "";
   const campo = document.getElementById("notaTexto");
   campo.value = texto;
   const quem = document.getElementById("notaQuem");
-  quem.value = responsaveis[uuid] || ultimoResp;
+  quem.value = responsaveis[uuid] || (r ? quemQuando(r).quem : "") || ultimoResp;
   // sugere os nomes ja usados
   document.getElementById("pessoas").innerHTML =
     [...new Set(Object.values(responsaveis).filter(Boolean))]
       .map(n => `<option value="${esc(n)}">`).join("");
-  document.getElementById("notaApagar").hidden = !texto;
+  // so aparece para quem tem nota PROPRIA: apagar a da gemea nao e daqui
+  document.getElementById("notaApagar").hidden = !proprio;
   fecharCartao();
   document.getElementById("fundoNota").classList.add("aberto");
   (quem.value ? campo : quem).focus();
@@ -2638,13 +2779,23 @@ function avisoSE2(){
     precisa de boleto.
     ${escondidos ? `<b>${num(escondidos)}</b> saíram nesta rodada (boleto já lançado ou título
     baixado).` : "Nenhum saiu nesta rodada."}
+    ${se2.por_nota ? `A linha da <b>CLASSIFICAÇÃO</b> não tem título ainda, então a conferência
+    dela é pelo <b>nº do título + fornecedor</b> — e só sai quando <b>todas</b> as parcelas
+    daquela NF estiverem resolvidas (${num(se2.por_nota)} nesta rodada).` : ""}
     ${ficaram ? `<b>${num(ficaram)}</b> já resolvido${ficaram === 1 ? "" : "s"} no TOTVS
     ${ficaram === 1 ? "continua" : "continuam"} na sub-aba <b>Tratados</b>, com o selo
     <span class="selo se2-boleto">BOLETO</span> (já lançado) ou
     <span class="selo se2-baixa">BAIXADO</span>
     — são os que foram tratados por aqui.` : ""}
-    Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.</div>`;
+    Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.
+    ${comGemeas() ? `<br>📌 A mesma NF pode aparecer dos <b>dois lados</b> (CONTA A PAGAR e
+    CLASSIFICAÇÃO). Nesse caso <b>tratar uma trata as duas</b>: elas vão juntas para
+    <b>Tratados</b>, com a mesma observação. A caixa da outra fica marcada e travada — quem
+    desmarca é quem marcou.` : ""}</div>`;
 }
+
+// a aba tem alguma NF dos dois lados? (so entao vale explicar a marcacao unica)
+const comGemeas = () => (A().linhas || []).some(r => gemeas(r).length);
 
 /* As tres colunas de tipo de pagamento. O texto sai pela COLUNA existir na aba,
    nao pelo id dela: e assim que ele acompanha, sem manutencao, o dia em que o
@@ -2656,7 +2807,7 @@ function avisoTipoPgto(){
   // maior parte da coluna aparece travada em vez de vazia esperando alguem
   const travados = A().linhas.filter(tipoTravado).length;
   return `<div class="linha-aviso calmo">📌 <b>Tipo Pgto</b> é o tipo de pagamento gravado no
-    TOTVS: no <b>título</b> quando a linha vem da SE2, na <b>nota</b> quando vem da SF1 (a
+    TOTVS: no <b>título</b> nas linhas de CONTA A PAGAR, na <b>nota</b> nas de CLASSIFICAÇÃO (a
     coluna <b>Origem</b> diz qual é qual).
     Ao lado, <b>Tipo real</b> é onde você informa como o pagamento realmente
     foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
@@ -3298,7 +3449,13 @@ function iniciar(dados){
 
   // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
   // os filtros dela ligados na aba que assume o lugar.
-  if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);
+  // ⚠ E a aba INICIAL passa por ela igual, mesmo ja sendo a escolhida: e o
+  // `trocarAba` quem aplica a ABERTURA_PADRAO, e o pedido foi "sempre abrir" na
+  // classificacao a tratar. Sem `porAba` vazio isso seria destrutivo -- por isso
+  // o `estado.aba` so e zerado quando a pagina acabou de abrir (nada guardado).
+  const inicial = dados.abas.some(a => a.id === estado.aba) ? estado.aba : dados.abas[0].id;
+  if (!Object.keys(porAba).length) estado.aba = "";
+  trocarAba(inicial);
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharCartaoAtualizacao();
   mostrarAba(estado.aba);

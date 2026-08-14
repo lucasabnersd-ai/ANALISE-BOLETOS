@@ -24,9 +24,14 @@ Desde 13/08/2026 este mesmo passeio pela SE2 tambem traz o TIPO PGTO do titulo
 (coluna IK), que o painel mostra ao lado do tipo de pagamento real informado a
 mao -- de graca, porque a planilha ja esta aberta aqui.
 
+Desde 14/08/2026 o mesmo veredito existe por NOTA (fornecedor + no titulo), e
+nao so por uuid: as linhas vindas da SF1 carregam o uuid da NOTA, que nunca
+esta na SE2, entao elas escapavam do corte inteiro. Ver `olhar_nota`.
+
 Uso como modulo:
     conferencia = verificacao_se2.ler()          # None se a base nao existir
     conferencia.olhar(uuid)                      # None se o uuid nao esta la
+    conferencia.olhar_nota(fornecedor, titulo)   # o mesmo, achando pelo numero
     conferencia.tipos                            # vocabulario do Tipo Pgto
 """
 
@@ -53,17 +58,23 @@ BASE_PADRAO = Path(
 CACHE = Path(__file__).resolve().parent / "DADOS" / "verificacao_se2_cache.json"
 
 # ⚠ Versao do FORMATO do cache, dentro da assinatura. Em 13/08/2026 o veredito
-# ganhou o "t" (Tipo Pgto). Sem este numero, o cache gravado pela versao
-# anterior -- mesma planilha, mesma data, mesmo tamanho -- seria aceito como
-# valido e a coluna nova nasceria vazia, sem erro nenhum aparecer. Toda vez que
-# `situacoes` mudar de forma, este numero sobe.
-VERSAO_CACHE = 2
+# ganhou o "t" (Tipo Pgto); em 14/08/2026, o indice por NOTA (`notas`). Sem este
+# numero, o cache gravado pela versao anterior -- mesma planilha, mesma data,
+# mesmo tamanho -- seria aceito como valido e a novidade nasceria vazia, sem
+# erro nenhum aparecer. Toda vez que `situacoes` mudar de forma, este numero sobe.
+VERSAO_CACHE = 3
 
 ABA = "SE2"
 COL_UUID = "Campo UUID"
 COL_BAIXA = "DT Baixa"
 COL_BARRAS = "Cod.Barras"
 COL_DIGITAVEL = "Linha Dig."
+# Identidade do titulo SEM o UUID (14/08/2026). E o unico caminho para conferir
+# as linhas que vem da SF1: o UUID delas e o da NOTA e nunca aparece na SE2.
+# ⚠ "No. Titulo" tem PONTO -- "No Titulo" nao existe na base e a busca por nome
+# devolveria coluna nenhuma, calada.
+COL_FORNECEDOR = "Fornecedor"
+COL_NO_TITULO = "No. Titulo"
 # Tipo de pagamento do titulo -- coluna IK da SE2 (a mesma que o painel de fluxo
 # usa). Procurada pelo NOME, nunca pela posicao: o TOTVS ja inseriu coluna no
 # meio dessa base antes. Ao contrario das quatro acima, esta e OPCIONAL: nao
@@ -93,14 +104,30 @@ def _indices(cabecalho: list[str]) -> dict[str, int]:
             faltando.append(rotulo)
     if faltando:
         raise KeyError("colunas ausentes na SE2: " + ", ".join(faltando))
-    # Opcional: sem ela a conferencia continua inteira, so o tipo fica vazio.
+    # Opcionais: sem elas a conferencia continua inteira, so perde o extra.
     if COL_TIPO_PGTO in cabecalho:
         indices["tipo"] = cabecalho.index(COL_TIPO_PGTO)
+    if COL_FORNECEDOR in cabecalho and COL_NO_TITULO in cabecalho:
+        indices["fornecedor"] = cabecalho.index(COL_FORNECEDOR)
+        indices["no_titulo"] = cabecalho.index(COL_NO_TITULO)
     return indices
 
 
 def _digitos(valor) -> str:
     return re.sub(r"\D", "", "" if valor is None else str(valor))
+
+
+def chave_nota(fornecedor, no_titulo) -> str:
+    """`"38597270|2117"` -- fornecedor + numero do titulo, sem zeros a esquerda.
+
+    ⚠ Os dois lados escrevem o mesmo numero de formas diferentes: a SE2 traz
+    "000002117" e a SF1, "2117"; o fornecedor vem com e sem zeros. Sem esta
+    normalizacao o cruzamento por numero nao casa NADA -- e, pior, nao acusa
+    erro: simplesmente nao acha e todo mundo fica no painel.
+    """
+    forn = _digitos(fornecedor).lstrip("0")
+    titulo = _digitos(no_titulo).lstrip("0")
+    return f"{forn}|{titulo}" if forn and titulo else ""
 
 
 def _tipo_pgto(bruta, col: dict[str, int]) -> str:
@@ -126,9 +153,11 @@ class Conferencia:
     """O que a SE2 diz sobre cada titulo, pronto para consulta por uuid."""
 
     def __init__(self, arquivo: Path, situacoes: dict[str, dict],
-                 tipos: list[str] | None = None):
+                 tipos: list[str] | None = None, notas: dict[str, dict] | None = None):
         self.arquivo = arquivo
         self.situacoes = situacoes
+        # O mesmo veredito, mas por NOTA (fornecedor + no titulo) -- ver `ler`.
+        self.notas = notas or {}
         # Vocabulario do campo Tipo Pgto, do mais usado para o menos: e a lista
         # que vira o menu do "tipo real" no painel. Sai da propria SE2 de
         # proposito -- so vale escolher o que o TOTVS de fato usa.
@@ -154,6 +183,27 @@ class Conferencia:
             return None
         return self.situacoes.get(str(uuid).strip().upper())
 
+    def olhar_nota(self, fornecedor, no_titulo) -> dict | None:
+        """O mesmo veredito, achando o titulo pelo NUMERO em vez do uuid.
+
+        Existe para as linhas que vem da SF1 (notas classificadas): o uuid delas
+        e o da NOTA e nunca esta na SE2, entao `olhar()` sempre devolvia None e
+        elas escapavam do corte -- ficavam no painel pedindo boleto para titulo
+        que ja tinha o boleto lancado. Em 14/08/2026 eram 60 das 95 linhas da
+        aba Titulos Associados (mais 7 ja baixadas).
+
+        ⚠ So devolve veredito quando TODOS os titulos daquela nota estao
+        resolvidos. Nota parcelada em tres com boleto em duas ainda da trabalho,
+        e sumir com ela seria esconder servico -- o mesmo fail-open de `olhar`.
+        """
+        chave = chave_nota(fornecedor, no_titulo)
+        if not chave:
+            return None
+        nota = self.notas.get(chave)
+        if not nota or nota["abertos"] or not nota["m"]:
+            return None
+        return nota
+
 
 def _assinatura(arquivo: Path) -> list:
     dados = arquivo.stat()
@@ -174,11 +224,13 @@ def _do_cache(arquivo: Path) -> dict | None:
     return guardado
 
 
-def _guardar_cache(arquivo: Path, situacoes: dict, tipos: list[str]) -> None:
+def _guardar_cache(arquivo: Path, situacoes: dict, tipos: list[str],
+                   notas: dict) -> None:
     try:
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         CACHE.write_text(json.dumps({"assinatura": _assinatura(arquivo),
-                                     "situacoes": situacoes, "tipos": tipos},
+                                     "situacoes": situacoes, "tipos": tipos,
+                                     "notas": notas},
                                     ensure_ascii=False, separators=(",", ":")),
                          encoding="utf-8")
     except OSError:
@@ -199,7 +251,7 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
         guardado = _do_cache(arquivo)
         if guardado is not None:
             return Conferencia(arquivo, guardado["situacoes"],
-                               guardado.get("tipos"))
+                               guardado.get("tipos"), guardado.get("notas"))
 
     wb = load_workbook(arquivo, read_only=True, data_only=True)
     try:
@@ -212,11 +264,9 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
                   " de tipo de pagamento do painel fica vazia.", file=sys.stderr)
 
         situacoes: dict[str, dict] = {}
+        notas: dict[str, dict] = {}
         quantos_tipos: Counter = Counter()
         for bruta in linhas:
-            uuid = bruta[col["uuid"]] if col["uuid"] < len(bruta) else None
-            if not uuid:
-                continue
             baixa = _baixado(bruta[col["baixa"]])
             barras = _digitos(bruta[col["barras"]])
             digitavel = _digitos(bruta[col["digitavel"]])
@@ -229,6 +279,28 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
                 motivo, detalhe = "BOLETO", digitavel or barras
             else:
                 motivo, detalhe = "", ""
+
+            # Indice por NOTA. ⚠ Vem ANTES do filtro de uuid de proposito: o
+            # titulo sem UUID no TOTVS continua sendo uma parcela da nota, e
+            # ignora-lo aqui faria uma nota parecer 100% resolvida por causa de
+            # uma parcela que ninguem contou.
+            chave = (chave_nota(bruta[col["fornecedor"]], bruta[col["no_titulo"]])
+                     if "fornecedor" in col else "")
+            if chave:
+                nota = notas.setdefault(chave, {"m": "", "d": "", "dig": "",
+                                                "total": 0, "abertos": 0})
+                nota["total"] += 1
+                if not motivo:
+                    nota["abertos"] += 1
+                # BOLETO conta mais que BAIXA na hora de explicar a nota: e o
+                # que a pessoa veio conferir. Quem ja tem os dois cai no BOLETO.
+                elif not nota["m"] or (motivo == "BOLETO" and nota["m"] == "BAIXA"):
+                    nota["m"], nota["d"] = motivo, detalhe
+                    nota["dig"] = digitavel if motivo == "BOLETO" else ""
+
+            uuid = bruta[col["uuid"]] if col["uuid"] < len(bruta) else None
+            if not uuid:
+                continue
             tipo = _tipo_pgto(bruta, col)
             if tipo:
                 quantos_tipos[tipo] += 1
@@ -247,5 +319,5 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
     # do mais usado para o menos: e assim que a lista vira menu no painel
     tipos = [t for t, _ in quantos_tipos.most_common()]
     if usar_cache:
-        _guardar_cache(arquivo, situacoes, tipos)
-    return Conferencia(arquivo, situacoes, tipos)
+        _guardar_cache(arquivo, situacoes, tipos, notas)
+    return Conferencia(arquivo, situacoes, tipos, notas)
