@@ -335,12 +335,23 @@ body[data-aba="pedidos"] tr.grupos th.g-pedido{background:var(--acento-bg); colo
 
 /* ---------- planilha ---------- */
 .planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
-  overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05)}
+  overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05);
+  /* Avisa o navegador que esta caixa vive rolando, então ela ganha camada
+     própria e a rolagem para de repintar tudo do zero. Vale pouco nas abas
+     pequenas e muito na de 715 linhas. Ver `contain:paint` na tabela. */
+  will-change:scroll-position}
 html[data-tema="escuro"] .planilha{box-shadow:0 8px 26px rgba(0,0,0,.35)}
 /* Enquanto a mao esta puxando a grade. `user-select:none` e o que impede o
    arrasto de sair pintando o texto das celulas de azul. */
 .planilha.arrastando{cursor:grabbing; user-select:none}
-.planilha.arrastando *{cursor:grabbing !important}
+/* ⚠ Era `.planilha.arrastando *{cursor:grabbing !important}` -- um seletor
+   UNIVERSAL sobre os 67 mil nós da aba NF x Pedido: começar a arrastar disparava
+   um recálculo de estilo da grade inteira, e isso é metade do engasgo que ele
+   sentiu em 14/08/2026. Sem hit-test na tabela, o cursor da caixa já vale para
+   tudo que está por cima dela -- e de quebra o `tr:hover` para de invalidar uma
+   linha a cada pixel arrastado. O arraste não perde nada: quem escuta o ponteiro
+   é a `.planilha`, e ela ainda tem o `setPointerCapture`. */
+.planilha.arrastando table{pointer-events:none}
 table{border-collapse:separate; border-spacing:0; font-size:12.5px; width:max-content; min-width:100%}
 th, td{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:0; text-align:left}
 
@@ -386,7 +397,30 @@ tr.feita td .txt{text-decoration:line-through; text-decoration-color:var(--txt-3
 /* `width:max-content` = a tabela vale a SOMA das colunas (em px, ver PX_POR_PONTO)
    e transborda quando precisa; `min-width:100%` estica quando sobra espaco. Com
    `width:100%` ela cabia sempre -- e coluna nova espremia as vizinhas. */
-table.conferencia{table-layout:fixed; width:max-content; min-width:100%; font-size:12px}
+table.conferencia{table-layout:fixed; width:max-content; min-width:100%; font-size:12px;
+  /* ---------- o engasgo ao deslocar a tela (14/08/2026, achado por medição) ---
+     Ele: "na aba NF x Pedido corre travamentos quando desloco a tela". Essa aba
+     é 715 linhas x 39 colunas -- 28 mil células e uma grade de 6.500x23.000px.
+     O custo NÃO era o tamanho: era a COLUNA GRUDADA. `position:sticky` numa
+     célula é uma restrição por célula, e são 715 delas para o navegador
+     reposicionar a cada quadro. Medido com a CPU 4x mais lenta, 60 quadros:
+       base ................ mediana 34/48ms, 29-38 quadros acima de 32ms
+       tirando o sticky .... mediana 16,6ms  (mas perde a coluna parada)
+       `contain:paint` ..... mediana 18/19ms, com a coluna parada
+       + `will-change` ..... mediana ~17ms
+     `contain:paint` promete ao navegador que nada da tabela pinta fora da caixa
+     dela, e com isso ele deixa de reavaliar a grade inteira a cada rolagem.
+     ⚠ É seguro AQUI porque nada dentro da tabela sai dela: o quadro de hover
+     (`#cartao`) e o drill são irmãos da `.planilha`, não filhos. Um `absolute`
+     que precisasse vazar da tabela passaria a ser cortado -- e sem erro nenhum.
+     ⚠ Não vale trocar por `contain:strict`/`content-visibility` (ver abaixo). */
+  contain:paint}
+/* ⚠ NÃO pôr `content-visibility:auto` nas linhas. Parece a solução óbvia para as
+   715 linhas da aba NF x Pedido e foi medida em 14/08/2026: piorou tudo. Numa
+   TABELA, cada linha que entra ou sai muda a altura de quem contribui para o
+   layout da tabela inteira, e o navegador refaz mais do que economiza --
+   mediana do quadro foi de 29,7ms para 73,6ms e o pior quadro, de 152ms para
+   611ms (CPU 4x mais lenta). */
 table.conferencia th, table.conferencia td{border-right:1px solid var(--line)}
 tr.grupos th{position:sticky; top:0; z-index:7; background:var(--surface-2); color:var(--txt-2);
   font:700 9.5px/1 "Segoe UI",sans-serif; text-transform:uppercase; letter-spacing:1.1px;
@@ -1108,7 +1142,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608141727"></script>
+<script src="supa.js?v=202608141824"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2612,7 +2646,10 @@ document.addEventListener("mouseout", e => {
   if (e.target.closest("[data-cartao]") || e.target.closest("[data-match]")
       || e.target.closest("[data-trat]") || e.target.closest("[data-texto]")) fecharCartao();
 });
-addEventListener("scroll", fecharCartao, true);
+// ⚠ `passive`: este ouvinte roda em CAPTURA, então pega o scroll da grade também
+// -- em aba de 700 linhas é um `scroll` por quadro. Sem `passive` o navegador
+// tem de esperar o JS antes de rolar.
+addEventListener("scroll", fecharCartao, {capture:true, passive:true});
 
 /* ---------- drill: todas as parcelas daquela NF ----------
    Fonte: aba "NFs Múltiplas Parcelas" da base. O alerta diz quantas parcelas
