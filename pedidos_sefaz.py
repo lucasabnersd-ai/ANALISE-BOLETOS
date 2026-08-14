@@ -83,7 +83,10 @@ PC = "Numero PC"
 NUM_SC = "Numero da SC"
 SOLICITANTE = "Solicitante"
 COMPRADOR = "Comprador"
-USUARIO_SC = "Usuário SC"
+# ⚠ `Usuário SC` (SC7, coluna GU) NAO e coluna desta aba: esta preenchida em 83
+# das 24.401 linhas da SC7 e em ZERO dos pedidos que casam com nota -- nasceria
+# vazia para sempre. O `sc7.py` continua lendo; para devolver a coluna, basta
+# reinserir aqui e no COMPACTA_PEDIDOS.
 QTD_CLASSI = "Qtd.a Classi"
 CONTROLE = "Controle Ap."
 ENCERRADO = "Ped. Encerr."
@@ -102,7 +105,7 @@ CABECALHO = [
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
-    PC, NUM_SC, SOLICITANTE, COMPRADOR, USUARIO_SC,
+    PC, NUM_SC, SOLICITANTE, COMPRADOR,
     QTD_CLASSI, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
     VLR_PC, FORNEC_PC, ITENS_PC,
     CRITERIO, INFO, CHAVE_NFE,
@@ -380,7 +383,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
                 PC: pedido.numero_totvs,
                 NUM_SC: pedido.sc,
                 COMPRADOR: pedido.comprador,
-                USUARIO_SC: pedido.usuario_sc,
                 SOLICITANTE: " · ".join(solicitantes.get(pedido.numero, [])),
                 QTD_CLASSI: pedido.qtd_classi or None,
                 CONTROLE: pedido.controle,

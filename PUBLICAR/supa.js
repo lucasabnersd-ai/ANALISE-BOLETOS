@@ -143,61 +143,85 @@
     throw new Error("carteira grande demais para carregar (" + tudo.length + " linhas)");
   }
 
+  /* ---------------- carregamento SOB DEMANDA (13/08/2026) ----------------
+   * Antes, entrar no painel baixava a carteira INTEIRA -- 3.892 linhas, 5,2 MB
+   * -- para mostrar uma aba de 97. Com a aba de pedidos a conta passou a doer.
+   *
+   * Agora sao duas etapas: o login traz so os CABECALHOS (uma linha por aba,
+   * uuid "#meta:<aba>") e as MARCACOES; as linhas de cada aba chegam quando
+   * alguem abre a aba, e ficam em memoria para nao rebaixar.
+   *
+   * ⚠ As marcacoes vem INTEIRAS, e nao por aba, de proposito: elas nao dizem a
+   * que aba pertencem (a tabela e uma so, por uuid) e sao a fonte de quem esta
+   * tratado -- que o painel precisa saber para CONTAR as abas que ainda nem
+   * abriu. Sao poucas linhas perto da carteira.
+   */
+  var marcasPorUuid = {};
+
+  function montarLinha(row) {
+    var d = row.dados || {};
+    var marca = marcasPorUuid[row.uuid] || {};
+    return {
+      uuid: row.uuid,
+      c: d.c || {}, copia: d.copia || {}, difere: d.difere || {},
+      delta: d.delta || {}, forte: !!d.forte,
+      alerta: d.alerta || { tipo: "", nf: "" },
+      match: d.match || null,
+      texto: d.texto || null,
+      selo: d.selo || "", ocr: !!d.ocr,
+      feito: marca.feito != null ? marca.feito : !!d.feito,
+      tratativa: marca.tratativa || "",
+      // tipo de pagamento REAL, informado a mao na aba de associados. So
+      // existe na marcacao -- a carteira nunca traz este campo.
+      tipo_pgto_real: marca.tipo_pgto_real || "",
+      tratado_em: marca.tratado_em || "",
+      tratado_por: marca.tratado_por || "",
+      quem: marca.quem || "",
+      // sem check, a data da marcacao e o que diz QUANDO a NF foi tratada --
+      // o painel usa isso para decidir visao futura x visao passado
+      atualizado_em: marca.atualizado_em || "",
+      // `o` so traz o que difere do exibido (numero cru, data ISO); o resto
+      // cai no proprio `c`. Ordenar pelo texto formatado daria ordem errada.
+      o: Object.assign({}, d.c || {}, d.o || {}),
+      busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),
+    };
+  }
+
+  /* As linhas de UMA aba. Chamada pelo painel quando a aba e aberta.
+   * ⚠ O filtro e por `dados->>aba`, o mesmo campo que o gerador grava em cada
+   * linha -- e o `not like '#meta:%'` tira o cabecalho, que tambem carrega o
+   * `aba` e viraria uma linha fantasma na tabela. */
+  window.__CARREGAR_LINHAS_ABA__ = async function (id) {
+    var linhas = await lerTudo("analise_boletos_titulos", "uuid,dados",
+      function (q) {
+        return q.eq("ativo", true).eq("dados->>aba", id)
+                .not("uuid", "like", "#meta:%");
+      });
+    return linhas.map(montarLinha);
+  };
+
   async function baixarCarteira() {
-    // so os ativos: os que sairam da base ficam no banco, mas fora do painel
-    var titulos = await lerTudo("analise_boletos_titulos", "uuid,dados",
-      function (q) { return q.eq("ativo", true); });
-    if (!titulos.length) throw new Error("a carteira está vazia no servidor");
-    var t = { data: titulos };
+    // ETAPA 1: so os cabecalhos. Sao 8 linhas -- uma por aba.
+    var metaRows = await lerTudo("analise_boletos_titulos", "uuid,dados",
+      function (q) { return q.eq("ativo", true).like("uuid", "#meta:%"); });
+    if (!metaRows.length) throw new Error("a carteira está vazia no servidor");
 
     var m = { data: await lerTudo("analise_boletos_marcacoes",
       "uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em,tipo_pgto_real") };
-    var porUuid = {};
-    (m.data || []).forEach(function (r) { porUuid[r.uuid] = r; });
+    marcasPorUuid = {};
+    (m.data || []).forEach(function (r) { marcasPorUuid[r.uuid] = r; });
 
-    // O cabecalho de cada aba (colunas, parcelas, contagens) vem numa linha
-    // propria, de uuid "#meta:<aba>". Titulos antigos podem ainda trazer o
-    // _meta embutido -- vale so enquanto nao houver a linha propria, senao uma
-    // NF que ficou no banco de uma carga velha serviria um cabecalho vencido.
-    var metas = {}, metasVelhas = {}, porAba = {};
-    t.data.forEach(function (row) {
+    var metas = {}, porAba = {};
+    metaRows.forEach(function (row) {
       var d = row.dados || {};
       var aba = d.aba || "associacoes";
-      if (String(row.uuid).indexOf("#meta:") === 0) {
-        if (d._meta) { metas[aba] = d._meta; porAba[aba] = porAba[aba] || []; }
-        return;                                  // cabecalho nao e titulo
-      }
-      if (d._meta && !metasVelhas[aba]) metasVelhas[aba] = d._meta;
-      var marca = porUuid[row.uuid] || {};
-      (porAba[aba] = porAba[aba] || []).push({
-        uuid: row.uuid,
-        c: d.c || {}, copia: d.copia || {}, difere: d.difere || {},
-        delta: d.delta || {}, forte: !!d.forte,
-        alerta: d.alerta || { tipo: "", nf: "" },
-        match: d.match || null,
-        selo: d.selo || "", ocr: !!d.ocr,
-        feito: marca.feito != null ? marca.feito : !!d.feito,
-        tratativa: marca.tratativa || "",
-        // tipo de pagamento REAL, informado a mao na aba de associados. So
-        // existe na marcacao -- a carteira nunca traz este campo.
-        tipo_pgto_real: marca.tipo_pgto_real || "",
-        tratado_em: marca.tratado_em || "",
-        tratado_por: marca.tratado_por || "",
-        quem: marca.quem || "",
-        // sem check, a data da marcacao e o que diz QUANDO a NF foi tratada --
-        // o painel usa isso para decidir visao futura x visao passado
-        atualizado_em: marca.atualizado_em || "",
-        // `o` so traz o que difere do exibido (numero cru, data ISO); o resto
-        // cai no proprio `c`. Ordenar pelo texto formatado daria ordem errada.
-        o: Object.assign({}, d.c || {}, d.o || {}),
-        busca: Object.keys(d.c || {}).map(function (k) { return d.c[k]; }).join(" ").toLowerCase(),
-      });
+      if (d._meta) { metas[aba] = d._meta; porAba[aba] = null; }
     });
     // "Gerado em" e afins valem para a carteira inteira: vem do cabecalho mais
     // novo que existir, nunca de um que ficou para tras.
     var geral = metas[Object.keys(metas)[0]] || null;
     var abas = Object.keys(porAba).map(function (id) {
-      var m = metas[id] || metasVelhas[id] || {};
+      var m = metas[id] || {};
       if (m.compacta && m.compacta.length) geral = geral || m;
       return {
         id: id, nome: m.nome || id, cor: m.cor || "azul",
@@ -213,7 +237,12 @@
         // rotulos dos contadores do resumo; ausente = os rotulos padrao
         resumo: m.resumo || null,
         com_alerta: m.com_alerta || 0, divergentes: m.divergentes || 0,
-        linhas: porAba[id],
+        // ⚠ `linhas` nasce como lista VAZIA, e nao `null`: assim todo o painel
+        // (resumo, sub-abas, pills, drill) continua funcionando sem nenhuma
+        // guarda espalhada. Quem diz se ja chegou e o `carregada` -- e e so ele
+        // que o desenho consulta para mostrar "carregando" em vez de "vazio".
+        linhas: [], carregada: false,
+        total: m.total || 0,
       };
     }).filter(function (a) { return a.compacta.length; });
     if (!geral) throw new Error("carteira sem cabeçalho (_meta)");
@@ -225,6 +254,9 @@
       gerado_em: geral.gerado_em, atualizado_em: geral.atualizado_em,
       salva_em: geral.salva_em || "", sem_codigo: geral.sem_codigo,
       abas: abas,
+      // as marcacoes inteiras: e delas que o painel monta quem esta tratado,
+      // inclusive das abas que ainda nao foram abertas
+      marcacoes: m.data || [],
     };
   }
 

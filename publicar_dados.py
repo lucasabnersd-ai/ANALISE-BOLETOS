@@ -69,6 +69,13 @@ def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
                 "sem_codigo": carga["sem_codigo"],
                 "com_alerta": aba["com_alerta"],
                 "divergentes": aba["divergentes"],
+                # Quantas linhas a aba tem. Existe por causa do carregamento SOB
+                # DEMANDA (13/08/2026): o painel desenha os botoes das abas antes
+                # de ter as linhas de qualquer uma delas, e sem este numero o
+                # botao nasceria com "0" e so acertaria depois do clique.
+                # ⚠ E o total ANTES dos cortes do navegador (SE2, SAIU DA BASE,
+                # vencimento): assim que a aba carrega, o painel recalcula.
+                "total": len(aba["linhas"]),
                 "compacta": aba["compacta"],
                 "parcelas": aba["parcelas"],
                 "pills": aba["pills"],

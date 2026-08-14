@@ -431,7 +431,19 @@ ROTULOS_PLANILHA_SEFAZ_SF1 = {
 # lancada?", esta responde "de qual pedido veio?". Ver pedidos_sefaz.py.
 COMPACTA_PEDIDOS = [
     ("CHECK (FEITO)",     "",       "",             3),
+    # A chave NF-e vem LOGO NO COMECO (pedido do usuario, 13/08/2026): ela e so
+    # o botao de copiar (SO_BOTAO, 44 digitos que ninguem le) e e a primeira
+    # coisa que se cola no TOTVS/portal da SEFAZ. No fim da linha obrigava a
+    # atravessar 36 colunas para chegar nela.
+    ("Chave NF-e",        "",       "",             3.5),
     ("Situação",          "",       "",            10),
+    # ⚠ O MESMO `Numero PC` aparece DUAS vezes de propósito (pedido do usuario,
+    # 13/08/2026: "coloque o numero do pedido depois da coluna situação
+    # também"). Aqui ele fica colado no veredito -- que e a leitura de sempre,
+    # "qual pedido e o quanto confiar" -- e continua no bloco PEDIDO, junto do
+    # resto do pedido. Duas colunas com a mesma `chave` sao inofensivas: a
+    # celula e a mesma e ordenar por qualquer uma das duas ordena igual.
+    ("Numero PC",         "",       "",             5),
     ("Alerta",            "",       "",             6.5),
     # o veredito da OUTRA aba, de proposito: "achei o pedido MAS a nota nunca
     # foi lancada" e justamente o caso que esta aba serve para achar
@@ -461,10 +473,8 @@ COMPACTA_PEDIDOS = [
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
-    # ⚠ Nasce VAZIA: `Usuário SC` esta preenchida em 83 das 24.401 linhas da SC7
-    # e em ZERO dos pedidos que casam com nota. Fica porque o usuario pediu e
-    # porque passa a funcionar sozinha se a exportacao mudar.
-    ("Usuário SC",        "boleto", "PEDIDO",       6),
+    # ⚠ `Usuário SC` SAIU em 13/08/2026: nascia vazia (83 de 24.401 linhas da
+    # SC7, e ZERO nos pedidos que casam com nota). O `sc7.py` continua lendo.
     ("Qtd.a Classi",      "boleto", "PEDIDO",       4),
     ("Controle Ap.",      "boleto", "PEDIDO",       4),
     ("Ped. Encerr.",      "boleto", "PEDIDO",       4),
@@ -478,7 +488,6 @@ COMPACTA_PEDIDOS = [
     # o texto de onde o numero do pedido foi lido; abre no quadro
     ("Informações",       "",       "",             3.5),
     ("@tratativa",        "",       "",             4),
-    ("Chave NF-e",        "",       "",             3.5),
 ]
 
 ROTULOS_PLANILHA_PEDIDOS = {
@@ -504,7 +513,6 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Numero da SC": "Nº da Solicitação de Compra (SC7)",
     "Solicitante": "Solicitante da SC (SC1)",
     "Comprador": "Comprador do Pedido (SC7)",
-    "Usuário SC": "Usuário da SC (SC7 — quase sempre vazio na base)",
     "Qtd.a Classi": "Quantidade a Classificar (soma dos itens do PC)",
     "Controle Ap.": "Controle de Aprovação (SC7)",
     "Ped. Encerr.": "Pedido Encerrado (SC7)",
@@ -753,10 +761,11 @@ ABAS = {
         "col_score": "",
         "col_uuid": "Chave",
         "prefixo_uuid": "",
-        # ⚠ LISTA de colunas (o resto do painel declara uma so). "Comprador" e
-        # "Ped. Encerr." so viram botao se tiverem de 2 a 8 valores na base do
-        # dia -- a guarda de sempre; com 19 compradores a barra viraria parede.
-        "pills": ["Lançada na SF1", "Ped. Encerr."],
+        # ⚠ LISTA de colunas (o resto do painel declara uma so). Cada uma so vira
+        # botao se tiver de 2 a 8 valores na base do dia -- a guarda de sempre.
+        # `Ped. Encerr.` costuma nao passar (um valor so) e simplesmente nao
+        # aparece; `Origem` (NF-e / NFS-e) foi pedida em 13/08/2026.
+        "pills": ["Origem", "Lançada na SF1", "Ped. Encerr."],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   pedidos_sefaz.PROVAVEL: "provavel",
                   pedidos_sefaz.CONFERIR: "provavel",

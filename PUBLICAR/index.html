@@ -485,7 +485,7 @@ td.tipo-real{padding:2px 4px}
 
 /* Selos da conferencia na SE2. Aparecem so nas linhas que JA foram resolvidas
    no TOTVS e que continuam na tela porque alguem daqui tratou -- as demais
-   somem (ver filtrarSE2). Verde = fizeram o que o painel pediu; ambar = o
+   somem (ver processarAba). Verde = fizeram o que o painel pediu; ambar = o
    boleto lancado nao e o que o painel indicou, vale conferir; cinza = baixado. */
 .selo.se2-boleto{background:var(--verde-bg); color:var(--verde-txt); border-color:var(--verde-linha)}
 .selo.se2-outro{background:var(--ambar-bg); color:var(--ambar-txt); border-color:var(--ambar-linha)}
@@ -631,6 +631,12 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <label data-so-com="vencimento_boleto">até<input type="date" data-filtro="bolAte"></label>
     <label>Nº título<input type="search" data-filtro="titulo" placeholder="000050174" autocomplete="off"></label>
     <label>NF<input type="search" data-filtro="nf" placeholder="50174" autocomplete="off"></label>
+    <!-- Campos das abas da SEFAZ / do pedido de compra (13/08/2026). Mesma regra
+         das faixas acima: cada um aparece SO na aba que tem a coluna. -->
+    <label data-so-com="nat_operacao">Natureza<input type="search" data-filtro="natureza" placeholder="venda, remessa…" autocomplete="off"></label>
+    <label data-so-com="solicitante">Solicitante<input type="search" data-filtro="solicitante" placeholder="jose.marques" autocomplete="off"></label>
+    <label data-so-com="comprador">Comprador<input type="search" data-filtro="comprador" placeholder="otoniel.cruz" autocomplete="off"></label>
+    <label data-so-com="numero_pc">Pedido<input type="search" data-filtro="pc" placeholder="3100 ou 003100" autocomplete="off"></label>
     <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
     <button type="button" id="limparFiltros" hidden>Limpar</button>
     <span class="espaco"></span>
@@ -1008,7 +1014,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608131936"></script>
+<script src="supa.js?v=202608140820"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1031,7 +1037,8 @@ const primeiroNome = n => String(n || "").trim().split(/\s+/)[0];
 const estado = {busca:"", ordem:null, desc:false, sub:"tratar", aba:"", pill:{},
                 filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
                          realDe:"", realAte:"", bolDe:"", bolAte:"",
-                         titulo:"", nf:"", uuid:""}};
+                         titulo:"", nf:"", uuid:"",
+                         natureza:"", solicitante:"", comprador:"", pc:""}};
 
 /* ---------- os filtros sao de cada aba, nao do painel ----------
    Ate 13/08/2026 havia um estado so para todas: o que se digitava numa aba
@@ -1049,7 +1056,8 @@ const porAba = {};
 const semFiltro = () => ({busca:"", ordem:null, desc:false, sub:"tratar", pill:{},
                           filtros:{fornecedor:"", valor:"", vencDe:"", vencAte:"",
                                    realDe:"", realAte:"", bolDe:"", bolAte:"",
-                                   titulo:"", nf:"", uuid:""}});
+                                   titulo:"", nf:"", uuid:"",
+                                   natureza:"", solicitante:"", comprador:"", pc:""}});
 
 // copia, nunca a referencia: `filtros` e `pill` sao mutados in loco (a cada tecla
 // digitada e a cada botao clicado)
@@ -1340,6 +1348,15 @@ const CAMPOS_FILTRO = {
   titulo:     ["no_titulo"],
   nf:         ["nf_doc_boleto", "nf_doc_original", "nf_normalizada", "n_doc"],
   uuid:       ["campo_uuid"],
+  /* Abas da SEFAZ e do pedido de compra (13/08/2026). ⚠ Cada campo tem um
+     `data-so-com` no HTML apontando para a PRIMEIRA chave da lista: e ela que
+     decide se o campo aparece. Acrescentar chave aqui sem olhar o `data-so-com`
+     faz o filtro funcionar numa aba onde o campo esta escondido. */
+  natureza:    ["nat_operacao"],
+  solicitante: ["solicitante"],
+  comprador:   ["comprador"],
+  // "3100" tem de achar "003100": o PC e exibido no padrao TOTVS, de 6 digitos
+  pc:          ["numero_pc", "numero_da_sc"],
 };
 // O vencimento tem filtro proprio (intervalo), entao sai da busca por texto.
 const COLUNAS_VENC = ["vencimento", "vencto_real", "vencimento_boleto"];
@@ -1426,23 +1443,70 @@ function naVisaoFutura(r, hoje){
   return !!tratou && tratou <= venc;           // tratada antes de vencer: fica
 }
 
-/* Abre em duas as abas que declaram `particoes`; as demais passam direto. */
+/* Abre em duas as abas que declaram `particoes`; as demais passam direto.
+   ⚠ Desde o carregamento sob demanda (13/08/2026) isto roda ANTES de existir
+   linha nenhuma: a lista de particoes vem do CABECALHO da aba, entao a barra de
+   abas ja pode ser desenhada sem baixar nada. Quem filtra as linhas por
+   particao e o `processarAba`, na hora em que a aba abre.
+   ⚠ `origem` e a aba de onde as linhas saem no banco: duas particoes vem da
+   MESMA consulta, e sem isso a segunda pediria de novo (e por um id que nao
+   existe em `dados->>aba`). */
 function partirAbas(abas){
-  const hoje = hojeISO();
   const saida = [];
   abas.forEach(aba => {
     const partes = aba.particoes || [];
-    if (!partes.length){ saida.push(aba); return; }
+    if (!partes.length){ aba.origem = aba.origem || aba.id; saida.push(aba); return; }
     partes.forEach(p => {
-      const querFutura = p.modo === "futura";
       saida.push(Object.assign({}, aba, {
         id: p.id, nome: p.nome, cor: p.cor, particoes: null, modo: p.modo,
-        guia: p.guia || p.nome,
-        linhas: aba.linhas.filter(r => naVisaoFutura(r, hoje) === querFutura),
+        guia: p.guia || p.nome, origem: aba.id,
+        linhas: (aba.linhas || []).slice(),
       }));
     });
   });
   return saida;
+}
+
+/* Tudo o que uma aba sofre entre chegar do banco e aparecer na tela, num lugar
+   so -- porque agora isso acontece uma aba de cada vez, e nao numa passada
+   unica no `iniciar`. A ordem importa e e a mesma de antes:
+     tipo da SE2 -> corte da SE2 -> SAIU DA BASE -> particao -> contagens.
+   ⚠ O tipo da SE2 e aplicado ANTES do corte: a linha escondida por ele nao
+   passaria mais por aqui, e ela reaparece na sub-aba Tratados. */
+function processarAba(aba){
+  const tipos = (aba.se2 || {}).tipos;
+  if (tipos) aba.linhas.forEach(r => {
+    const t = tipos[r.uuid];
+    if (!t || r.tipo_se2) return;          // `|| r.tipo_se2`: nao somar duas vezes na busca
+    r.tipo_se2 = t;
+    r.busca += " " + t.toLowerCase();
+  });
+
+  const fora = (aba.se2 || {}).fora;
+  if (fora){
+    aba.se2.escondidos = 0;
+    aba.linhas = aba.linhas.filter(r => {
+      const saiu = fora[r.uuid];
+      if (!saiu) return true;
+      r.se2 = saiu;                       // vira selo e manda para Tratados
+      if (tratadoPorAqui(r)) return true;
+      aba.se2.escondidos++;
+      return false;
+    });
+  }
+
+  aba.linhas = aba.linhas.filter(r => (r.c.situacao || "").indexOf("SAIU") !== 0);
+
+  if (aba.modo){
+    const hoje = hojeISO();
+    aba.linhas = aba.linhas.filter(r => naVisaoFutura(r, hoje) === (aba.modo === "futura"));
+  }
+
+  recontarAba(aba);
+  pillDeTipo(aba);
+  aba.total = aba.linhas.length;           // agora o contador do botao e exato
+  aba.carregada = true;
+  return aba;
 }
 
 /* ---------- conferencia na SE2 ----------
@@ -1468,22 +1532,10 @@ function tratadoPorAqui(r){
   return feitos.has(r.uuid) || !!(tratativas[r.uuid] || r.tratativa);
 }
 
-function filtrarSE2(abas){
-  abas.forEach(aba => {
-    const fora = (aba.se2 || {}).fora;
-    if (!fora) return;
-    aba.se2.escondidos = 0;
-    aba.linhas = aba.linhas.filter(r => {
-      const saiu = fora[r.uuid];
-      if (!saiu) return true;
-      r.se2 = saiu;                       // vira selo e manda para Tratados
-      if (tratadoPorAqui(r)) return true;
-      aba.se2.escondidos++;
-      return false;
-    });
-  });
-  return abas;
-}
+/* ⚠ O corte da SE2, o do SAIU DA BASE e o da particao moram no `processarAba`
+   desde 13/08/2026 (carregamento sob demanda). Antes eram tres passadas sobre
+   TODAS as abas dentro do `iniciar` -- o que so era possivel porque todas as
+   linhas chegavam de uma vez. */
 
 /* "Tratados" = o check OU a propria SE2 ja resolvida. Um titulo com o boleto
    lancado no TOTVS nao pode ficar na fila de A tratar so porque ninguem marcou
@@ -1500,22 +1552,11 @@ const encerrado = r => feitos.has(r.uuid) || !!r.se2;
    campo novo posto dentro da linha nunca chegaria em quem ja tem check.
 
    ⚠ O alerta e calculado NA HORA, no navegador -- o tipo real muda a qualquer
-   momento e um alerta congelado na geracao mentiria ate a rodada seguinte. */
-function aplicarTipoSE2(abas){
-  abas.forEach(aba => {
-    const tipos = (aba.se2 || {}).tipos;
-    if (!tipos) return;
-    aba.linhas.forEach(r => {
-      const t = tipos[r.uuid];
-      if (!t) return;
-      r.tipo_se2 = t;
-      // entra na busca: procurar por "BOLETO S/C" e uma pergunta legitima, e o
-      // `busca` e montado so com o que veio em `c`
-      r.busca += " " + t.toLowerCase();
-    });
-  });
-  return abas;
-}
+   momento e um alerta congelado na geracao mentiria ate a rodada seguinte.
+
+   ⚠ O tipo entra na BUSCA (`r.busca += ...`): procurar por "BOLETO S/C" e uma
+   pergunta legitima, e o `busca` e montado so com o que veio em `c`. Quem faz
+   isso e o `processarAba`, junto com os cortes. */
 
 const tipoSE2 = r => r.tipo_se2 || "";
 const tipoReal = r => tiposReais[r.uuid] || "";
@@ -1568,33 +1609,24 @@ function opcoesTipo(atual){
    ⚠ O corte e por SITUACAO, nao por aba: se um dia o selo voltar a existir em
    outra aba, o mesmo criterio vale. Nada e apagado do banco -- a linha continua
    la, so deixa de ser exibida (mesma escolha da aba de vencidas). */
-function tirarSaiuDaBase(abas){
-  abas.forEach(aba => {
-    aba.linhas = aba.linhas.filter(r => (r.c.situacao || "").indexOf("SAIU") !== 0);
-  });
-  return abas;
-}
-
 /* Contagens do resumo e valores dos botoes de fonte: recalculados a partir das
-   linhas de CADA aba -- depois do corte, os totais que vieram da geracao
+   linhas DESTA aba -- depois dos cortes, os totais que vieram da geracao
    valeriam para as duas visoes somadas. */
-function recontarAbas(abas){
-  abas.forEach(aba => {
-    // pelo tipo do alerta, nao pela chave da coluna: nas abas da SEFAZ ela se
-    // chama `alerta`, nas de boleto `alerta_fatura`
-    aba.com_alerta = aba.linhas.filter(r => r.alerta && r.alerta.tipo).length;
-    aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
-    (aba.pills || []).forEach((grupo, i) => {
-      // ⚠ grupo `fixo` (o do tipo de pagamento) nao se recalcula: os valores
-      // dele sao os quatro estados possiveis, e nao o que existe hoje na aba.
-      if (grupo.fixo) return;
-      aba.pills[i] = Object.assign({}, grupo, {
-        valores: [...new Set(aba.linhas.map(r => r.c[grupo.chave]).filter(Boolean))]
-                   .sort((a, b) => a.localeCompare(b, "pt-BR")),
-      });
+function recontarAba(aba){
+  // pelo tipo do alerta, nao pela chave da coluna: nas abas da SEFAZ ela se
+  // chama `alerta`, nas de boleto `alerta_fatura`
+  aba.com_alerta = aba.linhas.filter(r => r.alerta && r.alerta.tipo).length;
+  aba.divergentes = aba.linhas.filter(r => Object.keys(r.difere || {}).length).length;
+  (aba.pills || []).forEach((grupo, i) => {
+    // ⚠ grupo `fixo` (o do tipo de pagamento) nao se recalcula: os valores
+    // dele sao os quatro estados possiveis, e nao o que existe hoje na aba.
+    if (grupo.fixo) return;
+    aba.pills[i] = Object.assign({}, grupo, {
+      valores: [...new Set(aba.linhas.map(r => r.c[grupo.chave]).filter(Boolean))]
+                 .sort((a, b) => a.localeCompare(b, "pt-BR")),
     });
   });
-  return abas;
+  return aba;
 }
 
 /* ---------- filtro de botao do tipo de pagamento ----------
@@ -1614,15 +1646,13 @@ const PILL_TIPO = {
   valores: ["DIVERGE", "CONFERE", "SEM SE2", TIPO_A_INFORMAR],
 };
 
-function pillsDeTipo(abas){
-  abas.forEach(aba => {
-    // pela COLUNA existir, nao pelo id da aba: se o trio for para outra aba um
-    // dia, o filtro vai junto sem ninguem lembrar de mexer aqui
-    if (!(aba.compacta || []).some(c => c.tipo === "alerta_tipo")) return;
-    if ((aba.pills || []).some(g => g.chave === PILL_TIPO.chave)) return;
-    aba.pills = (aba.pills || []).concat([PILL_TIPO]);
-  });
-  return abas;
+function pillDeTipo(aba){
+  // pela COLUNA existir, nao pelo id da aba: se o trio for para outra aba um
+  // dia, o filtro vai junto sem ninguem lembrar de mexer aqui
+  if (!(aba.compacta || []).some(c => c.tipo === "alerta_tipo")) return aba;
+  if ((aba.pills || []).some(g => g.chave === PILL_TIPO.chave)) return aba;
+  aba.pills = (aba.pills || []).concat([PILL_TIPO]);
+  return aba;
 }
 
 /* O valor da linha para um grupo de botoes. Quase sempre e a celula da base; o
@@ -1639,7 +1669,7 @@ function dentroDoPeriodo(r, de, ate){
 }
 // Filtros numericos casam tambem so pelos digitos: "5427" acha "R$ 5.427,50"
 // e "082026" acha "01/08/2026".
-const SO_DIGITOS = new Set(["valor", "venc", "titulo", "nf"]);
+const SO_DIGITOS = new Set(["valor", "venc", "titulo", "nf", "pc"]);
 const digitos = t => String(t).replace(/\D/g, "");
 
 function casaFiltro(r, campo, termo){
@@ -2276,9 +2306,12 @@ function desenharCartaoAtualizacao(){
 }
 
 function desenharAbasTopo(){
+  // ⚠ Aba ainda nao aberta mostra o `total` do cabecalho -- que e de ANTES dos
+  // cortes do navegador. Ao carregar, `processarAba` reescreve o total com o
+  // numero exato e o botao se corrige sozinho.
   document.getElementById("abasTopo").innerHTML = DADOS.abas.map(a =>
     `<button type="button" data-aba="${esc(a.id)}" class="${a.id === estado.aba ? "ativa" : ""}">
-       ${esc(a.nome)}<small>${num(a.linhas.length)}</small></button>`).join("");
+       ${esc(a.nome)}<small>${num(a.carregada ? a.linhas.length : (a.total || 0))}</small></button>`).join("");
   document.body.dataset.aba = estado.aba;
   document.querySelector(".topo h1").innerHTML =
     `${esc(A().nome)} <span>· Análise de Boletos</span>`;
@@ -2290,10 +2323,9 @@ document.getElementById("abasTopo").addEventListener("click", e => {
   // guarda os filtros da aba que sai e devolve os da que entra (nada e zerado)
   trocarAba(botao.dataset.aba);
   try { sessionStorage.setItem("painel_boletos_aba", estado.aba); } catch (err) {}
-  desenharAbasTopo();
-  desenharPills();
-  desenharAviso();
-  desenhar();
+  // `mostrarAba` desenha na hora e, se as linhas ainda nao chegaram, pede e
+  // redesenha quando chegarem -- ver o carregamento sob demanda.
+  mostrarAba(estado.aba);
 });
 
 /* Uma barra por grupo (a declarada pela aba e a de Situação). O rotulo aparece
@@ -2739,6 +2771,16 @@ function desenhar(){
   if (!DADOS) return;               // ainda sem carteira: nada a desenhar
   const grade = document.getElementById("grade");
   grade.className = "conferencia";
+  // Aba ainda chegando: dizer "carregando" e diferente de mostrar "nenhuma
+  // linha encontrada", que faria a pessoa mexer no filtro sem motivo.
+  if (!A().carregada){
+    grade.innerHTML = `<tbody><tr><td class="vazio">${
+      A().erro ? "Não consegui carregar esta aba: " + esc(A().erro)
+               : "Carregando as linhas desta aba…"}</td></tr></tbody>`;
+    atualizarSubabas();
+    mostrarResumo();
+    return;
+  }
   grade.innerHTML = desenharConferencia(linhas());
   atualizarSubabas();
   document.getElementById("limparFiltros").hidden =
@@ -2949,6 +2991,54 @@ function aplicarFila(){
 /* ---------- entrada dos dados ----------
    O dev.html traz a carteira embutida; o index.html publicado nasce vazio e
    espera o supa.js resolver window.__DADOS_BOLETOS__ depois do login. */
+/* ---------- carregamento SOB DEMANDA ----------
+   Ate 13/08/2026 entrar no painel baixava a carteira INTEIRA (3.892 linhas,
+   5,2 MB) para mostrar uma aba de 97. Agora o login traz so os cabecalhos e as
+   marcacoes, e as linhas de cada aba chegam quando alguem abre a aba.
+   ⚠ `abrindo` guarda a PROMESSA, nao um booleano: dois cliques rapidos na mesma
+   aba tem de esperar a mesma consulta, e nao disparar duas.
+   ⚠ Duas particoes da mesma aba (`origem`) vem de UMA consulta so -- o id da
+   particao nem existe no `dados->>aba` do banco.
+   ⚠ Sem `__CARREGAR_LINHAS_ABA__` (o dev.html, que ja nasce com tudo) isto vira
+   um no-op: as abas chegam com `carregada: true`. */
+const abrindo = {};
+
+function garantirAba(id){
+  const aba = DADOS.abas.find(a => a.id === id);
+  if (!aba || aba.carregada) return Promise.resolve(aba);
+  if (!window.__CARREGAR_LINHAS_ABA__){ aba.carregada = true; return Promise.resolve(aba); }
+  const origem = aba.origem || aba.id;
+  if (!abrindo[origem]) abrindo[origem] = window.__CARREGAR_LINHAS_ABA__(origem);
+  return abrindo[origem].then(linhas => {
+    // todas as particoes desta origem se servem da MESMA consulta
+    DADOS.abas.filter(a => (a.origem || a.id) === origem && !a.carregada)
+              .forEach(a => { a.linhas = linhas.slice(); processarAba(a); });
+    return aba;
+  }).catch(err => {
+    delete abrindo[origem];               // deixa tentar de novo no proximo clique
+    aba.erro = (err && err.message) || String(err);
+    throw err;
+  });
+}
+
+/* Abre a aba na tela: pede as linhas se faltarem e redesenha quando chegam. */
+function mostrarAba(id){
+  const aba = DADOS.abas.find(a => a.id === id);
+  if (aba && aba.carregada){ desenharTudoDaAba(); return; }
+  desenharTudoDaAba();                     // mostra "carregando" ja
+  garantirAba(id).then(() => {
+    if (estado.aba === id) desenharTudoDaAba();
+    desenharAbasTopo();                    // o contador do botao vira o exato
+  }).catch(() => { if (estado.aba === id) desenharTudoDaAba(); });
+}
+
+function desenharTudoDaAba(){
+  desenharAbasTopo();
+  desenharPills();
+  desenharAviso();
+  desenhar();
+}
+
 function iniciar(dados){
   DADOS = dados;
   // Com login o banco e a fonte unica: zerar antes evita que um espelho velho
@@ -2956,7 +3046,20 @@ function iniciar(dados){
   // chegou la volta logo abaixo, pela fila.
   if (noBanco()){ feitos.clear(); tratativas = {}; responsaveis = {}; tratadoEm = {};
                   tiposReais = {}; }
-  dados.abas.forEach(aba => aba.linhas.forEach(r => {
+  /* ⚠ As marcacoes vem da TABELA, nao das linhas -- e essa foi a condicao para
+     carregar sob demanda. O painel precisa saber quem esta tratado para contar
+     e cortar abas que ainda nem abriu; se dependesse das linhas, uma aba
+     fechada nunca contribuiria com as marcacoes dela.
+     O `dev.html` nao tem essa tabela: la as marcacoes continuam vindo dentro
+     das linhas, e o laco de baixo cobre os dois casos. */
+  (dados.marcacoes || []).forEach(m => {
+    if (m.feito) feitos.add(m.uuid);
+    if (m.tratativa) tratativas[m.uuid] = m.tratativa;
+    if (m.tratado_em) tratadoEm[m.uuid] = m.tratado_em;
+    if (m.tratado_por) responsaveis[m.uuid] = m.tratado_por;
+    if (m.tipo_pgto_real) tiposReais[m.uuid] = m.tipo_pgto_real;
+  });
+  dados.abas.forEach(aba => (aba.linhas || []).forEach(r => {
     if (r.feito) feitos.add(r.uuid);
     // com login, o banco manda sobre o que houver gravado no navegador
     if (r.tratativa) tratativas[r.uuid] = r.tratativa;
@@ -2965,21 +3068,24 @@ function iniciar(dados){
     if (r.tipo_pgto_real) tiposReais[r.uuid] = r.tipo_pgto_real;
   }));
   if (noBanco()) aplicarFila();
-  // os dois cortes leem o que foi tratado, entao vem depois do laco acima:
-  // primeiro sai quem a SE2 ja resolveu, depois o corte por vencimento.
-  // O tipo da SE2 e aplicado ANTES do corte: a linha que fica escondida por
-  // filtrarSE2 nao passaria mais por aqui, e ela reaparece em Tratados.
-  dados.abas = pillsDeTipo(
-    recontarAbas(partirAbas(tirarSaiuDaBase(filtrarSE2(aplicarTipoSE2(dados.abas))))));
+
+  // As particoes viram abas ja aqui: elas saem do CABECALHO, nao das linhas.
+  dados.abas = partirAbas(dados.abas);
+  // Quem ja veio com linhas (dev.html) passa pelo tratamento agora; as demais
+  // esperam o clique. Os cortes leem o que foi tratado, entao vem depois do
+  // laco das marcacoes, acima.
+  dados.abas.forEach(aba => {
+    if (aba.carregada === false) return;   // sob demanda: fica para o `garantirAba`
+    aba.linhas = aba.linhas || [];
+    processarAba(aba);
+  });
+
   // Pela `trocarAba` tambem aqui: a aba que sumiu na carga nova nao pode deixar
   // os filtros dela ligados na aba que assume o lugar.
   if (!dados.abas.some(a => a.id === estado.aba)) trocarAba(dados.abas[0].id);
   document.getElementById("atualizado").textContent = "Gerado em " + dados.atualizado_em;
   desenharCartaoAtualizacao();
-  desenharAbasTopo();
-  desenharPills();
-  desenharAviso();
-  desenhar();
+  mostrarAba(estado.aba);
 }
 window.__INICIAR_PAINEL__ = iniciar;
 
