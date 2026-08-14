@@ -1054,7 +1054,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608141449"></script>
+<script src="supa.js?v=202608141532"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1554,7 +1554,7 @@ function processarAba(aba){
   }
 
   recontarAba(aba);
-  pillDeTipo(aba);
+  pillsDerivadas(aba);
   aba.total = aba.linhas.length;           // agora o contador do botao e exato
   aba.carregada = true;
   return aba;
@@ -1724,21 +1724,79 @@ function recontarAba(aba){
 const PILL_TIPO = {
   chave: "alerta_tipo", rotulo: "Tipo de pagamento", fixo: true,
   valores: ["DIVERGE", "CONFERE", "SEM SE2", TIPO_A_INFORMAR],
+  quando: aba => (aba.compacta || []).some(c => c.tipo === "alerta_tipo"),
+  valor: situacaoTipo,
 };
 
-function pillDeTipo(aba){
-  // pela COLUNA existir, nao pelo id da aba: se o trio for para outra aba um
+/* ---------- filtros do PEDIDO DE COMPRA (14/08/2026, pedido do usuario) ------
+   "Permita filtrar a quantidade classificada" e "permita filtrar essa coluna
+   Ped. Encerr. (AU) da SC7: se tiver E, pedido encerrado; se nao, pendente."
+   Nenhum dos dois vira barra pelo caminho normal do `grupos_de_pills()`:
+   - `Ped. Encerr.` tem UM valor preenchido so ("E") e a guarda de la pede 2 --
+     era descartada todo dia, calada;
+   - `Qtd.a Classi` e NUMERO: viraria uma barra de "3, 4, 6, 7, 8, 9, 14, 56",
+     e a pergunta que se faz da coluna e outra ("sobrou algo a classificar?").
+   Por isso os dois nascem aqui, do mesmo jeito que o do tipo de pagamento: o
+   valor da linha e CALCULADO da celula e o grupo e `fixo` (nao se recalcula a
+   partir de `r.c`, ver `recontarAba`).
+
+   ⚠ NOTA SEM PEDIDO FICA COM VALOR VAZIO nos dois -- e nao "PENDENTE". Sao 414
+   das 715 notas de hoje: elas nao tem pedido nenhum, entao chamar o pedido delas
+   de pendente seria inventar um pedido que nao existe. Valor vazio nao casa com
+   botao nenhum e nao entra em contagem; quem procura por essas usa o selo
+   SEM PEDIDO da barra de Situação.
+   ⚠ "Tem quantidade?" e testado por DIGITO DIFERENTE DE ZERO na celula ja
+   formatada, e nao convertendo texto em numero: a celula chega em pt-BR ("0",
+   "0,954", "1.890.000") e um `parseFloat` leria "1.890.000" como 1,89. */
+const temQuantidade = celula => /[1-9]/.test(String(celula || ""));
+
+/* ⚠ O que o `sc7.py` escreve na celula quando SO PARTE dos itens do pedido esta
+   encerrada (constante `PARCIAL` la). Pedido pela metade ainda tem item em
+   aberto -- e trabalho pendente, e nao pedido fechado. */
+const PC_PARCIAL = "PARCIAL";
+
+const PILL_ENCERRADO = {
+  chave: "@ped_encerr", rotulo: "Pedido encerrado", fixo: true,
+  ajuda: "Coluna Ped. Encerr. da SC7: “E” = pedido encerrado; vazio = pendente. "
+       + "Pedido com só parte dos itens encerrada aparece como PARCIAL na coluna "
+       + "e conta como pendente. Nota sem pedido não entra em nenhum dos dois.",
+  valores: ["ENCERRADO", "PENDENTE"],
+  quando: aba => (aba.compacta || []).some(c => c.chave === "ped_encerr"),
+  valor: r => !r.c.numero_pc ? ""
+            : (r.c.ped_encerr && r.c.ped_encerr !== PC_PARCIAL ? "ENCERRADO" : "PENDENTE"),
+};
+
+const PILL_QTD_CLASSI = {
+  chave: "@qtd_classi", rotulo: "Qtd. a classificar", fixo: true,
+  ajuda: "Coluna Qtd.a Classi da SC7 (o que do pedido ainda falta classificar). "
+       + "Nota sem pedido não entra em nenhum dos dois.",
+  valores: ["A CLASSIFICAR", "NADA A CLASSIFICAR"],
+  quando: aba => (aba.compacta || []).some(c => c.chave === "qtd_a_classi"),
+  valor: r => !r.c.numero_pc ? ""
+            : (temQuantidade(r.c.qtd_a_classi) ? "A CLASSIFICAR" : "NADA A CLASSIFICAR"),
+};
+
+const PILLS_DERIVADAS = [PILL_TIPO, PILL_ENCERRADO, PILL_QTD_CLASSI];
+
+function pillsDerivadas(aba){
+  // pela COLUNA existir, nao pelo id da aba: se a coluna for para outra aba um
   // dia, o filtro vai junto sem ninguem lembrar de mexer aqui
-  if (!(aba.compacta || []).some(c => c.tipo === "alerta_tipo")) return aba;
-  if ((aba.pills || []).some(g => g.chave === PILL_TIPO.chave)) return aba;
-  aba.pills = (aba.pills || []).concat([PILL_TIPO]);
+  PILLS_DERIVADAS.forEach(grupo => {
+    if (!grupo.quando(aba)) return;
+    if ((aba.pills || []).some(g => g.chave === grupo.chave)) return;
+    aba.pills = (aba.pills || []).concat([grupo]);
+  });
   return aba;
 }
 
-/* O valor da linha para um grupo de botoes. Quase sempre e a celula da base; o
-   grupo do tipo de pagamento e o caso calculado. */
+/* O valor da linha para um grupo de botoes. Quase sempre e a celula da base; os
+   grupos derivados (tipo de pagamento, pedido encerrado, qtd. a classificar)
+   sao os casos calculados. */
+const DERIVADO_POR_CHAVE = Object.fromEntries(
+  PILLS_DERIVADAS.map(g => [g.chave, g.valor]));
+
 const valorPill = (r, chave) =>
-  chave === PILL_TIPO.chave ? situacaoTipo(r) : r.c[chave];
+  DERIVADO_POR_CHAVE[chave] ? DERIVADO_POR_CHAVE[chave](r) : r.c[chave];
 
 /* Os valores acesos de uma barra. SEMPRE lista -- chave fora do mapa = "Todas".
    Passa por aqui todo mundo que le a selecao (o filtro, as contagens e o
@@ -2161,7 +2219,11 @@ function abrirCartaoTratativa(alvo, uuid){
    pelo gerar_painel.py a partir do planilha_excel_js.py). Numero sai numero e
    data sai data, para dar para somar e filtrar no Excel; texto sai em caixa
    alta. Nada de biblioteca de CDN -- o painel e fechado por login. */
-const TIPO_PLANILHA = {moeda:"moeda", inteiro:"inteiro", data:"data"};
+// ⚠ `quantidade` sai como `inteiro` -- que no motor da planilha e o formato
+// GERAL do Excel, e nao um arredondamento: 0,954 chega como 0,954 e continua
+// somavel. Sem esta linha ela cairia no "texto" e a coluna nao somaria.
+const TIPO_PLANILHA = {moeda:"moeda", inteiro:"inteiro", data:"data",
+                       quantidade:"inteiro"};
 
 function colunasExportacao(){
   const cols = A().compacta
@@ -2460,7 +2522,11 @@ function desenharPills(){
     const conta = v => base.filter(r => valorPill(r, g.chave) === v).length;
     const acesos = pillsAtivos(g.chave);
     return `<div class="pills">` +
-      (grupos.length > 1 ? `<span class="pills-rotulo">${esc(g.rotulo)}</span>` : "") +
+      // o `title` so existe nos grupos DERIVADOS: e neles que o botao nao repete
+      // o que esta escrito na celula, entao a regra precisa estar ao alcance do
+      // mouse (nao ha coluna nenhuma na tela dizendo "PENDENTE")
+      (grupos.length > 1 ? `<span class="pills-rotulo" title="${esc(g.ajuda || g.rotulo)}"
+         >${esc(g.rotulo)}</span>` : "") +
       `<button type="button" data-chave="${esc(g.chave)}" data-pill=""
          title="Mostrar tudo — apaga os botões desta barra"
          class="${acesos.length ? "" : "ativa"}">Todas<small>${num(base.length)}</small></button>` +

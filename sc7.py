@@ -53,6 +53,11 @@ COLUNAS_SC7 = [
     ("AI", "Numero PC",     "pc"),
     ("AB", "Numero da SC",  "sc"),
     ("BH", "Qtd.a Classi",  "qtd_classi"),
+    # ⚠ O TOTAL do pedido, que da tamanho ao "a classificar" (pedido do usuario,
+    # 14/08/2026: "para saber o total a ser classificado e o total do pedido").
+    # Sozinho, "20 a classificar" nao diz nada: 20 de 20 e um pedido intocado,
+    # 20 de 289 e um pedido quase todo classificado.
+    ("I",  "Quantidade",    "quantidade"),
     ("BM", "Controle Ap.",  "controle"),
     ("GU", "Usuário SC",    "usuario_sc"),
     ("GV", "Comprador",     "comprador"),
@@ -74,6 +79,11 @@ COLUNAS_SC1 = [
 ]
 
 JUNTA = " · "
+
+# Pedido com PARTE dos itens encerrada. ⚠ O painel conhece este texto pelo nome
+# (`PC_PARCIAL` no painel_modelo.html): e ele que manda o pedido para o botao
+# PENDENTE do filtro "Pedido encerrado". Mudar aqui e mudar la.
+PARCIAL = "PARCIAL"
 
 
 def normalizar_pc(valor) -> str:
@@ -101,8 +111,12 @@ class Pedido:
     """
     numero: str                                   # normalizado (chave)
     itens: int = 0
-    # somas: as unicas duas em que somar responde a pergunta certa
+    # somas: as unicas tres em que somar responde a pergunta certa
     qtd_classi: float = 0.0
+    # ⚠ Quantidade PODE SER FRACIONARIA -- medido na SC7: 889 dos 24.516 itens
+    # (0,954 / 1,4 / 0,062) e 316 dos 3.382 pedidos somam quebrado. Quem exibir
+    # isso nao pode arredondar para inteiro.
+    quantidade: float = 0.0
     vlr: float = 0.0
     # menor data: e a que chega antes, e e o que a pessoa precisa ver
     entrega: dt.date | None = None
@@ -113,6 +127,9 @@ class Pedido:
     usuarios_sc: list = field(default_factory=list)
     controles: list = field(default_factory=list)
     encerrados: list = field(default_factory=list)
+    # quantos itens vieram com a marca de encerrado: e o que separa o pedido
+    # encerrado do encerrado PELA METADE (ver a propriedade `encerrado`)
+    itens_encerrados: int = 0
     filiais: list = field(default_factory=list)
     razoes: list = field(default_factory=list)
     # raizes de CNPJ do fornecedor: e por aqui que a nota encontra o pedido
@@ -124,10 +141,10 @@ class Pedido:
 
     def somar(self, linha: dict) -> None:
         self.itens += 1
-        for campo, destino in (("qtd_classi", "qtd_classi"), ("vlr", "vlr")):
+        for campo in ("qtd_classi", "quantidade", "vlr"):
             valor = sefaz._numero(linha.get(campo))
             if valor:
-                setattr(self, destino, getattr(self, destino) + valor)
+                setattr(self, campo, getattr(self, campo) + valor)
         valor_item = sefaz._numero(linha.get("vlr"))
         if valor_item:
             self.valores_item.append(round(valor_item, 2))
@@ -150,6 +167,8 @@ class Pedido:
             valor = sefaz._texto(linha.get(campo))
             if valor and valor not in lista:
                 lista.append(valor)
+        if sefaz._texto(linha.get("encerrado")):
+            self.itens_encerrados += 1
 
         raiz = re.sub(r"\D", "", sefaz._texto(linha.get("fornecedor")))[:8]
         if raiz:
@@ -178,6 +197,22 @@ class Pedido:
 
     @property
     def encerrado(self) -> str:
+        """"E" so quando TODOS os itens estao encerrados; `PARCIAL` quando alguns.
+
+        ⚠ Este e o UNICO campo que nao pode juntar os distintos como os outros.
+        Medido em 14/08/2026: o PC 002890 tem 15 itens, **2** com "E" e 13 em
+        aberto com 284 a classificar -- e a celula saia "E", dizendo que o pedido
+        estava encerrado. Como o painel ganhou um filtro que pergunta exatamente
+        isso ("encerrado ou pendente?"), o meio-termo precisa aparecer: pedido
+        com item em aberto e trabalho pendente, nao pedido fechado.
+        Nao e caso isolado: sao **178 dos 3.380** pedidos da SC7 (2.948 fechados
+        de verdade, 254 sem marca nenhuma), e 9 deles estao amarrados a alguma
+        nota da aba -- 13 linhas que, sem isto, entrariam em ENCERRADO.
+        """
+        if not self.encerrados:
+            return ""
+        if self.itens_encerrados < self.itens:
+            return PARCIAL
         return JUNTA.join(self.encerrados)
 
     @property

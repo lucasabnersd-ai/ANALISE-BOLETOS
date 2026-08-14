@@ -125,7 +125,15 @@ INTEIRO = {"Score Match", "2º Score", "Margem", "Score",
            # aba SEFAZ x SF1: quantas duplicatas a nota tem (vazio = uma so)
            "Duplicatas",
            # aba NF x Pedido de Compra
-           "Itens do PC", "Qtd.a Classi"}
+           "Itens do PC"}
+
+# Quantidade de mercadoria do pedido (SC7). ⚠ NAO entra em INTEIRO: medido na
+# base, 889 dos 24.516 itens tem quantidade quebrada (0,954 / 1,4 / 0,062) e 316
+# dos 3.382 pedidos somam quebrado -- o `int()` do tipo inteiro truncaria 0,954
+# para 0 sem erro nenhum aparecer. Sai formatada em pt-BR e ordena por numero.
+# `Qtd.a Classi` veio junto (era inteiro) porque as duas ficam LADO A LADO: uma
+# truncar e a outra nao faria a comparacao mentir na coluna do meio.
+QUANTIDADE = {"Quantidade", "Qtd.a Classi"}
 
 # Colunas com botao de copiar (o usuario cola no SE2 / no banco). O rotulo so
 # aparece nas que sao SO_BOTAO; nas outras o proprio valor e o botao.
@@ -527,6 +535,10 @@ COMPACTA_PEDIDOS = [
     # ⚠ `Usuário SC` SAIU em 13/08/2026: nascia vazia (83 de 24.401 linhas da
     # SC7, e ZERO nos pedidos que casam com nota). O `sc7.py` continua lendo.
     ("Qtd.a Classi",      "boleto", "PEDIDO",       4),
+    # ⚠ COLADA na de cima de proposito (pedido do usuario, 14/08/2026): e o
+    # TOTAL do pedido, e e ele que da tamanho ao "a classificar" ao lado.
+    # Separar as duas por qualquer coluna desfaz a leitura "X de Y".
+    ("Quantidade",        "boleto", "PEDIDO",       4),
     ("Controle Ap.",      "boleto", "PEDIDO",       4),
     ("Ped. Encerr.",      "boleto", "PEDIDO",       4),
     ("Dt. Entrega",       "boleto", "PEDIDO",       5),
@@ -565,6 +577,7 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Solicitante": "Solicitante da SC (SC1)",
     "Comprador": "Comprador do Pedido (SC7)",
     "Qtd.a Classi": "Quantidade a Classificar (soma dos itens do PC)",
+    "Quantidade": "Quantidade Total do Pedido (soma dos itens, SC7)",
     "Controle Ap.": "Controle de Aprovação (SC7)",
     "Ped. Encerr.": "Pedido Encerrado (SC7)",
     "Dt. Entrega": "Data de Entrega do Pedido (a mais próxima)",
@@ -841,9 +854,13 @@ ABAS = {
         "prefixo_uuid": "",
         # ⚠ LISTA de colunas (o resto do painel declara uma so). Cada uma so vira
         # botao se tiver de 2 a 8 valores na base do dia -- a guarda de sempre.
-        # `Ped. Encerr.` costuma nao passar (um valor so) e simplesmente nao
-        # aparece; `Origem` (NF-e / NFS-e) foi pedida em 13/08/2026.
-        "pills": ["Origem", "Lançada na SF1", "Ped. Encerr."],
+        # `Origem` (NF-e / NFS-e) foi pedida em 13/08/2026.
+        # ⚠ `Ped. Encerr.` SAIU daqui em 14/08/2026 e virou filtro DERIVADO no
+        # navegador (`PILLS_DERIVADAS` no painel_modelo.html), junto com o da
+        # quantidade a classificar. Pela regra daqui ela nunca virava barra: tem
+        # um valor preenchido so ("E"), e a guarda pede 2. Ver o comentario la
+        # -- inclusive por que a nota SEM PEDIDO nao entra em nenhum dos dois.
+        "pills": ["Origem", "Lançada na SF1"],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   pedidos_sefaz.PROVAVEL: "provavel",
                   pedidos_sefaz.CONFERIR: "provavel",
@@ -992,6 +1009,21 @@ def moeda_br(valor) -> str:
     return f"R$ {inteiro}"
 
 
+def quantidade_br(valor) -> str:
+    """Quantidade em pt-BR, sem casa decimal que nao existe: 20, 1.890.000, 0,954.
+
+    ⚠ A parte decimal e cortada SEPARADAMENTE, e nao com um `rstrip("0")` no
+    numero inteiro: em 1.000 o strip comeria os zeros da casa do milhar e
+    devolveria "1" -- um erro de mil vezes, calado.
+    """
+    if valor is None:
+        return ""
+    inteiro, _, fracao = f"{valor:,.3f}".partition(".")
+    fracao = fracao.rstrip("0")
+    inteiro = inteiro.replace(",", ".")
+    return f"{inteiro},{fracao}" if fracao else inteiro
+
+
 def formatar_linha_digitavel(valor) -> str:
     """Deixa a linha no formato lido pelo banco: 5.5 5.6 5.6 1 14."""
     digitos = re.sub(r"\D", "", texto(valor))
@@ -1010,6 +1042,8 @@ def tipo_da_coluna(rotulo: str) -> str:
         return "data"
     if rotulo in INTEIRO:
         return "inteiro"
+    if rotulo in QUANTIDADE:
+        return "quantidade"
     return "texto"
 
 
@@ -1157,6 +1191,9 @@ def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
                 bruto = numero(valor)
                 celulas[chave] = "" if bruto is None else str(int(bruto))
                 ordem[chave] = bruto
+            elif tipo == "quantidade":
+                bruto = numero(valor)
+                celulas[chave], ordem[chave] = quantidade_br(bruto), bruto
             elif rotulo == "Linha Digitável":
                 celulas[chave] = formatar_linha_digitavel(valor)
                 ordem[chave] = re.sub(r"\D", "", texto(valor))

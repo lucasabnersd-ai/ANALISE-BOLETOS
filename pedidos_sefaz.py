@@ -88,6 +88,10 @@ COMPRADOR = "Comprador"
 # vazia para sempre. O `sc7.py` continua lendo; para devolver a coluna, basta
 # reinserir aqui e no COMPACTA_PEDIDOS.
 QTD_CLASSI = "Qtd.a Classi"
+# O total do pedido, ao lado do "a classificar" (pedido do usuario, 14/08/2026).
+# ⚠ As duas so aparecem quando ESTA NOTA tem pedido amarrado, e ai aparecem
+# ate quando valem ZERO: "0 de 23" e a resposta, celula vazia nao e.
+QTD_PC = "Quantidade"
 CONTROLE = "Controle Ap."
 ENCERRADO = "Ped. Encerr."
 ENTREGA = "Dt. Entrega"
@@ -106,7 +110,7 @@ CABECALHO = [
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
     PC, NUM_SC, SOLICITANTE, COMPRADOR,
-    QTD_CLASSI, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
+    QTD_CLASSI, QTD_PC, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
     VLR_PC, FORNEC_PC, ITENS_PC,
     CRITERIO, INFO, CHAVE_NFE,
 ]
@@ -384,7 +388,12 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
                 NUM_SC: pedido.sc,
                 COMPRADOR: pedido.comprador,
                 SOLICITANTE: " · ".join(solicitantes.get(pedido.numero, [])),
-                QTD_CLASSI: pedido.qtd_classi or None,
+                # ⚠ SEM `or None` nestas duas, ao contrario do valor: aqui o ZERO
+                # e informacao ("nada a classificar neste pedido") e some se virar
+                # celula vazia -- e vazio, nesta aba, ja quer dizer outra coisa:
+                # nota que nao tem pedido nenhum.
+                QTD_CLASSI: pedido.qtd_classi,
+                QTD_PC: pedido.quantidade,
                 CONTROLE: pedido.controle,
                 ENCERRADO: pedido.encerrado,
                 ENTREGA: pedido.entrega,
