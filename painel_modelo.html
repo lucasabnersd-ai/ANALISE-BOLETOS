@@ -42,7 +42,9 @@ body{margin:0; background:var(--bg); color:var(--txt); text-transform:uppercase;
 .envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 32px}
 body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 
-.topo{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
+/* `center` e nao `baseline`: com a busca alta (ver .busca) o alinhamento pela
+   linha de base deixava o titulo flutuando acima do campo. */
+.topo{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
 .topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px}
 .topo h1 span{color:var(--txt-3); font-weight:400}
 /* ---------- card de atualizacao ----------
@@ -70,11 +72,22 @@ body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 .resumo b{color:var(--txt); font-weight:640}
 .resumo .sep{color:var(--txt-3); margin:0 7px}
 .acoes{display:flex; gap:8px; align-items:center; margin-left:auto}
+/* ---------- busca ----------
+   14/08/2026, pedido do usuario: "deixe esse campo mais visivel". Era uma caixa
+   fina e cinza encolhida no canto -- do tamanho de um enfeite, sendo que e o
+   atalho mais usado do painel. Agora tem a borda do acento da aba, altura de
+   botao e a lupa acesa. */
 .busca{position:relative}
-.busca input{width:250px; font:inherit; font-size:13px; color:var(--txt); background:var(--surface);
-  border:1px solid var(--line); border-radius:7px; padding:7px 10px 7px 30px; outline:none}
-.busca input:focus{border-color:var(--azul-2); width:320px}
-.busca svg{position:absolute; left:9px; top:50%; transform:translateY(-50%); opacity:.45}
+.busca input{width:300px; font:inherit; font-size:14px; font-weight:600; color:var(--txt);
+  background:var(--surface); border:2px solid var(--acento, var(--azul-2)); border-radius:9px;
+  padding:10px 12px 10px 36px; outline:none;
+  box-shadow:0 1px 3px rgba(15,23,42,.07); transition:width .12s ease}
+.busca input::placeholder{color:var(--txt-3); font-weight:600}
+.busca input:focus{width:400px; box-shadow:0 0 0 3px var(--acento-bg, var(--sel))}
+/* digitou: a lupa e a borda ficam cheias, para nao se esquecer de um filtro ligado */
+.busca input:not(:placeholder-shown){background:var(--acento-bg, var(--sel))}
+.busca svg{position:absolute; left:11px; top:50%; transform:translateY(-50%);
+  opacity:1; color:var(--acento, var(--azul-2))}
 button.leve{font:inherit; font-size:12.5px; color:var(--txt-2); background:var(--surface);
   border:1px solid var(--line); border-radius:7px; padding:7px 11px; cursor:pointer}
 button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
@@ -82,17 +95,37 @@ button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 /* ---------- abas do topo: uma por aba da base ----------
    Cada uma tem sua cor; o painel inteiro segue a cor da aba ativa, via
    --acento / --acento-bg, para nao confundir uma com a outra. */
-.abas-topo{display:flex; gap:0; border-bottom:2px solid var(--line-forte); margin:4px 0 12px}
+/* ---------- barra de abas ----------
+   14/08/2026, pedido do usuario: "coloque as abas como botoes maiores e
+   visiveis". Eram texto plano sublinhado -- as 8 abas pareciam um menu apagado
+   e so a ativa se distinguia, por um risco de 3px. Agora cada aba e um BOTAO de
+   verdade: fundo, borda, cantos, e a ativa pintada com o acento da aba.
+   ⚠ `flex-wrap` e obrigatorio: sao 8 botoes com nomes longos ("BOLETOS NÃO
+   ASSOCIADOS A VENCER") e sem quebra a barra empurraria a pagina para o lado. */
+.abas-topo{display:flex; gap:7px; flex-wrap:wrap; margin:6px 0 14px}
 /* nome da aba em CAIXA ALTA (pedido do usuario, 13/08/2026) */
-.abas-topo button{font:inherit; font-size:12.5px; font-weight:700; color:var(--txt-3); cursor:pointer;
-  text-transform:uppercase; letter-spacing:.4px;
-  background:transparent; border:0; border-bottom:3px solid transparent; margin-bottom:-2px;
-  padding:9px 18px; display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
-.abas-topo button small{font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px;
-  background:var(--surface-2); color:var(--txt-3)}
-.abas-topo button:hover{color:var(--txt)}
-.abas-topo button.ativa{color:var(--acento); border-bottom-color:var(--acento)}
-.abas-topo button.ativa small{background:var(--acento-bg); color:var(--acento)}
+.abas-topo button{font:inherit; font-size:13px; font-weight:750; color:var(--txt-2); cursor:pointer;
+  text-transform:uppercase; letter-spacing:.3px;
+  background:var(--surface); border:1.5px solid var(--line-forte); border-radius:10px;
+  padding:11px 16px; display:inline-flex; align-items:center; gap:9px; white-space:nowrap;
+  box-shadow:0 1px 2px rgba(15,23,42,.05); transition:transform .08s ease}
+.abas-topo button small{font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:999px;
+  background:var(--surface-2); color:var(--txt-3); font-variant-numeric:tabular-nums}
+.abas-topo button:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
+.abas-topo button:active{transform:translateY(1px)}
+/* A ativa e a unica pintada: com 8 botoes iguais, saber onde se esta e o que
+   mais importa nesta barra. */
+.abas-topo button.ativa{background:var(--acento); border-color:var(--acento); color:#fff;
+  box-shadow:0 2px 8px rgba(15,23,42,.18)}
+.abas-topo button.ativa small{background:rgba(255,255,255,.24); color:#fff}
+/* ⚠ No tema ESCURO o acento de cada aba e uma cor CLARA (#f0b429 âmbar,
+   #34d399 verde, #22d3ee ciano, #94a3b8 ardósia): branco em cima de claro nao
+   se le. Letra escura, que ja e a regra dos selos de fundo cheio do painel. */
+html[data-tema="escuro"] .abas-topo button.ativa{color:#0b1220}
+html[data-tema="escuro"] .abas-topo button.ativa small{background:rgba(0,0,0,.20); color:#0b1220}
+/* Mesmo problema, mesma cura: os botoes de filtro ja eram pintados com o acento
+   e ja saiam ilegiveis no escuro -- so que desde antes desta mudanca. */
+html[data-tema="escuro"] .pills button.ativa{color:#0b1220}
 
 /* cores por aba */
 body[data-aba="associacoes"]{--acento:var(--azul-2); --acento-bg:var(--sel)}
