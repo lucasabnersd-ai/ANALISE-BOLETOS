@@ -191,12 +191,12 @@ CONFRONTOS = {
 # para a conferencia acontecer num lugar so. Ver `fundir_classificacao`.
 COLUNA_ORIGEM = "Origem"
 # ⚠ Nomes do NEGOCIO, nao das tabelas do TOTVS (14/08/2026, pedido do usuario:
-# "SE2 = CONTA A PAGAR, SF1 = CLASSIFICAÇÃO"). Trocar aqui basta: e o TEXTO da
+# "SE2 = CONTAS A PAGAR, SF1 = CLASSIFICAÇÃO"). Trocar aqui basta: e o TEXTO da
 # celula, entao o botao de filtro, a grade e o .xlsx exportado mudam juntos.
 # ⚠ O navegador NAO depende destes textos para saber de que lado a linha veio --
 # ele olha o prefixo "SF1:" da chave (ver `daClassificacao` no painel_modelo).
 # Foi de proposito: rotulo e coisa que o usuario renomeia, chave nao.
-ORIGEM_SE2 = "CONTA A PAGAR"
+ORIGEM_SE2 = "CONTAS A PAGAR"
 ORIGEM_SF1 = "CLASSIFICAÇÃO"
 
 # ⚠ Coluna interna (nao desenhada): guarda a chave que amarra check e tratativa
@@ -224,10 +224,10 @@ COMPACTA = [
     # sem esta coluna as duas metades ficariam indistinguiveis na mesma grade --
     # e elas nao querem dizer a mesma coisa (uma tem titulo, a outra ainda nao).
     # ⚠ Largura medida contra os valores REAIS: eram "SE2"/"SF1" e cabiam em
-    # 3.5, mas em 14/08/2026 viraram "CONTA A PAGAR"/"CLASSIFICAÇÃO" (13
-    # caracteres). Na largura antiga sairia "CONTA A P…" -- a celula corta com
+    # 3.5, mas em 14/08/2026 viraram "CONTAS A PAGAR"/"CLASSIFICAÇÃO" (14
+    # caracteres). Na largura antiga sairia "CONTAS A …" -- a celula corta com
     # ellipsis e NAO acusa erro nenhum.
-    ("Origem",            "",       "",           8.5),
+    ("Origem",            "",       "",           9),
     ("Campo UUID",        "",       "",           4),
     ("Filial",            "",       "",           3.5),
     ("Prefixo",           "",       "",           3.5),

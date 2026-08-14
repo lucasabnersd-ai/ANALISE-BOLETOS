@@ -1237,6 +1237,8 @@ function partirAbas(abas){
    ⚠ O tipo da SE2 e aplicado ANTES do corte: a linha escondida por ele nao
    passaria mais por aqui, e ela reaparece na sub-aba Tratados. */
 function processarAba(aba){
+  renomearOrigem(aba);
+
   // ⚠ ANTES do corte da SE2: e o `tratadoPorAqui` do corte que pergunta se a
   // gemea foi tratada, e sem o indice ele responderia "nao" para todas.
   indexarNotas(aba);
@@ -1328,7 +1330,7 @@ function chaveNota(r){
 }
 
 /* De que lado a linha veio. ⚠ Sai do PREFIXO da chave, nunca do texto da coluna
-   Origem: "CONTA A PAGAR"/"CLASSIFICAÇÃO" sao rotulos, e rotulo o usuario
+   Origem: "CONTAS A PAGAR"/"CLASSIFICAÇÃO" sao rotulos, e rotulo o usuario
    renomeia (ja renomeou uma vez, em 14/08/2026). O prefixo "SF1:" e o que
    amarra a marcacao no banco -- esse nao muda. */
 const daClassificacao = r => String(r.uuid || "").startsWith("SF1:");
@@ -1368,6 +1370,27 @@ function quemQuando(r, aba){
   const gemea = gemeaComMarca(r, aba);
   return gemea ? {quando: tratadoEm[gemea] || "", quem: responsaveis[gemea] || ""}
                : {quando, quem};
+}
+
+/* ---------- vocabulario velho da coluna Origem ----------
+   14/08/2026. A coluna nasceu com "SE2"/"SF1" e no mesmo dia virou "CONTA A
+   PAGAR"/"CLASSIFICAÇÃO" (pedido dele). So que a carga **nao regrava titulo que
+   ja tem check** -- regra da Edge Function, para valer o que a pessoa viu quando
+   tratou -- entao as linhas dos tratados ficaram no banco com o texto ANTIGO e
+   apareceram como uma TERCEIRA barra de filtro, "SE2", com 3 linhas.
+   ⚠ Traduzir na chegada e o unico caminho: mandar a carga reescrever essas
+   linhas mudaria o retrato que a pessoa aprovou. E vale para sempre, nao e
+   remendo de um dia -- qualquer marcacao feita antes da troca chega assim.
+   ⚠ Vai no `o` tambem, senao a ordenacao por Origem separa os dois nomes da
+   mesma coisa. */
+const ORIGEM_ANTIGA = {"SE2": "CONTAS A PAGAR", "SF1": "CLASSIFICAÇÃO"};
+function renomearOrigem(aba){
+  aba.linhas.forEach(r => {
+    const nova = ORIGEM_ANTIGA[r.c.origem];
+    if (!nova) return;
+    r.c.origem = nova;
+    if (r.o) r.o.origem = nova;
+  });
 }
 
 function indexarNotas(aba){
@@ -1737,7 +1760,7 @@ function celulaCompacta(r, col){
     // continuaria marcada, porque a heranca nao mudou. Ver `feitoDe`.
     const herda = herdada(r);
     const dica = herda
-      ? `Já tratado pela linha de ${daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO"} `
+      ? `Já tratado pela linha de ${daClassificacao(r) ? "CONTAS A PAGAR" : "CLASSIFICAÇÃO"} `
         + `da mesma NF. Para reabrir os dois, desmarque lá.`
       : "Marcar como tratado";
     return `<td class="check ${zona}"><input type="checkbox" data-feito="${esc(r.uuid)}"
@@ -1800,7 +1823,7 @@ function celulaCompacta(r, col){
     const dica = nota
       ? nota + (quem ? `\n— ${quem}` : "")
         + (daGemea ? `\n(observação da linha de ${
-             daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO"} da mesma NF)` : "")
+             daClassificacao(r) ? "CONTAS A PAGAR" : "CLASSIFICAÇÃO"} da mesma NF)` : "")
       : (quem ? `Em tratamento por ${quem}` : "Registrar tratativa");
     return `<td class="trat ${zona}"><button class="btn-trat ${nota ? "tem" : ""}" type="button"
       data-trat="${esc(r.uuid)}" title="${esc(dica)}">${nota ? "✎ nota" : "+ nota"}${
@@ -2206,7 +2229,7 @@ function abrirNota(uuid){
   document.getElementById("notaSub").textContent = r
     ? [r.c.no_titulo && "Título " + r.c.no_titulo, r.c.razao_social,
        !proprio && texto && "observação vinda da linha de "
-         + (daClassificacao(r) ? "CONTA A PAGAR" : "CLASSIFICAÇÃO")].filter(Boolean).join(" · ")
+         + (daClassificacao(r) ? "CONTAS A PAGAR" : "CLASSIFICAÇÃO")].filter(Boolean).join(" · ")
     : "";
   const campo = document.getElementById("notaTexto");
   campo.value = texto;
@@ -2474,7 +2497,7 @@ function avisoSE2(){
     <span class="selo se2-baixa">BAIXADO</span>
     — são os que foram tratados por aqui.` : ""}
     Nada é apagado: quem sai continua no banco e volta se a SE2 mudar.
-    ${comGemeas() ? `<br>📌 A mesma NF pode aparecer dos <b>dois lados</b> (CONTA A PAGAR e
+    ${comGemeas() ? `<br>📌 A mesma NF pode aparecer dos <b>dois lados</b> (CONTAS A PAGAR e
     CLASSIFICAÇÃO). Nesse caso <b>tratar uma trata as duas</b>: elas vão juntas para
     <b>Tratados</b>, com a mesma observação. A caixa da outra fica marcada e travada — quem
     desmarca é quem marcou.` : ""}</div>`;
@@ -2493,7 +2516,7 @@ function avisoTipoPgto(){
   // maior parte da coluna aparece travada em vez de vazia esperando alguem
   const travados = A().linhas.filter(tipoTravado).length;
   return `<div class="linha-aviso calmo">📌 <b>Tipo Pgto</b> é o tipo de pagamento gravado no
-    TOTVS: no <b>título</b> nas linhas de CONTA A PAGAR, na <b>nota</b> nas de CLASSIFICAÇÃO (a
+    TOTVS: no <b>título</b> nas linhas de CONTAS A PAGAR, na <b>nota</b> nas de CLASSIFICAÇÃO (a
     coluna <b>Origem</b> diz qual é qual).
     Ao lado, <b>Tipo real</b> é onde você informa como o pagamento realmente
     foi — fica gravado no banco, por título, e todo mundo vê o mesmo. Quando os dois não batem, a
