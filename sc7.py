@@ -41,10 +41,20 @@ from openpyxl.utils import column_index_from_string
 
 import sefaz
 
-BASE_GENERICOS = Path(
-    r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
-    r"\LUCAS ABNER ARAUJO\BASES GENERICOS"
-)
+# O painel roda em DUAS maquinas: esta pasta e a mesma biblioteca do OneDrive,
+# montada com um nome diferente em cada uma. Este arquivo mora DENTRO dela
+# (...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>\ANALISES BOLETOS\PAINEL ANALISE
+# BOLETOS\sc7.py), entao quatro niveis acima esta a raiz -- e isso vale nos dois
+# PCs. Ao contrario das outras bases, esta aqui nao tem argumento de linha de
+# comando no gerar_painel.py: o .cmd nao teria como corrigir o caminho, e na
+# outra maquina a aba de pedidos de compra nascia vazia, so com um AVISO.
+# O caminho fixo fica de ultimo recurso, para quem tirar o script da biblioteca.
+BASE_GENERICOS = Path(__file__).resolve().parents[3] / "BASES GENERICOS"
+if not BASE_GENERICOS.is_dir():
+    BASE_GENERICOS = Path(
+        r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
+        r"\LUCAS ABNER ARAUJO\BASES GENERICOS"
+    )
 BASE_SC7 = BASE_GENERICOS / "SC7.xlsx"
 BASE_SC1 = BASE_GENERICOS / "SC1.xlsx"
 
