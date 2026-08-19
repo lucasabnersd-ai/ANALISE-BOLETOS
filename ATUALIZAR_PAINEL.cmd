@@ -96,6 +96,9 @@ rem   %AQUI%  ...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>\ANALISES BOLETOS\PAINEL 
 rem   %RAIZ%  ...\LUCAS ABNER ARAUJO
 for %%D in ("%AQUI%..")       do set "ANALISES=%%~fD"
 for %%D in ("%AQUI%..\..\..") do set "RAIZ=%%~fD"
+rem Onde o associador grava o log de cada rodada -- derivado, e nao escrito na
+rem mao, porque o nome da pasta tem cedilha e til de verdade.
+for %%D in ("%AQUI%..\..\logs") do set "LOGS=%%~fD"
 set "GENERICOS=%RAIZ%\BASES GENERICOS"
 set "BASE_PAINEL=%RAIZ%\TRATAMENTO PYTHON BOLETOS.xlsx"
 
@@ -142,14 +145,11 @@ if not "%CODIGO%"=="0" (
   echo   A BASE NAO FOI GERADA -- o painel NAO foi atualizado.
   echo   Nada foi publicado com base velha de proposito: seria impossivel
   echo   perceber depois que a planilha ficou para tras.
+  echo   O motivo esta na mensagem acima e no log mais recente de:
+  echo   "%LOGS%"
+  echo.
   echo   Para publicar assim mesmo, com a base que ja esta na pasta:
   echo       ATUALIZAR_PAINEL.cmd /sembase
-  echo.
-  echo   Obs.: a etapa [1/4] termina publicando o painel BOLETOS-PENDENTES a
-  echo   partir de um repositorio que fica FORA desta biblioteca ^(ver o
-  echo   ATUALIZAR_BOLETOS_PENDENTES.cmd^), entao ela so roda inteira na maquina
-  echo   onde aquele repositorio foi clonado. Nas outras o caminho e o
-  echo   /sembase: a base chega pronta pelo OneDrive.
   goto :erro
 )
 
