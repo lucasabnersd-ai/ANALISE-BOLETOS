@@ -28,12 +28,27 @@ usuario pediu, mas nascendo vazia.
 Mesma regra do `sefaz.py`: a SC7 tem 207 colunas e 3 nomes repetidos, a SC1 tem
 119 e 2 repetidos. Ler por nome escolhe a errada calado. A letra e o que vale; o
 nome e conferido na leitura e a leitura PARA se ele saiu do lugar.
+
+⚠ COLUNA INSERIDA: O DESLOCAMENTO EM BLOCO E RECUPERADO
+--------------------------------------------------------
+24/08/2026 a exportacao ganhou UMA coluna nova e TUDO andou uma casa para a
+direita (`Numero PC` saiu de AI para AJ, `Vlr.Total` de V para W...). Pela regra
+acima a leitura parava, e a aba de pedidos ficava sem atualizar -- calada, porque
+o gerar_painel so mostra um AVISO nesse caso.
+
+O `_posicoes()` agora resolve isso: se TODOS os nomes declarados aparecem juntos
+a uma mesma distancia (ate DESLOCAMENTO_MAXIMO colunas), o deslocamento e aplicado em bloco e
+sai um aviso dizendo quanto andou. Nao e "ler por nome": exige que o bloco INTEIRO
+bata deslocado do mesmo tanto -- coluna trocada de lugar sozinha, ou nome que
+sumiu, continua sendo ERRO. E o que separa "inseriram uma coluna" (rotina, dá para
+seguir) de "a planilha virou outra" (parar e olhar).
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -89,6 +104,10 @@ COLUNAS_SC1 = [
 ]
 
 JUNTA = " · "
+
+# Ate quantas colunas de deslocamento em bloco aceitar antes de desistir. Uma ou
+# duas colunas inseridas e rotina de exportacao; dez e outra planilha.
+DESLOCAMENTO_MAXIMO = 6
 
 # Pedido com PARTE dos itens encerrada. ⚠ O painel conhece este texto pelo nome
 # (`PC_PARCIAL` no painel_modelo.html): e ele que manda o pedido para o botao
@@ -238,6 +257,67 @@ class Pedido:
         return min(self.emissoes) if self.emissoes else None
 
 
+def _posicoes(cabecalho: list, colunas: list, onde: str) -> list[tuple]:
+    """[(indice, apelido)] -- as posicoes REAIS das colunas declaradas.
+
+    Tenta, nesta ordem:
+      1. a letra declarada (o caso normal: o nome bate onde deveria);
+      2. o mesmo nome PERTO dali (ate DESLOCAMENTO_MAXIMO colunas), quando alguem
+         inseriu/removeu coluna na exportacao;
+      3. desiste e levanta o erro de sempre, dizendo o que estava em cada letra.
+
+    ⚠ A COLUNA NOVA ENTRA NO MEIO, entao o deslocamento e PARCIAL: em 24/08/2026
+    `Filial` (A), `Razão Social` (B) e `Quantidade` (I) ficaram onde estavam e
+    todas as de `Dt. Entrega` (L) em diante andaram uma casa. Por isso o teste nao
+    e "todas deslocadas do mesmo tanto", e sim, por coluna, o nome achado numa
+    JANELA em volta da posicao declarada.
+
+    ⚠ Duas travas seguram o passo 2, para ele nao virar "ler por nome" -- que e
+    justamente o bug que a leitura por posicao existe para evitar (a SC7 tem 3
+    nomes repetidos, e o repetido escolhido calado da coluna errada):
+      - o nome tem de ser UNICO dentro da janela; dois candidatos = erro;
+      - os deslocamentos, na ordem das colunas, so podem CRESCER (nao decrescer).
+        Coluna inserida empurra tudo que vem depois; se uma coluna "andou para
+        tras" enquanto a vizinha andou para frente, nao foi insercao -- e outra
+        planilha, e ai para.
+    """
+    rotulos = [sefaz._rotulo(c) for c in cabecalho]
+    declaradas = [(column_index_from_string(letra) - 1, sefaz._rotulo(nome), apelido)
+                  for letra, nome, apelido in colunas]
+
+    achadas = []          # (indice_declarado, indice_real, apelido)
+    for i, esperado, apelido in declaradas:
+        if i < len(rotulos) and rotulos[i] == esperado:
+            achadas.append((i, i, apelido))
+            continue
+        janela = [j for j in range(max(0, i - DESLOCAMENTO_MAXIMO),
+                                   min(len(rotulos), i + DESLOCAMENTO_MAXIMO + 1))
+                  if rotulos[j] == esperado]
+        if len(janela) != 1:
+            # ambiguo ou ausente: erro de sempre, com o diagnostico por letra
+            sefaz._conferir(cabecalho, colunas, onde)
+        achadas.append((i, janela[0], apelido))
+
+    # deslocamentos so podem crescer na ordem das colunas (ver docstring)
+    ordenadas = sorted(achadas)
+    anterior = None
+    for declarado, real, _apelido in ordenadas:
+        desloc = real - declarado
+        if anterior is not None and desloc < anterior:
+            sefaz._conferir(cabecalho, colunas, onde)
+        anterior = desloc
+
+    movidas = [(d, r) for d, r, _a in achadas if d != r]
+    if movidas:
+        maior = max(abs(r - d) for d, r in movidas)
+        print(f"AVISO: {onde} mudou de layout -- {len(movidas)} de {len(declaradas)} "
+              f"colunas andaram ate {maior} casa(s) (coluna inserida/removida na "
+              f"exportacao). Foram reencontradas pelo nome e a leitura seguiu.\n"
+              f"       Se isso virar o novo normal, corrija as letras em "
+              f"COLUNAS_SC7/COLUNAS_SC1 no sc7.py.", file=sys.stderr)
+    return [(real, apelido) for _d, real, apelido in achadas]
+
+
 def _ler(caminho: Path, colunas: list) -> list[dict]:
     """Uma planilha de coluna larga, lida por posicao e conferida por nome."""
     wb, temporaria = sefaz._abrir(caminho)
@@ -245,9 +325,7 @@ def _ler(caminho: Path, colunas: list) -> list[dict]:
         ws = wb[wb.sheetnames[0]]
         brutas = ws.iter_rows(values_only=True)
         cabecalho = list(next(brutas, ()) or ())
-        sefaz._conferir(cabecalho, colunas, f"{caminho.name}/{ws.title}")
-        posicoes = [(column_index_from_string(l) - 1, apelido)
-                    for l, _n, apelido in colunas]
+        posicoes = _posicoes(cabecalho, colunas, f"{caminho.name}/{ws.title}")
         linhas = []
         for bruta in brutas:
             if all(v in (None, "") for v in bruta):

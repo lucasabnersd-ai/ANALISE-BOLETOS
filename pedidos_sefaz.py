@@ -127,8 +127,16 @@ PROVAVEL = "PEDIDO PROVÁVEL"
 CONFERIR = "CONFERIR PEDIDO"
 FORA = "PEDIDO FORA DA BASE"
 SEM = "SEM PEDIDO"
+# Os DOIS ultimos degraus (14/08 -> 24/08/2026, pedido do usuario): a analise
+# AGRUPADA, que roda por ULTIMO e so sobre o que sobrou sem pedido. Uma nota
+# pode ser composta por VARIOS pedidos, e um pedido pode gerar VARIAS notas --
+# ver `analise_agrupada`. Sao sempre "conferir" (olho humano): casam so por
+# valor, dentro do mesmo fornecedor.
+AGRUPADO_PC = "PEDIDO AGRUPADO"   # 1 NF = soma de varios PCs
+AGRUPADO_NF = "NOTAS AGRUPADAS"   # varias NFs = 1 PC
 
-ORDEM_SITUACAO = {SEM: 0, FORA: 1, CONFERIR: 2, PROVAVEL: 3, CONFIRMADO: 4}
+ORDEM_SITUACAO = {SEM: 0, FORA: 1, CONFERIR: 2, AGRUPADO_NF: 3, AGRUPADO_PC: 4,
+                  PROVAVEL: 5, CONFIRMADO: 6}
 
 # ------------------------------------------------------------------- extracao
 # Rotulo FORTE: e a nossa ordem de compra, escrita por extenso ou abreviada.
@@ -165,6 +173,20 @@ PESO_EMISSAO = 1
 
 DIAS_EMISSAO = 45     # pedido e nota costumam ficar dentro disso
 CENTAVO = 0.01
+
+# ---------------------------------------------------- analise agrupada
+# Casa por SOMA de valores, dentro do MESMO fornecedor, so no que sobrou sem
+# pedido. Combinacao de ate 3 elementos: mais que isso, qualquer valor "fecha"
+# com algum somatorio e o sinal deixa de valer (⚠ o mesmo motivo de o 1:1 so
+# confiar no valor). Comparacao em CENTAVOS inteiros -- somar float acumula erro
+# e "R$ 0,01 de diferenca" viraria falso negativo (ou pior, falso positivo).
+MAX_COMBINACAO = 3
+# Guarda de custo: fornecedor com muitos itens no balde vira busca combinatoria
+# grande. Acima de LIMITE_TRIPLA so tenta pares; acima de LIMITE_TOTAL nem tenta
+# (a S&D LOGISTICA sozinha tem centenas de notas). O teto de nos corta o resto.
+LIMITE_POOL_TRIPLA = 25
+LIMITE_POOL_TOTAL = 400
+LIMITE_NOS = 200_000
 
 
 def _digitos(valor) -> str:
@@ -328,6 +350,177 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
             "pontos": melhor_pontos}
 
 
+def _preencher_pedido(linha: dict, pedido: sc7.Pedido,
+                      solicitantes: dict[str, list[str]]) -> None:
+    """Escreve as colunas do bloco PEDIDO a partir de um Pedido inteiro."""
+    linha.update({
+        PC: pedido.numero_totvs,
+        NUM_SC: pedido.sc,
+        COMPRADOR: pedido.comprador,
+        SOLICITANTE: " · ".join(solicitantes.get(pedido.numero, [])),
+        QTD_CLASSI: pedido.qtd_classi,
+        QTD_PC: pedido.quantidade,
+        CONTROLE: pedido.controle,
+        ENCERRADO: pedido.encerrado,
+        ENTREGA: pedido.entrega,
+        VENC_PC: pedido.venc1,
+        VLR_PC: pedido.vlr or None,
+        FORNEC_PC: pedido.razao,
+        ITENS_PC: pedido.itens,
+    })
+
+
+def _centavos(valor) -> int:
+    """Valor em centavos inteiros -- e como as somas sao comparadas."""
+    return int(round((valor or 0) * 100))
+
+
+def _combinacoes_soma(itens: list, alvo_cent: int, max_tam: int) -> list[list]:
+    """Combinacoes (tam 2..max_tam) de `itens` cujos valores somam `alvo_cent`.
+
+    `itens` = [(ref, centavos)], ordenado do maior para o menor. Devolve listas de
+    `ref`. Busca em profundidade, podando quando a parcela nao cabe e parando no
+    teto de nos -- o que a torna barata quando NAO ha combinacao (o caso comum).
+    """
+    if max_tam < 2 or alvo_cent <= 0:
+        return []
+    n = len(itens)
+    achados: list[list] = []
+    nos = [0]
+
+    def rec(inicio: int, restante: int, faltam: int, combo: list) -> None:
+        if restante == 0:
+            if len(combo) >= 2:
+                achados.append([itens[i][0] for i in combo])
+            return
+        if faltam == 0:
+            return
+        for i in range(inicio, n):
+            cent = itens[i][1]
+            if cent > restante:
+                continue          # ordenado desc: um menor adiante ainda cabe
+            nos[0] += 1
+            if nos[0] > LIMITE_NOS or len(achados) >= 50:
+                return
+            combo.append(i)
+            rec(i + 1, restante - cent, faltam - 1, combo)
+            combo.pop()
+
+    rec(0, alvo_cent, max_tam, [])
+    return achados
+
+
+def _cap_tam(tamanho_pool: int) -> int:
+    """Ate quantos elementos combinar, conforme o tamanho do balde."""
+    if tamanho_pool > LIMITE_POOL_TOTAL:
+        return 0
+    if tamanho_pool > LIMITE_POOL_TRIPLA:
+        return 2
+    return MAX_COMBINACAO
+
+
+def _moeda(valor) -> str:
+    return f"R$ {(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
+                     solicitantes: dict[str, list[str]],
+                     pcs_usados: set) -> dict:
+    """ULTIMO passo: casa por SOMA o que sobrou em SEM PEDIDO / FORA DA BASE.
+
+    Duas direcoes, nesta ordem (a mais ancorada primeiro):
+      B) 1 PC : N NFs  -- varias notas do mesmo fornecedor somam um pedido inteiro;
+      A) N PCs : 1 NF  -- uma nota vale a soma de varios pedidos do fornecedor.
+
+    So mexe nas linhas ainda sem pedido; nada do 1:1 e reescrito. `pcs_usados` sao
+    os pedidos que o 1:1 ja atribuiu -- ficam de fora dos dois lados para nao
+    aparecer o mesmo pedido em dois lugares dizendo coisas diferentes.
+    """
+    contagem = {AGRUPADO_NF: 0, AGRUPADO_PC: 0}
+
+    # baldes por fornecedor (raiz do CNPJ do emitente da nota)
+    por_forn_notas: dict[str, list[dict]] = {}
+    for linha in linhas:
+        if linha.get(SITUACAO) not in (SEM, FORA):
+            continue
+        if not linha.get(VLR_SEFAZ):
+            continue
+        por_forn_notas.setdefault(_raiz(linha.get(CNPJ_EMIT)), []).append(linha)
+
+    por_forn_pedidos: dict[str, list[sc7.Pedido]] = {}
+    for numero, pedido in pedidos.items():
+        if numero in pcs_usados or not pedido.vlr:
+            continue
+        for raiz in pedido.fornecedores:
+            por_forn_pedidos.setdefault(raiz, []).append(pedido)
+
+    for raiz, notas in por_forn_notas.items():
+        peds = por_forn_pedidos.get(raiz, [])
+        if not peds:
+            continue
+        pendentes = {id(l): l for l in notas}   # notas ainda nao agrupadas
+
+        # --- B) 1 PC : N NFs -------------------------------------------------
+        # do maior pedido para o menor: o grande e o que mais precisa de varias
+        # notas para fechar, e consumir cedo evita casar a nota no pedido errado.
+        for pedido in sorted(peds, key=lambda p: p.vlr or 0, reverse=True):
+            disponiveis = [(l, _centavos(l.get(VLR_SEFAZ))) for l in pendentes.values()]
+            disponiveis = [(l, c) for l, c in disponiveis if c > 0]
+            tam = _cap_tam(len(disponiveis))
+            if tam < 2:
+                continue
+            disponiveis.sort(key=lambda ic: ic[1], reverse=True)
+            combos = _combinacoes_soma(disponiveis, _centavos(pedido.vlr), tam)
+            if not combos:
+                continue
+            combos.sort(key=len)               # a mais simples ganha
+            escolha = combos[0]
+            ambiguo = sum(1 for c in combos if len(c) == len(escolha)) > 1
+            nfs = " + ".join(f"NF {l.get(NUM_NF) or '?'} ({_moeda(l.get(VLR_SEFAZ))})"
+                             for l in escolha)
+            for l in escolha:
+                _preencher_pedido(l, pedido, solicitantes)
+                l[SITUACAO] = AGRUPADO_NF
+                l[CRITERIO] = (
+                    f"Esta nota faz parte de {len(escolha)} notas do mesmo fornecedor "
+                    f"que somam o pedido {pedido.numero_totvs} "
+                    f"({_moeda(pedido.vlr)}): {nfs}"
+                    + ("  ⚠ há outra combinação possível — conferir" if ambiguo else "")
+                    + "  — casado por soma de valores, confira")
+                contagem[AGRUPADO_NF] += 1
+                pendentes.pop(id(l), None)
+
+        # --- A) N PCs : 1 NF -------------------------------------------------
+        itens_pc = [(p, _centavos(p.vlr)) for p in peds if _centavos(p.vlr) > 0]
+        tam = _cap_tam(len(itens_pc))
+        if tam < 2:
+            continue
+        itens_pc.sort(key=lambda ic: ic[1], reverse=True)
+        for l in list(pendentes.values()):
+            combos = _combinacoes_soma(itens_pc, _centavos(l.get(VLR_SEFAZ)), tam)
+            if not combos:
+                continue
+            combos.sort(key=len)
+            escolha = combos[0]
+            ambiguo = sum(1 for c in combos if len(c) == len(escolha)) > 1
+            escolha.sort(key=lambda p: p.numero_totvs)
+            l[SITUACAO] = AGRUPADO_PC
+            l[PC] = " · ".join(p.numero_totvs for p in escolha)
+            l[NUM_SC] = " · ".join(dict.fromkeys(
+                s for p in escolha for s in (p.sc.split(" · ") if p.sc else []) if s))
+            l[VLR_PC] = round(sum(p.vlr for p in escolha), 2)
+            l[FORNEC_PC] = escolha[0].razao
+            pcs = " + ".join(f"PC {p.numero_totvs} ({_moeda(p.vlr)})" for p in escolha)
+            l[CRITERIO] = (
+                f"O valor da nota ({_moeda(l.get(VLR_SEFAZ))}) = soma de {len(escolha)} "
+                f"pedidos do mesmo fornecedor: {pcs}"
+                + ("  ⚠ há outra combinação possível — conferir" if ambiguo else "")
+                + "  — casado por soma de valores, confira")
+            contagem[AGRUPADO_PC] += 1
+
+    return contagem
+
+
 # ---------------------------------------------------------------------- saida
 def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
            solicitantes: dict[str, list[str]], teto: int,
@@ -344,6 +537,8 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
         for raiz in pedido.fornecedores:
             por_fornecedor.setdefault(raiz, []).append(numero)
 
+    # pedidos que o 1:1 ja atribuiu -- a analise agrupada nao os reaproveita
+    pcs_usados: set = set()
     saida = []
     for nota in cruzamento.cruzadas:
         # A nota ja vem da visao por NOTA do cruzamento com a SF1: as colunas da
@@ -383,27 +578,20 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
 
         pedido = veredito.get("pedido")
         if pedido is not None:
-            linha.update({
-                PC: pedido.numero_totvs,
-                NUM_SC: pedido.sc,
-                COMPRADOR: pedido.comprador,
-                SOLICITANTE: " · ".join(solicitantes.get(pedido.numero, [])),
-                # ⚠ SEM `or None` nestas duas, ao contrario do valor: aqui o ZERO
-                # e informacao ("nada a classificar neste pedido") e some se virar
-                # celula vazia -- e vazio, nesta aba, ja quer dizer outra coisa:
-                # nota que nao tem pedido nenhum.
-                QTD_CLASSI: pedido.qtd_classi,
-                QTD_PC: pedido.quantidade,
-                CONTROLE: pedido.controle,
-                ENCERRADO: pedido.encerrado,
-                ENTREGA: pedido.entrega,
-                VENC_PC: pedido.venc1,
-                VLR_PC: pedido.vlr or None,
-                FORNEC_PC: pedido.razao,
-                ITENS_PC: pedido.itens,
-            })
+            # ⚠ o helper preenche QTD_CLASSI/QTD_PC SEM `or None`: aqui o ZERO e
+            # informacao ("nada a classificar neste pedido") e some se virar
+            # celula vazia -- e vazio, nesta aba, ja quer dizer outra coisa:
+            # nota que nao tem pedido nenhum.
+            _preencher_pedido(linha, pedido, solicitantes)
+            if veredito[SITUACAO] in (CONFIRMADO, PROVAVEL, CONFERIR):
+                pcs_usados.add(pedido.numero)
         linha[CHAVE] = PREFIXO + (_digitos(linha[CHAVE_NFE]) or str(linha[CHAVE_NFE]))
         saida.append(linha)
+
+    # ULTIMO passo: o que sobrou sem pedido ainda pode casar por SOMA de valores
+    # -- varias notas para um pedido, ou varios pedidos para uma nota. Roda depois
+    # de tudo e so mexe nas linhas SEM PEDIDO / FORA DA BASE. Ver `analise_agrupada`.
+    analise_agrupada(saida, pedidos, solicitantes, pcs_usados)
     return saida
 
 
@@ -452,6 +640,8 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
         "confirmados": contagem.get(CONFIRMADO, 0),
         "provaveis": contagem.get(PROVAVEL, 0),
         "conferir": contagem.get(CONFERIR, 0),
+        "agrupado_nf": contagem.get(AGRUPADO_NF, 0),
+        "agrupado_pc": contagem.get(AGRUPADO_PC, 0),
         "fora_da_base": contagem.get(FORA, 0),
         "sem_pedido": contagem.get(SEM, 0),
         "com_solicitante": sum(1 for l in linhas if l.get(SOLICITANTE)),

@@ -567,6 +567,12 @@ COMPACTA_PEDIDOS = [
 ]
 
 ROTULOS_PLANILHA_PEDIDOS = {
+    # ⚠ SEM esta linha o .xlsx desta aba herdava o rotulo GLOBAL do delta,
+    # "Diferença de Valor (Boleto - Título)" -- e aqui nao ha boleto nem titulo:
+    # o confronto da aba e `Vlr Pedido` contra `Vlr SEFAZ`. A coluna saia com o
+    # numero certo e o nome de outra aba (achado em 24/08/2026, conferindo a
+    # exportacao coluna a coluna contra a tela).
+    "@delta_valor": "Diferença de Valor (Pedido - Nota)",
     "Situação": "O pedido de compra desta nota foi encontrado?",
     "Lançada na SF1": "A nota está lançada no TOTVS (SF1)?",
     "Nº NF": "Nº da NF (SEFAZ)",
@@ -810,6 +816,15 @@ ABAS = {
         "col_alerta": "Alerta",
         "resumo": {"alerta": "com alerta", "divergentes": None},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ,
+        # ABA DESLIGADA em 24/08/2026, pedido do usuario ("desabilite essa aba").
+        # Mesmo desenho da SEFAZ x SF1 logo abaixo: `oculta` NAO e apagar a
+        # entrada. A leitura da SEFAZ continua rodando (a aba de PEDIDOS depende
+        # dela) e o CABECALHO continua sendo publicado -- e ele que sobrescreve,
+        # com a marca de oculta, o cabecalho que ja esta no Postgres. Sem isso a
+        # aba voltaria sozinha: a lista de abas do painel sai das linhas `#meta:`
+        # do banco, e nao do que este arquivo gerou hoje.
+        # Para trazer de volta: apagar esta linha.
+        "oculta": True,
     },
     # A nota da SEFAZ ja foi lancada no TOTVS? Cruza SO com a SF1, pelo numero
     # da NF. Ver cruzamento_sefaz_sf1.py.
@@ -873,10 +888,20 @@ ABAS = {
         # quantidade a classificar. Pela regra daqui ela nunca virava barra: tem
         # um valor preenchido so ("E"), e a guarda pede 2. Ver o comentario la
         # -- inclusive por que a nota SEM PEDIDO nao entra em nenhum dos dois.
-        "pills": ["Origem", "Lançada na SF1"],
+        # 24/08/2026: "Controle Ap." entrou na lista a pedido do usuario. Ela
+        # passa na guarda de 2 a 8 valores (na base de hoje sao 5: L, B, B · L,
+        # L · R, R), entao vira barra pelo caminho normal -- ao contrario de
+        # `Ped. Encerr.` e `Qtd.a Classi`, que precisaram nascer derivadas no
+        # navegador. Comprador NAO entra aqui: sao 51 valores, muito acima da
+        # guarda -- filtro de muito valor virou busca com dropdown, no campo de
+        # texto (ver LISTAS_FILTRO no painel_modelo.html).
+        "pills": ["Origem", "Lançada na SF1", "Controle Ap."],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   pedidos_sefaz.PROVAVEL: "provavel",
                   pedidos_sefaz.CONFERIR: "provavel",
+                  # a analise agrupada (por soma de valores) e sempre conferir
+                  pedidos_sefaz.AGRUPADO_NF: "provavel",
+                  pedidos_sefaz.AGRUPADO_PC: "provavel",
                   pedidos_sefaz.FORA: "grave",
                   pedidos_sefaz.SEM: "grave"},
         "texto_longo": {"Informações"},

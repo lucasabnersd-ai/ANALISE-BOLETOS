@@ -752,9 +752,19 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     <label>NF<input type="search" data-filtro="nf" placeholder="50174" autocomplete="off"></label>
     <!-- Campos das abas da SEFAZ / do pedido de compra (13/08/2026). Mesma regra
          das faixas acima: cada um aparece SO na aba que tem a coluna. -->
-    <label data-so-com="nat_operacao">Natureza<input type="search" data-filtro="natureza" placeholder="venda, remessa…" autocomplete="off"></label>
-    <label data-so-com="solicitante">Solicitante<input type="search" data-filtro="solicitante" placeholder="jose.marques" autocomplete="off"></label>
-    <label data-so-com="comprador">Comprador<input type="search" data-filtro="comprador" placeholder="otoniel.cruz" autocomplete="off"></label>
+    <!-- 24/08/2026, pedido do usuario: "filtro com muitos valores use pesquisar
+         com dropdown". Continuam sendo os MESMOS <input> de busca de sempre (o
+         filtro por texto nao mudou) -- o `list=` so acrescenta o dropdown com os
+         valores que existem na aba aberta. Coluna com poucos valores continua
+         virando BOTAO (pills); dropdown e para quando botao nao cabe: sao 51
+         compradores e 60 naturezas na base de hoje. As <datalist> sao
+         preenchidas por `encherListas()`, a cada troca de aba. -->
+    <label data-so-com="nat_operacao">Natureza<input type="search" data-filtro="natureza" list="listaNatureza" placeholder="escolha ou digite" autocomplete="off"></label>
+    <label data-so-com="solicitante">Solicitante<input type="search" data-filtro="solicitante" list="listaSolicitante" placeholder="escolha ou digite" autocomplete="off"></label>
+    <label data-so-com="comprador">Comprador<input type="search" data-filtro="comprador" list="listaComprador" placeholder="escolha ou digite" autocomplete="off"></label>
+    <datalist id="listaNatureza"></datalist>
+    <datalist id="listaSolicitante"></datalist>
+    <datalist id="listaComprador"></datalist>
     <label data-so-com="numero_pc">Pedido<input type="search" data-filtro="pc" placeholder="3100 ou 003100" autocomplete="off"></label>
     <label>UUID<input type="search" data-filtro="uuid" placeholder="62A367E2…" autocomplete="off"></label>
     <button type="button" id="limparFiltros" hidden>Limpar</button>
@@ -933,6 +943,7 @@ function refletirFiltros(){
      nenhum. ⚠ Esconder e seguro porque o filtro e de CADA aba: a aba sem a
      coluna tem o proprio estado, sempre vazio nesses campos -- ninguem digita
      num campo escondido, e nada fica filtrando invisivel. */
+  encherListas();
   document.querySelectorAll("#filtros [data-so-com]").forEach(rotulo => {
     rotulo.hidden = !abaTemColuna(rotulo.dataset.soCom);
   });
@@ -1671,14 +1682,22 @@ const PILL_ENCERRADO = {
             : (r.c.ped_encerr && r.c.ped_encerr !== PC_PARCIAL ? "ENCERRADO" : "PENDENTE"),
 };
 
+/* ⚠ TRES estados desde 24/08/2026, a pedido do usuario ("filtrar quantidade a
+   classificar usando botoes como sendo vazio, 0, diferente de 0"). Antes eram
+   dois, e a nota SEM PEDIDO caia num vazio que nao casava com botao nenhum --
+   eram 142 das 448 linhas invisiveis para este filtro. Agora ela tem botao
+   proprio (SEM PEDIDO), que e o que "vazio" quer dizer nesta coluna: celula
+   vazia aqui e nota que nao tem pedido amarrado, e nao pedido com zero a
+   classificar -- esse e o ZERO, e sao coisas diferentes. */
 const PILL_QTD_CLASSI = {
   chave: "@qtd_classi", rotulo: "Qtd. a classificar", fixo: true,
   ajuda: "Coluna Qtd.a Classi da SC7 (o que do pedido ainda falta classificar). "
-       + "Nota sem pedido não entra em nenhum dos dois.",
-  valores: ["A CLASSIFICAR", "NADA A CLASSIFICAR"],
+       + "A CLASSIFICAR = diferente de zero; ZERO = pedido sem nada a classificar; "
+       + "SEM PEDIDO = célula vazia, a nota não tem pedido amarrado.",
+  valores: ["A CLASSIFICAR", "ZERO", "SEM PEDIDO"],
   quando: aba => (aba.compacta || []).some(c => c.chave === "qtd_a_classi"),
-  valor: r => !r.c.numero_pc ? ""
-            : (temQuantidade(r.c.qtd_a_classi) ? "A CLASSIFICAR" : "NADA A CLASSIFICAR"),
+  valor: r => !r.c.numero_pc ? "SEM PEDIDO"
+            : (temQuantidade(r.c.qtd_a_classi) ? "A CLASSIFICAR" : "ZERO"),
 };
 
 const PILLS_DERIVADAS = [PILL_TIPO, PILL_ENCERRADO, PILL_QTD_CLASSI];
@@ -1692,6 +1711,44 @@ function pillsDerivadas(aba){
     aba.pills = (aba.pills || []).concat([grupo]);
   });
   return aba;
+}
+
+/* ---------- dropdown dos filtros de texto (24/08/2026) ----------
+   Cada <datalist> recebe os valores que EXISTEM na aba aberta -- nao um catalogo
+   fixo: a lista de compradores de uma aba nao serve para outra, e valor que nao
+   esta na tela so faria o filtro devolver zero linha.
+
+   ⚠ A celula pode trazer VARIOS valores juntos ("jose.marques · ana.souza"),
+   porque um pedido nasce de mais de uma SC. A celula e quebrada pelo mesmo
+   separador que o `sc7.py` usa para juntar; sem isso a lista ofereceria o
+   combinado, que nunca casa com a busca por um nome so. */
+const LISTAS_FILTRO = [
+  ["listaComprador",   "comprador",     true],
+  ["listaSolicitante", "solicitante",   true],
+  // natureza e uma frase inteira ("COMPRA PARA COMERCIALIZACAO"), nao uma lista
+  // de nomes: nao se quebra em pedacos
+  ["listaNatureza",    "nat_operacao",  false],
+];
+
+function encherListas(){
+  const aba = A();
+  LISTAS_FILTRO.forEach(([id, chave, quebrar]) => {
+    const lista = document.getElementById(id);
+    if (!lista) return;
+    if (!aba || !(aba.compacta || []).some(c => c.chave === chave)){
+      lista.innerHTML = "";
+      return;
+    }
+    const valores = new Set();
+    (aba.linhas || []).forEach(r => {
+      const celula = String(r.c[chave] || "");
+      (quebrar ? celula.split(" · ") : [celula]).forEach(v => {
+        if (v.trim()) valores.add(v.trim());
+      });
+    });
+    lista.innerHTML = [...valores].sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map(v => `<option value="${esc(v)}">`).join("");
+  });
 }
 
 /* O valor da linha para um grupo de botoes. Quase sempre e a celula da base; os
@@ -2935,7 +2992,9 @@ const LEGENDAS = {
       <i>PC</i>…), mas <b>estar escrito não basta</b>: quase todo número de 3 ou 4 dígitos existe na
       base de pedidos por acaso. O que decide o selo é o que <b>confirma além do número</b> —
       fornecedor (raiz do CNPJ), valor e emissão. Quando a nota <b>não</b> cita pedido, o painel
-      procura entre os pedidos <b>daquele fornecedor</b> e só arrisca quando o <b>valor bate</b>.`,
+      procura entre os pedidos <b>daquele fornecedor</b> e só arrisca quando o <b>valor bate</b>.
+      <br>Por <b>último</b>, no que sobrou sem pedido, o painel tenta as <b>somas</b>: vários pedidos
+      compondo uma nota, ou várias notas compondo um pedido.`,
     itens: [
       ["forte", "PEDIDO CONFIRMADO",
        `O número está na nota <b>e</b> o fornecedor do pedido é o emitente dela (ou o valor total
@@ -2948,6 +3007,15 @@ const LEGENDAS = {
        `Achou pelo fornecedor + <b>valor de um item</b> (entrega parcial), ou o número citado não
         tem nada que o sustente. É o balde de <b>olho humano</b> — o pedido mostrado é um palpite
         fundamentado, não um veredito.`],
+      ["provavel", "PEDIDO AGRUPADO",
+       `A nota <b>não</b> tinha pedido, mas o valor dela é a <b>soma de vários pedidos</b> do mesmo
+        fornecedor — uma nota que fecha mais de um PC. Casou <b>só por valor</b>: confira antes de
+        usar, e leia o <b>Critério</b>, que lista os pedidos somados e avisa quando havia
+        <b>mais de uma combinação possível</b>.`],
+      ["provavel", "NOTAS AGRUPADAS",
+       `O caminho inverso: <b>várias notas</b> deste fornecedor somam <b>um pedido</b> — entrega
+        parcelada, uma nota por remessa. Todas as notas do grupo recebem o mesmo pedido, e o
+        <b>Critério</b> mostra quais são e quanto cada uma vale. Também casou <b>só por valor</b>.`],
       ["grave", "PEDIDO FORA DA BASE",
        `A nota cita um pedido que <b>não existe na SC7</b>. Pedido cancelado, de filial que não
         entrou na exportação, ou exportação incompleta. O <b>Critério</b> diz qual número era.`],
@@ -3189,8 +3257,19 @@ function ligarArraste(){
 
   caixa.addEventListener("pointerdown", e => {
     if (e.button !== 0) return;                       // so o botao esquerdo
-    // campo com dono proprio: digitar/marcar tem de continuar funcionando
-    if (e.target.closest("input, button, select, textarea, a, label, [data-copiar]")) return;
+    // Campo com dono proprio: digitar e marcar tem de continuar funcionando.
+    // ⚠ 24/08/2026, pedido do usuario ("permita arrastar o painel clicando e
+    // arrastando"): `button` e `[data-copiar]` SAIRAM desta lista. O botao de
+    // copiar E um <button> (`button.botao-copia`), e em varias colunas a celula
+    // inteira e so ele -- com `button` aqui, o arraste nao tinha praticamente
+    // onde comecar: so a gutter e as bordas da tabela.
+    // Nao ha conflito com o clique: o gesto so vira arraste depois de LIMIAR px
+    // e, quando vira, o `click` que o fecha e morto na fase de captura (ver o
+    // comentario acima). Clique parado continua copiando/ordenando; arraste
+    // rola e nao copia. Ficam de fora so os campos em que o arrasto do mouse
+    // ja significa outra coisa: digitar, escolher, marcar e selecionar texto
+    // de link.
+    if (e.target.closest("input, select, textarea, a")) return;
     origem = {x:e.clientX, y:e.clientY, sx:caixa.scrollLeft, sy:caixa.scrollTop, id:e.pointerId};
     arrastando = false;
   });
