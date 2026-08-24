@@ -1749,9 +1749,26 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     # derruba o painel, mas tem de aparecer na tela do .cmd.
     sefaz_resumo = cruz_sefaz_resumo = pedidos_resumo = None
     caminho_sefaz = base_sefaz or sefaz.BASE_PADRAO
+    # 24/08/2026: so entram na analise da SEFAZ as notas cujo TOMADOR esta na
+    # LISTAGEM EMPRESAS BIOFLOR. A listagem e lida UMA vez aqui e desce para as
+    # tres abas junto com as linhas -- ver sefaz.ler_cnpjs_empresas().
+    # ⚠ Sem a listagem as abas da SEFAZ NAO sao atualizadas, de proposito: gerar
+    # sem filtro traria de volta as notas das outras empresas do grupo, e o
+    # painel diria que sao da Bioflor. Fica com o dado da rodada anterior e o
+    # aviso na tela, como quando a propria SEFAZ.xlsx nao esta la.
+    empresas_bioflor = None
+    erro_empresas = None
+    try:
+        empresas_bioflor = sefaz.ler_cnpjs_empresas()
+    except Exception as exc:  # noqa: BLE001 - listagem fora do ar/renomeada/mudada
+        erro_empresas = exc
     if not caminho_sefaz.exists():
         print(f"AVISO: base SEFAZ nao encontrada, abas nao atualizadas:\n"
               f"       {caminho_sefaz}", file=sys.stderr)
+    elif erro_empresas is not None:
+        print(f"AVISO: abas da SEFAZ nao atualizadas (sem a listagem das empresas "
+              f"BIOFLOR nao da para saber quais tomadores entram):\n"
+              f"       {erro_empresas}", file=sys.stderr)
     else:
         # ⚠ A ORDEM AQUI IMPORTA: o cruzamento com a SF1 roda ANTES da aba da
         # base, porque e ele quem sabe quais notas nao foram lancadas -- e os
@@ -1766,7 +1783,15 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # base de hoje MAIS as notas que sumiram dela (marcadas). As tres abas
         # que leem a SEFAZ recebem esse mesmo conjunto -- se cada uma relesse o
         # arquivo, as removidas apareceriam em nenhuma.
-        linhas_sefaz, sefaz_hist = sefaz.ler_com_historico(caminho_sefaz, HISTORICO_SEFAZ)
+        linhas_sefaz, sefaz_hist = sefaz.ler_com_historico(
+            caminho_sefaz, HISTORICO_SEFAZ, permitidos=empresas_bioflor)
+        print(f"           tomadores BIOFLOR: {sefaz_hist['filtro_empresas']} empresas | "
+              f"{sefaz_hist['filtro_notas']} de {sefaz_hist['filtro_notas_lidas']} notas "
+              f"entraram ({sefaz_hist['filtro_notas_fora']} de outras "
+              f"{sefaz_hist['filtro_cnpjs_fora']} empresas ficaram de fora)")
+        if sefaz_hist.get("expurgadas"):
+            print(f"           historico: {sefaz_hist['expurgadas']} nota(s) de fora da "
+                  f"listagem sairam do historico (nao viram alerta de removida)")
         print(f"           notas: {sefaz_hist['na_base']} na base | "
               f"{sefaz_hist['novas']} NOVAS | {sefaz_hist['sairam_hoje']} sairam hoje | "
               f"{sefaz_hist['voltaram']} voltaram")

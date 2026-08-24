@@ -27,6 +27,20 @@ planilha mudar de layout, a leitura para com o nome da coluna que saiu do lugar,
 em vez de trazer dado errado calado.
 
 ⚠ A ABA DE NF-e E POR ITEM x DUPLICATA, nao por nota: 726 linhas para 155
+SO AS NOTAS CONTRA AS EMPRESAS BIOFLOR
+--------------------------------------
+24/08/2026, pedido do usuario: "considere somente as empresas de CNPJs tomadores
+que estao nessa base". A exportacao da SEFAZ vem com TODAS as empresas do grupo
+(49 CNPJs de destinatario/tomador); o painel so analisa as 21 da
+`LISTAGEM EMPRESAS BIOFLOR.xlsx`. O corte e por **CNPJ do destinatario (NF-e) /
+tomador (NFS-e)**, so digitos -- ver `BASE_EMPRESAS` e `ler_cnpjs_empresas()`.
+
+⚠ O corte e por CNPJ INTEIRO, nao pela raiz: filial que nao esta na listagem
+fica de fora mesmo que a matriz esteja. Na base de 24/08/2026 isso tirou 21
+notas do CNPJ 27521346000787 (S&D FLORESTAL LOGISTICA), cuja raiz esta na lista
+por outras duas filiais. Se ela tiver de entrar, o lugar de arrumar e a
+LISTAGEM, nao este arquivo -- a listagem e a fonte da verdade.
+
 chaves (uma nota chegou a ter 51 linhas). Isso e de proposito -- `Vlr Total
 Item`, `CFOP`, `Venc Duplicata` e `Valor Duplicata` sao desses niveis, e o
 usuario marcou as quatro. Por isso a identidade da linha soma chave + item +
@@ -53,6 +67,17 @@ BASE_PADRAO = Path(
     r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
     r"\LUCAS ABNER ARAUJO\AUTOMAÇÕES LUCAS\ANALISES BOLETOS\SEFAZ.xlsx"
 )
+
+# A listagem das empresas do grupo BIOFLOR -- quem manda em quais notas o painel
+# analisa. Base GENERICA (mora fora da pasta do painel): e a mesma lista que
+# outros scripts leem, e por isso nao foi copiada para ca.
+BASE_EMPRESAS = Path(
+    r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
+    r"\LUCAS ABNER ARAUJO\BASES GENERICOS\LISTAGEM EMPRESAS BIOFLOR.xlsx"
+)
+ABAS_EMPRESAS = ("EMPRESAS",)
+COLUNA_CNPJ_EMPRESAS = "CNPJ"
+COLUNA_RAZAO_EMPRESAS = "RAZAO_SOCIAL"
 
 # Prefixo do uuid, no mesmo espirito do "ITAU:" e do "BOL:": as marcacoes de
 # todas as abas moram na mesma tabela, e chave repetida seria marcacao trocada.
@@ -335,6 +360,66 @@ def nf_chave(valor) -> str:
     return re.sub(r"\D", "", _texto(valor)).lstrip("0")
 
 
+def so_digitos(valor) -> str:
+    """CNPJ comparavel: so os digitos.
+
+    A LISTAGEM vem do TOTVS com espaco NAO-QUEBRAVEL (\xa0) na frente e espacos
+    atras; a SEFAZ ora traz o CNPJ limpo, ora com mascara. Comparar a string crua
+    nao casaria nenhum dos dois.
+    """
+    return re.sub(r"\D", "", str(valor or ""))
+
+
+def ler_cnpjs_empresas(base: Path | None = None) -> dict[str, str]:
+    """{CNPJ so digitos: razao social} das empresas do grupo BIOFLOR.
+
+    ⚠ Falha ALTO. Listagem ausente, ilegivel ou sem CNPJ nenhum nao pode virar
+    "filtro vazio": filtro vazio derrubaria a aba inteira e filtro ignorado
+    traria de volta as notas das outras empresas -- os dois calados. Quem chama
+    decide o que fazer com o erro (o gerar_painel.py pula as abas da SEFAZ e
+    avisa na tela do .cmd).
+    """
+    base = base or BASE_EMPRESAS
+    if not base.exists():
+        raise RuntimeError(
+            f"A listagem das empresas BIOFLOR nao foi encontrada:\n  {base}\n"
+            "Sem ela nao da para saber quais tomadores entram na analise da SEFAZ. "
+            "Confira se o OneDrive sincronizou, ou corrija BASE_EMPRESAS no sefaz.py."
+        )
+    wb, temporaria = _abrir(base)
+    try:
+        ws = _achar_aba(wb, ABAS_EMPRESAS, "empresas BIOFLOR", "ABAS_EMPRESAS")
+        brutas = ws.iter_rows(values_only=True)
+        cabecalho = [_rotulo(c) for c in next(brutas, [])]
+        try:
+            i_cnpj = cabecalho.index(_rotulo(COLUNA_CNPJ_EMPRESAS))
+            i_razao = cabecalho.index(_rotulo(COLUNA_RAZAO_EMPRESAS))
+        except ValueError:
+            raise RuntimeError(
+                f"{base.name} mudou de layout: nao achei as colunas "
+                f"{COLUNA_CNPJ_EMPRESAS!r} e {COLUNA_RAZAO_EMPRESAS!r}.\n"
+                "  o arquivo tem: " + " / ".join(repr(c) for c in cabecalho)
+            ) from None
+        empresas: dict[str, str] = {}
+        for linha in brutas:
+            cnpj = so_digitos(linha[i_cnpj] if i_cnpj < len(linha) else "")
+            # 14 digitos: linha de rodape/total ou celula vazia nao vira empresa
+            if len(cnpj) != 14:
+                continue
+            empresas[cnpj] = _texto(linha[i_razao] if i_razao < len(linha) else "")
+    finally:
+        wb.close()
+        if temporaria:
+            shutil.rmtree(temporaria, ignore_errors=True)
+    if not empresas:
+        raise RuntimeError(
+            f"{base.name} nao trouxe nenhum CNPJ valido na coluna "
+            f"{COLUNA_CNPJ_EMPRESAS!r}. Nada foi gerado -- com a lista vazia a aba "
+            "da SEFAZ ficaria vazia, e isso nao pode acontecer calado."
+        )
+    return empresas
+
+
 def _abrir(caminho: Path):
     """Abre a planilha; se o Excel/OneDrive estiver segurando, usa uma copia."""
     try:
@@ -431,8 +516,11 @@ def _achar_aba(wb, aceitos: tuple, oque: str, constante: str):
     )
 
 
-def ler(base: Path) -> list[dict]:
-    """As duas abas da SEFAZ.xlsx, ja unificadas e com a Origem marcada."""
+def _ler_tudo(base: Path) -> list[dict]:
+    """As duas abas da SEFAZ.xlsx, ja unificadas e com a Origem marcada.
+
+    A base CRUA, com todas as empresas do grupo -- quem corta e o `ler()`.
+    """
     wb, temporaria = _abrir(base)
     try:
         return (_ler_aba(_achar_aba(wb, ABAS_NFE, "NF-e", "ABAS_NFE"),
@@ -443,6 +531,47 @@ def ler(base: Path) -> list[dict]:
         wb.close()
         if temporaria:
             shutil.rmtree(temporaria, ignore_errors=True)
+
+
+def do_grupo(linha: dict, permitidos) -> bool:
+    """A nota foi emitida CONTRA uma empresa da listagem BIOFLOR?
+
+    O campo e o mesmo nas duas abas: `CNPJ_DEST` guarda o destinatario da NF-e e
+    o tomador da NFS-e (ver o topo do arquivo). Nota sem CNPJ de tomador NAO
+    entra -- nao da para afirmar que e do grupo.
+    """
+    return so_digitos(linha.get(CNPJ_DEST)) in permitidos
+
+
+def filtrar_grupo(linhas: list[dict], permitidos) -> tuple[list[dict], dict]:
+    """Corta as notas de tomador fora da listagem. Devolve (linhas, relatorio).
+
+    O relatorio nao e enfeite: e ele que diz, na tela do .cmd e no painel,
+    quantas linhas ficaram para tras. Corte silencioso em base acumulativa e
+    exatamente o erro que ja custou 820 linhas aqui (ver ABAS_NFE).
+    """
+    dentro = [l for l in linhas if do_grupo(l, permitidos)]
+    fora = [l for l in linhas if not do_grupo(l, permitidos)]
+    return dentro, {
+        "empresas": len(permitidos),
+        "linhas_lidas": len(linhas),
+        "linhas": len(dentro),
+        "linhas_fora": len(fora),
+        "notas_lidas": len({l[CHAVE_NFE] for l in linhas}),
+        "notas": len({l[CHAVE_NFE] for l in dentro}),
+        "notas_fora": len({l[CHAVE_NFE] for l in fora}),
+        "cnpjs_fora": len({so_digitos(l.get(CNPJ_DEST)) for l in fora}),
+    }
+
+
+def ler(base: Path, permitidos=None) -> list[dict]:
+    """As notas da SEFAZ.xlsx cujo tomador esta na listagem BIOFLOR.
+
+    `permitidos` chega pronto de quem ja leu a listagem (o gerar_painel.py le uma
+    vez so); sem ele, a listagem e lida aqui.
+    """
+    permitidos = ler_cnpjs_empresas() if permitidos is None else permitidos
+    return filtrar_grupo(_ler_tudo(base), permitidos)[0]
 
 
 # ------------------------------------------------------------------ historico
@@ -492,9 +621,32 @@ def _da_memoria(guardada: dict) -> dict:
     return linha
 
 
+def _expurgar_fora_do_grupo(notas: dict, permitidos) -> int:
+    """Tira do historico as notas de tomador que nao esta na listagem BIOFLOR.
+
+    ⚠ E a UNICA coisa que se apaga do historico, e existe por um motivo:
+    quando o filtro de tomadores entrou (24/08/2026) o historico ja guardava 878
+    notas, de todas as empresas do grupo. Sem este expurgo, as ~400 que o filtro
+    passou a cortar seriam lidas como "sumiram da base" e voltariam para a tela
+    com o alerta REMOVIDA DA BASE SEFAZ -- 400 alarmes falsos de uma vez.
+    Nota de empresa do grupo nunca e tocada aqui: se ela sumir da base, continua
+    virando alerta como sempre.
+    """
+    fora = [chave for chave, guardada in notas.items()
+            if not any(do_grupo(_da_memoria(l), permitidos)
+                       for l in guardada.get("linhas", []))]
+    for chave in fora:
+        del notas[chave]
+    return len(fora)
+
+
 def atualizar_historico(linhas: list[dict], arquivo: Path,
-                        hoje: dt.date | None = None) -> tuple[dict, dict, list[dict]]:
+                        hoje: dt.date | None = None,
+                        permitidos=None) -> tuple[dict, dict, list[dict]]:
     """Cruza as notas de hoje com o historico. NADA e apagado do historico.
+
+    A unica excecao e o `permitidos`: com ele, as notas de tomador fora da
+    listagem BIOFLOR saem do historico -- ver `_expurgar_fora_do_grupo`.
 
     Devolve (historico, resumo, linhas das notas removidas).
     """
@@ -503,6 +655,7 @@ def atualizar_historico(linhas: list[dict], arquivo: Path,
 
     historico = _ler_historico(arquivo)
     notas = historico["notas"]
+    expurgadas = _expurgar_fora_do_grupo(notas, permitidos) if permitidos else 0
 
     na_base: dict[str, list] = {}
     for linha in linhas:
@@ -546,7 +699,8 @@ def atualizar_historico(linhas: list[dict], arquivo: Path,
     historico["atualizado_em"] = dt.datetime.now().isoformat(timespec="seconds")
     resumo = {"na_base": len(na_base), "novas": novas, "voltaram": voltaram,
               "sairam_hoje": sairam_hoje, "conhecidas": len(notas),
-              "removidas": sum(1 for n in notas.values() if n.get("saiu_em"))}
+              "removidas": sum(1 for n in notas.values() if n.get("saiu_em")),
+              "expurgadas": expurgadas}
     return historico, resumo, removidas
 
 
@@ -557,7 +711,8 @@ def gravar_historico(historico: dict, arquivo: Path) -> None:
 
 
 def ler_com_historico(base: Path, arquivo: Path,
-                      hoje: dt.date | None = None) -> tuple[list[dict], dict]:
+                      hoje: dt.date | None = None,
+                      permitidos=None) -> tuple[list[dict], dict]:
     """As linhas da base MAIS as das notas que sumiram dela.
 
     ⚠ Roda UMA vez por geracao e o resultado e repassado adiante (`preparar()` e
@@ -566,9 +721,14 @@ def ler_com_historico(base: Path, arquivo: Path,
     -- o segundo passe ve a nota ja com `saiu_em` e nao reconta --, mas o
     `sairam_hoje` do segundo resumo viria zerado e enganaria quem o lesse.
     """
-    linhas = ler(base)
-    historico, resumo, removidas = atualizar_historico(linhas, arquivo, hoje)
+    permitidos = ler_cnpjs_empresas() if permitidos is None else permitidos
+    linhas, filtro = filtrar_grupo(_ler_tudo(base), permitidos)
+    historico, resumo, removidas = atualizar_historico(linhas, arquivo, hoje,
+                                                       permitidos)
     gravar_historico(historico, arquivo)
+    # O `filtro` viaja no mesmo resumo (prefixo `filtro_`) para a tela do .cmd e
+    # o painel dizerem quantas notas de outras empresas ficaram de fora.
+    resumo.update({f"filtro_{k}": v for k, v in filtro.items()})
     return linhas + removidas, resumo
 
 

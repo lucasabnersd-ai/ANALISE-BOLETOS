@@ -2752,10 +2752,23 @@ function linhaAlertasSefaz(){
     </ul></div>`;
 }
 
+/* 24/08/2026, pedido do usuário: a análise passou a considerar SÓ as notas cujo
+   TOMADOR está na LISTAGEM EMPRESAS BIOFLOR. O corte é no gerador (sefaz.py) —
+   aqui só se conta o que ficou de fora, para ninguém procurar na tela uma nota
+   que o filtro tirou. Os números vêm do `_sefaz`, e o aviso do corte só aparece
+   quando de fato sobrou alguma nota fora (base só do grupo não precisa de aviso). */
 function avisoSefaz(){
   if (estado.aba !== "sefaz") return "";
+  const s = DADOS._sefaz || {};
+  const fora = s.filtro_notas_fora || 0;
+  const corte = fora
+    ? ` Entram <b>apenas</b> as notas cujo <b>tomador</b> é uma das
+       <b>${num(s.filtro_empresas || 0)} empresas BIOFLOR</b> da listagem:
+       <b>${num(fora)}</b> nota(s) de outras <b>${num(s.filtro_cnpjs_fora || 0)}</b>
+       empresas do grupo ficaram <b>fora desta aba</b>.`
+    : "";
   return `<div class="linha-aviso calmo">📌 As notas que a <b>SEFAZ</b> registrou contra as empresas
-    do grupo — de produto (NF-e) e de serviço (NFS-e). É uma aba de <b>consulta</b>:
+    do grupo — de produto (NF-e) e de serviço (NFS-e).${corte} É uma aba de <b>consulta</b>:
     <b>não cruza com nada</b> e não olha a SE2.</div>`;
 }
 
