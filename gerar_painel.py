@@ -395,6 +395,10 @@ COMPACTA_SEFAZ = [
     ("Alerta",            "",       "",          15),
     ("Nº NF",             "titulo", "NF",         4.5),
     ("Emissão",           "titulo", "",           5),
+    # 28/08/2026, pedido do usuario: o status que a SEFAZ da a nota. Vem colado
+    # na emissao (e leitura da NOTA, nao do pedido nem do lancamento) e virou
+    # botao de filtro -- ver `pills` das abas.
+    ("Status da Nota",    "titulo", "",           5.5),
     ("Saída/Entrada",     "titulo", "",           5),
     ("Tipo Operação",     "titulo", "",           4.5),
     ("CFOP",              "titulo", "",           3.5),
@@ -415,6 +419,7 @@ COMPACTA_SEFAZ = [
 
 ROTULOS_PLANILHA_SEFAZ = {
     "Origem": "Aba de origem na SEFAZ.xlsx",
+    "Status da Nota": "Status da Nota na SEFAZ",
     "Informações": "Informações Complementares / Descrição do Serviço",
     "Vlr Item": "Valor Total do Item (só NF-e)",
     "Vlr Total": "Valor Total da Nota",
@@ -439,6 +444,10 @@ COMPACTA_SEFAZ_SF1 = [
     ("Nº NF",             "titulo", "NF",         5),
     ("Nº NF SF1",         "boleto", "NF",         5.5),
     ("Emissão",           "titulo", "",           5.5),
+    # 28/08/2026: entra aqui tambem para as tres abas da SEFAZ falarem a mesma
+    # lingua. ⚠ Esta aba esta OCULTA -- so o cabecalho dela viaja --, entao o
+    # efeito pratico e para o dia em que ela for religada.
+    ("Status da Nota",    "titulo", "",           5.5),
     ("Emitente",          "titulo", "CONTRAPARTE", 12),
     ("Razão Social",      "boleto", "CONTRAPARTE", 12),
     ("CNPJ Emitente",     "titulo", "CONTRAPARTE", 7),
@@ -525,6 +534,10 @@ COMPACTA_PEDIDOS = [
     # a NF com zeros a frente ate 9 digitos: e o que se cola no TOTVS
     ("NF no TOTVS",       "titulo", "NF",           5.5),
     ("Emissão",           "titulo", "",             5),
+    # 28/08/2026, pedido do usuario. ⚠ NAO se confunde com `Situação` (o veredito
+    # desta aba sobre o pedido): este e o status da nota na SEFAZ, e nota
+    # `Cancelada` pode ter PEDIDO CONFIRMADO. Filtravel -- ver `pills` abaixo.
+    ("Status da Nota",    "titulo", "",             5.5),
     ("Emitente",          "titulo", "EMITENTE",    11),
     ("CNPJ Emitente",     "titulo", "EMITENTE",     7),
     ("Nome Fantasia",     "titulo", "EMITENTE",     8),
@@ -802,7 +815,10 @@ ABAS = {
         # a chave ja vem montada (chave NF-e + item + duplicata), com prefixo
         "col_uuid": "Chave",
         "prefixo_uuid": "",
-        "pills": "Origem",
+        # 28/08/2026: "permita filtrar o status da nota". Passa na guarda de 2 a 8
+        # valores (na base de hoje sao 4 somando as duas abas: Autorizada,
+        # Cancelada, Normal, Substituída), entao vira barra pelo caminho normal.
+        "pills": ["Origem", "Status da Nota"],
         # Selo por valor exato: sem isto "NF-e" e "NFS-e" sairiam da mesma cor,
         # e o flag nao flagaria nada.
         "selos": {"NF-e": "nfe", "NFS-e": "nfse"},
@@ -895,8 +911,13 @@ ABAS = {
         # navegador. Comprador NAO entra aqui: sao 51 valores, muito acima da
         # guarda -- filtro de muito valor virou busca com dropdown, no campo de
         # texto (ver LISTAS_FILTRO no painel_modelo.html).
-        "pills": ["Origem", "Lançada na SF1", "Controle Ap."],
+        # 28/08/2026: `Status da Nota` entrou a pedido do usuario ("permita
+        # filtrar o status da nota"). Mesma guarda de 2 a 8 valores.
+        "pills": ["Origem", "Lançada na SF1", "Controle Ap.", "Status da Nota"],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
+                  # verde junto do CONFIRMADO: as duas sao "nada a fazer" -- uma
+                  # porque o pedido esta amarrado, a outra porque ele ja fechou
+                  pedidos_sefaz.ENCERRADO_PC: "forte",
                   pedidos_sefaz.PROVAVEL: "provavel",
                   pedidos_sefaz.CONFERIR: "provavel",
                   # a analise agrupada (por soma de valores) e sempre conferir

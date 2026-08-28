@@ -4,6 +4,14 @@
 Junta tres bases: a nota (SEFAZ.xlsx), o lancamento dela no TOTVS (SF1, pelo
 `cruzamento_sefaz_sf1`) e o pedido de compra (SC7 + SC1, pelo `sc7`).
 
+⚠ SO PEDIDO EM ABERTO ENTRA NA ANALISE (28/08/2026, pedido do usuario). O corte
+mora no `sc7.carregar()`; aqui o que muda e o vocabulario: um numero citado que
+nao esta na carteira pode ser pedido ENCERRADO (existe, fechado) ou FORA DA BASE
+(nao existe), e os dois textos dizem coisas opostas para quem for conferir. Ver
+`ENCERRADO_PC` e `escolher()`. Medido na base de 28/08/2026: das 441 notas que
+tinham pedido, **326 apontavam para um pedido totalmente encerrado** -- sao elas
+que passaram a sair com o veredito novo, e nao com um "SEM PEDIDO" falso.
+
 O QUE MEDIMOS ANTES DE ESCREVER A REGRA (13/08/2026, base real)
 ---------------------------------------------------------------
 617 notas. 609 tem algum texto em `Info Comp` / `Descrição do Serviço`. O numero
@@ -65,6 +73,11 @@ ORIGEM = "Origem"
 NUM_NF = "Nº NF"
 NF_TOTVS = "NF no TOTVS"
 EMISSAO = "Emissão"
+# O status que a SEFAZ da a nota (`Autorizada`/`Cancelada` na NF-e, `Normal`/
+# `Cancelada`/`Substituída` na NFS-e). ⚠ NAO se confunde com `Situação`, que e o
+# veredito DESTA aba sobre o pedido -- sao perguntas diferentes, e uma nota
+# `Cancelada` pode perfeitamente ter PEDIDO CONFIRMADO. Ver sefaz.STATUS_NOTA.
+STATUS_NOTA = "Status da Nota"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 FANTASIA = "Nome Fantasia"
@@ -105,7 +118,7 @@ CHAVE_NFE = "Chave NF-e"
 
 CABECALHO = [
     CHAVE, SITUACAO, ALERTA, LANCADA, ORIGEM,
-    NUM_NF, NF_TOTVS, EMISSAO,
+    NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA,
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
@@ -116,12 +129,15 @@ CABECALHO = [
 ]
 
 # ------------------------------------------------------------------- vereditos
-# ⚠ Sao CINCO e nao tres, e a diferenca entre eles e o que a pessoa faz depois:
+# ⚠ Sao SEIS e nao tres, e a diferenca entre eles e o que a pessoa faz depois:
 #   CONFIRMADO      nada a fazer, o pedido esta amarrado
 #   PROVÁVEL        so confirmar (o painel achou, o texto nao dizia)
 #   CONFERIR        a nota cita um pedido, mas nada sustenta -- olho humano
 #   SEM PEDIDO      a nota nao cita pedido e nada foi achado
 #   FORA DO SC7     cita um numero que a base de pedidos nao tem (lacuna de base)
+#   ENCERRADO       cita um pedido que ESTA na SC7 e esta fechado (28/08/2026,
+#                   quando a analise passou a olhar so os pedidos em aberto) --
+#                   nada a fazer, e nao e a mesma coisa que FORA DO SC7
 CONFIRMADO = "PEDIDO CONFIRMADO"
 PROVAVEL = "PEDIDO PROVÁVEL"
 CONFERIR = "CONFERIR PEDIDO"
@@ -134,9 +150,18 @@ SEM = "SEM PEDIDO"
 # valor, dentro do mesmo fornecedor.
 AGRUPADO_PC = "PEDIDO AGRUPADO"   # 1 NF = soma de varios PCs
 AGRUPADO_NF = "NOTAS AGRUPADAS"   # varias NFs = 1 PC
+# 28/08/2026: a analise passou a olhar SO os pedidos EM ABERTO (ver sc7.py). Este
+# degrau existe para nao mentir sobre os que sairam: a nota cita um pedido que
+# ESTA na SC7, inteiro, apenas fechado -- e nao um pedido inexistente (FORA) nem
+# uma nota que nao cita pedido nenhum (SEM). Sem ele, as 326 notas que hoje caem
+# num pedido encerrado sairiam com o texto do FORA DA BASE, mandando alguem
+# procurar "pedido cancelado, de outra filial ou exportacao incompleta".
+# ⚠ E o degrau MAIS ALTO da ordem: e a unica situacao em que nao ha nada a fazer
+# -- o pedido foi achado E ja esta encerrado.
+ENCERRADO_PC = "PEDIDO ENCERRADO"
 
 ORDEM_SITUACAO = {SEM: 0, FORA: 1, CONFERIR: 2, AGRUPADO_NF: 3, AGRUPADO_PC: 4,
-                  PROVAVEL: 5, CONFIRMADO: 6}
+                  PROVAVEL: 5, CONFIRMADO: 6, ENCERRADO_PC: 7}
 
 # ------------------------------------------------------------------- extracao
 # Rotulo FORTE: e a nossa ordem de compra, escrita por extenso ou abreviada.
@@ -265,6 +290,52 @@ def pontuar(nota: dict, pedido: sc7.Pedido, peso_texto: int = 0) -> tuple[int, l
     return pontos, porque
 
 
+# Quantos numeros de pedido fechado cabem no texto do Critério. Acima disso a
+# frase deixa de ajudar e vira lista: o fornecedor com mais pedidos tem 178, e
+# "confira se e um destes 178" nao e uma pista.
+MAX_ENCERRADOS_CITADOS = 3
+
+
+def _encerrados_parecidos(nota: dict, encerrados: dict[str, sc7.Pedido],
+                          por_fornecedor_enc: dict[str, list[str]]) -> list[str]:
+    """Pedidos FECHADOS do mesmo fornecedor cujo valor bate com a nota.
+
+    ⚠ Mesma barra da busca dos abertos (`PESO_CNPJ + PESO_VALOR_ITEM`), e pelo
+    mesmo motivo: sem o valor sobra "mesmo fornecedor + emissao proxima", que 37%
+    dos pedidos ERRADOS do mesmo fornecedor tambem tem. Isto aqui nao escolhe
+    pedido nenhum -- so diz "olhe ali antes de dar por sem pedido".
+    """
+    raiz = _raiz(nota.get(CNPJ_EMIT))
+    achados = []
+    for numero in por_fornecedor_enc.get(raiz, []):
+        pontos, _porque = pontuar(nota, encerrados[numero])
+        if pontos >= PESO_CNPJ + PESO_VALOR_ITEM:
+            achados.append(numero)
+    # do mais proximo em emissao para o mais distante: se so um numero couber no
+    # texto, que seja o mais provavel
+    achados.sort(key=lambda n: _distancia(nota, encerrados[n]))
+    return formatar_encerrados(achados[:MAX_ENCERRADOS_CITADOS])
+
+
+def _por_fornecedor(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
+    """{raiz do CNPJ do fornecedor: numeros dos pedidos dele}."""
+    indice: dict[str, list[str]] = {}
+    for numero, pedido in pedidos.items():
+        for raiz in pedido.fornecedores:
+            indice.setdefault(raiz, []).append(numero)
+    return indice
+
+
+def formatar_encerrados(numeros: list[str]) -> list[str]:
+    """Os numeros dos pedidos encerrados como o TOTVS os escreve (6 digitos).
+
+    ⚠ `citados()` devolve a chave NORMALIZADA (sem zeros a esquerda, "2890"), e e
+    ela que casa com a SC7. Na tela ela nao serve: quem for conferir digita
+    "002890" no TOTVS.
+    """
+    return [sc7.formatar_pc(n) for n in numeros]
+
+
 def _distancia(nota: dict, pedido: sc7.Pedido) -> int:
     """Dias entre a emissao da nota e a do pedido -- so para desempate."""
     if not (nota.get(EMISSAO) and pedido.emissao):
@@ -273,16 +344,40 @@ def _distancia(nota: dict, pedido: sc7.Pedido) -> int:
 
 
 def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
-             por_fornecedor: dict[str, list[str]], teto: int) -> dict:
+             por_fornecedor: dict[str, list[str]], teto: int,
+             encerrados: dict[str, sc7.Pedido] | None = None,
+             por_fornecedor_enc: dict[str, list[str]] | None = None) -> dict:
     """O pedido desta nota: quem e, com que forca e por que.
 
     Duas frentes, nesta ordem -- o texto manda, a busca so entra quando o texto
     nao resolve:
       1. os numeros citados no texto da nota;
       2. se nenhum se sustentar, os pedidos DO MESMO FORNECEDOR cujo valor bate.
+
+    ⚠ `pedidos` sao SO OS ABERTOS desde 28/08/2026, e `encerrados` sao os que
+    ficaram fora do corte. Eles entram aqui por DOIS caminhos, e nenhum dos dois
+    escolhe pedido -- os dois so evitam que a aba afirme algo falso:
+
+      1. **numero citado.** Um numero citado que nao esta em `pedidos` pode ser
+         pedido fechado ou pedido que nao existe -- coisas opostas para quem for
+         conferir. Sem esta separacao as duas sairiam com o texto do FORA DA BASE
+         ("nao existe na base de pedidos"), errado em 149 notas.
+      2. **nada citado, mas o valor bate num fechado.** Metade dos casos nao cita
+         numero: o pedido era achado por fornecedor + valor. Sem olhar os
+         fechados, essas notas saem em SEM PEDIDO afirmando que "nenhum pedido
+         deste fornecedor bate com o valor dela" -- e um bate, so esta encerrado.
+         Eram 144 linhas dizendo isso. ⚠ A situacao continua SEM PEDIDO: o sinal
+         aqui e o mesmo sinal FRACO da busca (CNPJ + valor, sem citacao), e
+         chamar isso de "pedido encerrado, nada a fazer" seria dar por resolvido
+         um palpite. O que muda e o Critério -- ele passa a dizer onde olhar.
     """
+    encerrados = encerrados or {}
+    por_fornecedor_enc = por_fornecedor_enc or {}
     achados = citados(nota.get(INFO), teto)
-    fora_da_base = [n for n, _p in achados if n not in pedidos]
+    # os citados que a analise nao tem, quebrados nos dois motivos possiveis
+    ausentes = [n for n, _p in achados if n not in pedidos]
+    citados_encerrados = [n for n in ausentes if n in encerrados]
+    fora_da_base = [n for n in ausentes if n not in encerrados]
 
     avaliados = [(*pontuar(nota, pedidos[n], peso), pedidos[n])
                  for n, peso in achados if n in pedidos]
@@ -301,14 +396,47 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         avaliados = buscados
 
     if not avaliados:
+        # ⚠ A ORDEM importa: o pedido ENCERRADO vem antes do fora da base porque
+        # e a resposta mais forte das tres -- "achei, e esta fechado" resolve a
+        # nota, enquanto os outros dois pedem trabalho. Nota que cita os dois
+        # (um encerrado e um inexistente) mostra o encerrado e cita o outro.
+        if citados_encerrados:
+            extra = (f"; também cita {' e '.join(fora_da_base)}, que não existe na base"
+                     if fora_da_base else "")
+            return {
+                SITUACAO: ENCERRADO_PC,
+                CRITERIO: (
+                    f"A nota cita o pedido {' e '.join(formatar_encerrados(citados_encerrados))}, "
+                    f"que está na SC7 com TODOS os itens encerrados (coluna Ped. Encerr. = “E”). "
+                    f"A análise só considera pedido em aberto, então as colunas do pedido "
+                    f"ficam vazias — nada a fazer nesta nota{extra}"),
+            }
+        if fora_da_base:
+            return {
+                SITUACAO: FORA,
+                CRITERIO: (
+                    f"A nota cita o pedido {' e '.join(fora_da_base)}, que não existe na "
+                    f"base de pedidos (SC7) — pedido cancelado, de outra filial ou "
+                    f"exportação incompleta"),
+            }
+        # Nada citado e nada aberto casou. Antes de dizer "nenhum pedido deste
+        # fornecedor bate com o valor dela", conferir se algum FECHADO batia:
+        # senao a frase e falsa. Ver o item 2 da docstring.
+        parecidos = _encerrados_parecidos(nota, encerrados, por_fornecedor_enc)
+        if parecidos:
+            return {
+                SITUACAO: SEM,
+                CRITERIO: (
+                    "A nota não cita pedido de compra e nenhum pedido EM ABERTO deste "
+                    "fornecedor bate com o valor dela — mas o pedido "
+                    f"{' ou '.join(parecidos)}, do mesmo fornecedor e com o valor batendo, "
+                    "está na SC7 já encerrado (a análise só considera pedido em aberto). "
+                    "Confira se a nota é dele antes de tratar como sem pedido"),
+            }
         return {
-            SITUACAO: FORA if fora_da_base else SEM,
-            CRITERIO: (
-                f"A nota cita o pedido {' e '.join(fora_da_base)}, que não existe na "
-                f"base de pedidos (SC7) — pedido cancelado, de outra filial ou "
-                f"exportação incompleta" if fora_da_base else
-                "A nota não cita pedido de compra e nenhum pedido deste fornecedor "
-                "bate com o valor dela"),
+            SITUACAO: SEM,
+            CRITERIO: ("A nota não cita pedido de compra e nenhum pedido deste "
+                       "fornecedor bate com o valor dela"),
         }
 
     melhor_pontos = max(a[0] for a in avaliados)
@@ -345,6 +473,10 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     if fora_da_base:
         porque = list(porque) + [f"A nota também cita {' e '.join(fora_da_base)}, "
                                  "que não existe na base de pedidos"]
+    if citados_encerrados:
+        porque = list(porque) + [
+            f"A nota também cita {' e '.join(formatar_encerrados(citados_encerrados))}, "
+            "que está na SC7 já encerrado (fora da análise)"]
 
     return {SITUACAO: situacao, CRITERIO: " + ".join(porque), "pedido": pedido,
             "pontos": melhor_pontos}
@@ -524,7 +656,8 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
 # ---------------------------------------------------------------------- saida
 def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
            solicitantes: dict[str, list[str]], teto: int,
-           texto_por_nota: dict[str, str]) -> list[dict]:
+           texto_por_nota: dict[str, str],
+           encerrados: set[str] | None = None) -> list[dict]:
     """Uma linha por NOTA, com o lancamento e o pedido do lado.
 
     ⚠ `texto_por_nota` chega ANTES do veredito e nao depois: e desse texto que o
@@ -532,10 +665,10 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     sempre contra string vazia -- a aba inteira nasceria em SEM PEDIDO, sem erro
     nenhum aparecer.
     """
-    por_fornecedor: dict[str, list[str]] = {}
-    for numero, pedido in pedidos.items():
-        for raiz in pedido.fornecedores:
-            por_fornecedor.setdefault(raiz, []).append(numero)
+    por_fornecedor = _por_fornecedor(pedidos)
+    # O MESMO indice sobre os pedidos que o corte deixou de fora: serve so para
+    # EXPLICAR o "sem pedido" (ver `escolher`), nunca para escolher um pedido.
+    por_fornecedor_enc = _por_fornecedor(encerrados or {})
 
     # pedidos que o 1:1 ja atribuiu -- a analise agrupada nao os reaproveita
     pcs_usados: set = set()
@@ -549,6 +682,9 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             NUM_NF: nota.get(csf1.NUM_NF),
             NF_TOTVS: nf_totvs(nota.get(csf1.NUM_NF)),
             EMISSAO: nota.get(csf1.EMISSAO),
+            # o status da nota NA SEFAZ, nao um veredito nosso (pedido do
+            # usuario, 28/08/2026) -- ver STATUS_NOTA
+            STATUS_NOTA: nota.get(csf1.STATUS_NOTA),
             NOME_EMIT: nota.get(csf1.NOME_EMIT),
             CNPJ_EMIT: nota.get(csf1.CNPJ_EMIT),
             FANTASIA: nota.get(csf1.FANTASIA),
@@ -572,7 +708,8 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             ALERTA: nota.get(csf1.ALERTA, ""),
             INFO: texto_por_nota.get(nota.get(csf1.CHAVE_NFE), ""),
         }
-        veredito = escolher(linha, pedidos, por_fornecedor, teto)
+        veredito = escolher(linha, pedidos, por_fornecedor, teto, encerrados,
+                            por_fornecedor_enc)
         linha[SITUACAO] = veredito[SITUACAO]
         linha[CRITERIO] = veredito[CRITERIO]
 
@@ -616,7 +753,10 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
              ) -> tuple[list[str], list[tuple], dict]:
     """Ponto de entrada: (cabecalho, linhas, resumo) para o gerador."""
     cruzamento = pronto or csf1.preparar(base_sefaz, base_sf1, hoje)
-    pedidos, solicitantes, resumo_sc7 = sc7.carregar(base_sc7, base_sc1)
+    # ⚠ `pedidos` sao SO OS EM ABERTO (corte de 28/08/2026, ver sc7.py); os
+    # numeros dos encerrados vem ao lado justamente para que "fechado" nao seja
+    # confundido com "nao existe" no veredito.
+    pedidos, solicitantes, encerrados, resumo_sc7 = sc7.carregar(base_sc7, base_sc1)
     teto = resumo_sc7["maior_pc"] + FOLGA_FAIXA
 
     # O texto de onde o pedido e lido nao existe na visao por nota (o cruzamento
@@ -628,7 +768,8 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
         for l in cruzamento.linhas:
             texto_por_nota.setdefault(l[sefaz.CHAVE_NFE], l.get(sefaz.INFO) or "")
 
-    linhas = montar(cruzamento, pedidos, solicitantes, teto, texto_por_nota)
+    linhas = montar(cruzamento, pedidos, solicitantes, teto, texto_por_nota,
+                    encerrados)
 
     contagem: dict[str, int] = {}
     for l in linhas:
@@ -643,6 +784,7 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
         "agrupado_nf": contagem.get(AGRUPADO_NF, 0),
         "agrupado_pc": contagem.get(AGRUPADO_PC, 0),
         "fora_da_base": contagem.get(FORA, 0),
+        "encerrado_pc": contagem.get(ENCERRADO_PC, 0),
         "sem_pedido": contagem.get(SEM, 0),
         "com_solicitante": sum(1 for l in linhas if l.get(SOLICITANTE)),
         **{f"sc7_{k}": v for k, v in resumo_sc7.items()},

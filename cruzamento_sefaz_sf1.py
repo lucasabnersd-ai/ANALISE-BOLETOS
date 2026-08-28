@@ -41,6 +41,9 @@ SITUACAO = "Situação"
 ORIGEM = "Origem"
 NUM_NF = "Nº NF"
 EMISSAO = "Emissão"
+# O status da nota NA SEFAZ (`Autorizada`/`Cancelada` na NF-e, `Normal`/
+# `Cancelada`/`Substituída` na NFS-e). Ver sefaz.STATUS_NOTA.
+STATUS_NOTA = "Status da Nota"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 VLR_SEFAZ = "Vlr SEFAZ"
@@ -80,6 +83,7 @@ ALERTA = "Alerta"
 # ponto no cruzamento (`_nota_do_par`) -- ela so nao vira coluna. Tirar daqui
 # tambem tira da carteira que viaja para o navegador, que e o ponto.
 CABECALHO = [CHAVE, SITUACAO, ALERTA, ORIGEM, NUM_NF, NF_SF1, EMISSAO,
+             STATUS_NOTA,
              NOME_EMIT, RAZAO, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              TIPO_OP, NAT_OP, SAIDA, CFOP, VLR_SEFAZ, VLR_TITULO,
              VENC_DUP, VLR_DUP, QTD_DUP,
@@ -159,6 +163,9 @@ DA_PRIMEIRA_LINHA = (
     (FANTASIA, sefaz.FANTASIA), (NOME_DEST, sefaz.NOME_DEST),
     (CNPJ_DEST, sefaz.CNPJ_DEST), (TIPO_OP, sefaz.TIPO_OP), (SAIDA, sefaz.SAIDA),
     (NAT_OP, sefaz.NAT_OP),
+    # 28/08/2026: medido nas duas abas, ZERO das 813 notas tem status diferente
+    # entre as proprias linhas -- ele e da nota, entao a primeira linha basta.
+    (STATUS_NOTA, sefaz.STATUS_NOTA),
 )
 
 

@@ -29,6 +29,37 @@ Mesma regra do `sefaz.py`: a SC7 tem 207 colunas e 3 nomes repetidos, a SC1 tem
 119 e 2 repetidos. Ler por nome escolhe a errada calado. A letra e o que vale; o
 nome e conferido na leitura e a leitura PARA se ele saiu do lugar.
 
+⚠ SO OS PEDIDOS EM ABERTO SAO ANALISADOS (28/08/2026)
+-----------------------------------------------------
+Pedido do usuario: "na coluna AU `Ped. Encerr.`, traga e analise SOMENTE os
+titulos em aberto -- considere so o que NAO tem `E` preenchido". Quem faz o corte
+e o `carregar()`: pedido com TODOS os itens marcados sai da carteira que a analise
+enxerga. Medido na base de 28/08/2026: dos 3.624 pedidos, **3.117 saem** (todos os
+itens com "E") e ficam **507** -- 323 sem marca nenhuma e 184 PARCIAL.
+
+⚠ PARCIAL FICA, E FICA INTEIRO. Pedido com parte dos itens encerrada ainda tem
+item em aberto: ele NAO esta encerrado, entao entra. E entra com todos os itens
+somados, inclusive os encerrados -- as colunas do painel leem "X a classificar de
+Y do pedido", e jogar fora metade dos itens faria o Y mentir sobre o tamanho do
+pedido.
+
+⚠ DUAS COISAS NAO PODEM SAIR JUNTO COM ELES, e as duas custam caro se saem:
+  1. **a FAIXA de numeros de PC** (`menor_pc`/`maior_pc`) continua vindo da SC7
+     INTEIRA. E ela que diz se um numero citado numa nota tem chance de ser
+     pedido nosso (ver `pedidos_sefaz`); calculada so sobre os abertos, ela
+     encolheria e todo pedido antigo citado numa nota viraria "acima da faixa",
+     isto e, pedido do fornecedor.
+  2. **os pedidos cortados** (`encerrados`), porque "nao esta na carteira" e "nao
+     existe" sao coisas diferentes. Sem eles, a nota que cita um pedido encerrado
+     sairia como PEDIDO FORA DA BASE -- cujo texto diz "nao existe na base de
+     pedidos (SC7) -- pedido cancelado, de outra filial ou exportacao incompleta".
+     Seriam 326 notas mandando alguem procurar um pedido que esta na base,
+     inteiro, so fechado.
+     ⚠ Sao os `Pedido` INTEIROS, e nao so os numeros: metade dos casos nao cita
+     numero nenhum -- o pedido era achado por fornecedor + valor --, e para dizer
+     "existe um encerrado deste fornecedor com este valor" o `pedidos_sefaz`
+     precisa comparar valor, o que a lista de numeros nao permite.
+
 ⚠ COLUNA INSERIDA: O DESLOCAMENTO EM BLOCO E RECUPERADO
 --------------------------------------------------------
 24/08/2026 a exportacao ganhou UMA coluna nova e TUDO andou uma casa para a
@@ -245,6 +276,19 @@ class Pedido:
         return JUNTA.join(self.encerrados)
 
     @property
+    def aberto(self) -> bool:
+        """O pedido NAO esta encerrado -- e o corte de 28/08/2026 (ver docstring).
+
+        ⚠ A pergunta e feita na CONTAGEM de itens marcados, e nao no texto que a
+        propriedade `encerrado` devolve. Os dois concordam hoje (a coluna AU so
+        tem "E" e vazio nas 26.377 linhas), mas o texto e um relatorio -- passa
+        por `PARCIAL` e por `JUNTA.join()` -- e uma marca nova na planilha ("F",
+        "ENC") mudaria o texto sem mudar a contagem. Item em aberto e a definicao
+        de pedido em aberto; o resto e como isso se escreve na tela.
+        """
+        return self.itens_encerrados < self.itens
+
+    @property
     def razao(self) -> str:
         return JUNTA.join(self.razoes)
 
@@ -376,20 +420,43 @@ def ler_solicitantes(caminho: Path | None = None) -> dict[str, list[str]]:
     return por_pc
 
 
-def carregar(base_sc7: Path | None = None,
-             base_sc1: Path | None = None) -> tuple[dict[str, Pedido], dict[str, list[str]], dict]:
-    """(pedidos, solicitantes por pedido, resumo).
+def carregar(base_sc7: Path | None = None, base_sc1: Path | None = None
+             ) -> tuple[dict[str, Pedido], dict[str, list[str]],
+                        dict[str, Pedido], dict]:
+    """(pedidos EM ABERTO, solicitantes por pedido, pedidos ENCERRADOS, resumo).
+
+    ⚠ E AQUI que o corte de 28/08/2026 mora, e de proposito: `ler_pedidos()`
+    continua devolvendo a SC7 inteira (e a leitura da planilha, nao a politica) e
+    este e o unico lugar que decide o que a analise enxerga. Quem quiser a
+    carteira completa -- uma conferencia, um script novo -- chama `ler_pedidos()`.
 
     A SC1 e OPCIONAL: sem ela os pedidos continuam valendo e so o solicitante
     fica vazio. Faltar a SC7, ao contrario, e nao ter aba nenhuma.
     """
     caminho7 = base_sc7 or BASE_SC7
     caminho1 = base_sc1 or BASE_SC1
-    pedidos = ler_pedidos(caminho7)
+    todos = ler_pedidos(caminho7)
     solicitantes = ler_solicitantes(caminho1) if caminho1.exists() else {}
-    numeros = [int(n) for n in pedidos if n.isdigit()]
+
+    pedidos = {n: p for n, p in todos.items() if p.aberto}
+    # Os que ficaram fora, INTEIROS. NAO sao "o que nao existe": sao o que existe
+    # e esta fechado, e a diferenca e o que separa um aviso certo de 326 falsos
+    # (ver a docstring do modulo).
+    encerrados = {n: p for n, p in todos.items() if not p.aberto}
+    parciais = sum(1 for p in pedidos.values() if p.encerrado == PARCIAL)
+
+    # ⚠ A FAIXA SAI DA BASE INTEIRA (`todos`), nunca dos abertos -- ver o item 1
+    # da docstring. Calculada sobre 507 pedidos em vez de 3.624, ela desceria de
+    # 3.6xx para o maior PC aberto e transformaria pedido antigo citado numa nota
+    # em "numero acima da faixa", isto e, pedido do fornecedor.
+    numeros = [int(n) for n in todos if n.isdigit()]
     resumo = {
+        # `pedidos` = os que a analise usa (abertos). O total da base vem ao lado,
+        # senao o numero da tela pareceria uma base que encolheu.
         "pedidos": len(pedidos),
+        "pedidos_na_base": len(todos),
+        "encerrados_fora": len(encerrados),
+        "parciais": parciais,
         "itens": sum(p.itens for p in pedidos.values()),
         "com_solicitante": len(set(pedidos) & set(solicitantes)),
         # a faixa de PCs que a exportacao cobre: e ela que diz se um numero
@@ -401,4 +468,4 @@ def carregar(base_sc7: Path | None = None,
         "salva_em": dt.datetime.fromtimestamp(
             caminho7.stat().st_mtime).strftime("%d/%m/%Y às %H:%M"),
     }
-    return pedidos, solicitantes, resumo
+    return pedidos, solicitantes, encerrados, resumo

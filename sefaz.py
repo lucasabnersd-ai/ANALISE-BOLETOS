@@ -99,6 +99,18 @@ ORIGEM = "Origem"
 CHAVE_NFE = "Chave NF-e"
 NUM_NF = "Nº NF"
 EMISSAO = "Emissão"
+# ⚠ O status que a SEFAZ da a NOTA -- e nao um veredito nosso. Pedido do usuario
+# em 28/08/2026: "leve a coluna Status da Nota (D) na aba NFe e a Status da Nota
+# (B) na aba NF's". As duas abas chamam a coluna do MESMO jeito e falam a MESMA
+# coisa, mas com vocabulario diferente: a de produto diz `Autorizada`/`Cancelada`
+# e a de servico `Normal`/`Cancelada`/`Substituída`. Sao empilhadas na mesma
+# coluna, sem traducao -- inventar um vocabulario unico seria esconder de qual
+# aba a linha veio, que e o que a coluna `Origem` existe para dizer.
+# ⚠ E do nivel da NOTA, nao do item: medido em 28/08/2026, ZERO das 424 notas de
+# NF-e e ZERO das 389 de NFS-e tem status divergente entre as proprias linhas.
+# Por isso ela sobe de nivel pela PRIMEIRA LINHA (ver DA_PRIMEIRA_LINHA no
+# cruzamento_sefaz_sf1.py) e nao juntando distintos.
+STATUS_NOTA = "Status da Nota"
 SAIDA = "Saída/Entrada"
 TIPO_OP = "Tipo Operação"
 # ⚠ NAO e o "Tipo Operação" acima: aquele diz entrada/saida, este e a natureza
@@ -120,7 +132,8 @@ NOME_DEST = "Destinatário"
 
 ALERTA = "Alerta"
 
-CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, SAIDA, TIPO_OP, NAT_OP, CFOP,
+CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, STATUS_NOTA,
+             SAIDA, TIPO_OP, NAT_OP, CFOP,
              NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              VLR_ITEM, VLR_TOTAL, VENC_DUP, VLR_DUP, INFO, CHAVE_NFE]
 
@@ -257,6 +270,7 @@ COLUNAS_NFE = [
     ("C",  "Chave NF-e",         CHAVE_NFE),
     ("I",  "Num NF",             NUM_NF),
     ("J",  "Data Emissão",       EMISSAO),
+    ("D",  "Status da Nota",     STATUS_NOTA),
     ("K",  "Data Saída/Entrada", SAIDA),
     ("L",  "Tipo Operação",      TIPO_OP),
     ("F",  "Nat. Operação",      NAT_OP),
@@ -277,6 +291,7 @@ COLUNAS_NFS = [
     ("A",  "Chave NFS-e",             CHAVE_NFE),
     ("I",  "Número NFSe",             NUM_NF),
     ("H",  "Data de Emissão NFSe",    EMISSAO),
+    ("B",  "Status da Nota",          STATUS_NOTA),
     ("P",  "Natureza Operação",       NAT_OP),
     ("Y",  "Descrição do Serviço",    INFO),
     ("BJ", "Valor dos Serviços",      VLR_TOTAL),

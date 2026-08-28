@@ -1152,7 +1152,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608280847"></script>
+<script src="supa.js?v=202608280958"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -1962,8 +1962,9 @@ const PILL_TIPO = {
    "Permita filtrar a quantidade classificada" e "permita filtrar essa coluna
    Ped. Encerr. (AU) da SC7: se tiver E, pedido encerrado; se nao, pendente."
    Nenhum dos dois vira barra pelo caminho normal do `grupos_de_pills()`:
-   - `Ped. Encerr.` tem UM valor preenchido so ("E") e a guarda de la pede 2 --
-     era descartada todo dia, calada;
+   - `Ped. Encerr.` tinha UM valor preenchido so ("E") e a guarda de la pede 2 --
+     era descartada todo dia, calada. Depois do corte de 28/08/2026 o unico valor
+     que aparece na coluna e "PARCIAL", entao ela continua sem passar na guarda;
    - `Qtd.a Classi` e NUMERO: viraria uma barra de "3, 4, 6, 7, 8, 9, 14, 56",
      e a pergunta que se faz da coluna e outra ("sobrou algo a classificar?").
    Por isso os dois nascem aqui, do mesmo jeito que o do tipo de pagamento: o
@@ -1985,15 +1986,26 @@ const temQuantidade = celula => /[1-9]/.test(String(celula || ""));
    aberto -- e trabalho pendente, e nao pedido fechado. */
 const PC_PARCIAL = "PARCIAL";
 
+/* ⚠ MUDOU DE PERGUNTA EM 28/08/2026, porque a base mudou embaixo dele. Desde que
+   a analise passou a olhar SO os pedidos em aberto (`sc7.carregar()`), pedido
+   encerrado nao chega mais nesta aba: o botao "ENCERRADO" ficaria na barra
+   devolvendo ZERO linha para sempre -- filtro que nao filtra e pior que filtro
+   que nao existe, porque parece resposta.
+   A divisao que SOBROU na coluna e a que interessa agora: PARCIAL (parte dos
+   itens ja encerrada, o pedido esta andando) x EM ABERTO (celula vazia, nenhum
+   item encerrado). Medido na base de 28/08/2026: dos 507 pedidos que ficaram,
+   184 sao PARCIAL e 323 estao intocados. */
 const PILL_ENCERRADO = {
-  chave: "@ped_encerr", rotulo: "Pedido encerrado", fixo: true,
-  ajuda: "Coluna Ped. Encerr. da SC7: “E” = pedido encerrado; vazio = pendente. "
-       + "Pedido com só parte dos itens encerrada aparece como PARCIAL na coluna "
-       + "e conta como pendente. Nota sem pedido não entra em nenhum dos dois.",
-  valores: ["ENCERRADO", "PENDENTE"],
+  chave: "@ped_encerr", rotulo: "Pedido em aberto", fixo: true,
+  ajuda: "Coluna Ped. Encerr. da SC7. Pedido ENCERRADO (“E” em todos os itens) "
+       + "não entra mais na análise, então aqui só há pedido em aberto: PARCIAL = "
+       + "parte dos itens já encerrada; EM ABERTO = nenhum item encerrado. Nota "
+       + "sem pedido não entra em nenhum dos dois — para essas, o selo PEDIDO "
+       + "ENCERRADO da barra de Situação mostra as que citavam um pedido fechado.",
+  valores: ["PARCIAL", "EM ABERTO"],
   quando: aba => (aba.compacta || []).some(c => c.chave === "ped_encerr"),
   valor: r => !r.c.numero_pc ? ""
-            : (r.c.ped_encerr && r.c.ped_encerr !== PC_PARCIAL ? "ENCERRADO" : "PENDENTE"),
+            : (r.c.ped_encerr === PC_PARCIAL ? "PARCIAL" : "EM ABERTO"),
 };
 
 /* ⚠ TRES estados desde 24/08/2026, a pedido do usuario ("filtrar quantidade a
@@ -3159,7 +3171,16 @@ function avisoPedidos(){
     <b>SEFAZ</b>. O número do pedido é lido do texto da nota e <b>só vale quando algo o
     confirma</b> — fornecedor, valor ou emissão. Quando a nota não cita pedido, o painel
     procura pelo <b>fornecedor + valor</b>. A coluna <b>Situação</b> diz o quanto confiar.
-    A coluna <b>Lançada na SF1</b> responde, na mesma linha, se a nota já entrou no TOTVS.</div>`;
+    A coluna <b>Lançada na SF1</b> responde, na mesma linha, se a nota já entrou no TOTVS.</div>
+    <div class="linha-aviso calmo">📌 <b>Só pedido EM ABERTO é analisado</b> — pedido com a coluna
+    <i>Ped. Encerr.</i> (AU da SC7) marcada em <b>todos</b> os itens fica fora. Pedido só em
+    <b>parte</b> encerrado (<b>PARCIAL</b>) continua entrando, inteiro. Nota que aponta para um
+    pedido encerrado sai como <b>PEDIDO ENCERRADO</b>, com o número no <b>Critério</b>: o pedido
+    existe, só está fechado — não é “sem pedido” nem “fora da base”.</div>
+    <div class="linha-aviso calmo">📌 <b>Status da Nota</b> é o status na <b>SEFAZ</b>
+    (<i>Autorizada</i>/<i>Cancelada</i> nas NF-e, <i>Normal</i>/<i>Cancelada</i>/<i>Substituída</i>
+    nas NFS-e), e não um veredito do painel — nota <b>Cancelada</b> pode ter pedido confirmado.
+    Os botões <b>Status da Nota</b>, lá em cima, filtram a aba por ele.</div>`;
 }
 
 /* ---------- legenda dos selos ----------
@@ -3308,7 +3329,13 @@ const LEGENDAS = {
       fornecedor (raiz do CNPJ), valor e emissão. Quando a nota <b>não</b> cita pedido, o painel
       procura entre os pedidos <b>daquele fornecedor</b> e só arrisca quando o <b>valor bate</b>.
       <br>Por <b>último</b>, no que sobrou sem pedido, o painel tenta as <b>somas</b>: vários pedidos
-      compondo uma nota, ou várias notas compondo um pedido.`,
+      compondo uma nota, ou várias notas compondo um pedido.
+      <br><br>⚠ <b>Só entram pedidos EM ABERTO</b> (28/08/2026): pedido com a coluna
+      <i>Ped. Encerr.</i> marcada com <b>“E” em todos os itens</b> fica fora da análise — na base de
+      hoje são 3.117 dos 3.624, sobrando 507. Pedido com <b>parte</b> dos itens encerrada
+      (<b>PARCIAL</b>) ainda tem item em aberto e <b>continua entrando</b>, inteiro. Quando a nota
+      aponta para um pedido que ficou de fora, ela sai como <b>PEDIDO ENCERRADO</b> — e não como
+      “sem pedido” ou “fora da base”, que dizem outra coisa.`,
     itens: [
       ["forte", "PEDIDO CONFIRMADO",
        `O número está na nota <b>e</b> o fornecedor do pedido é o emitente dela (ou o valor total
@@ -3330,12 +3357,22 @@ const LEGENDAS = {
        `O caminho inverso: <b>várias notas</b> deste fornecedor somam <b>um pedido</b> — entrega
         parcelada, uma nota por remessa. Todas as notas do grupo recebem o mesmo pedido, e o
         <b>Critério</b> mostra quais são e quanto cada uma vale. Também casou <b>só por valor</b>.`],
+      ["forte", "PEDIDO ENCERRADO",
+       `A nota cita um pedido que <b>está na SC7 e já foi encerrado</b> (“E” em todos os itens).
+        Como a análise só considera pedido em aberto, as colunas do pedido ficam <b>vazias</b> —
+        mas o pedido <b>existe</b>: o <b>Critério</b> diz qual é o número. <b>Nada a fazer.</b>
+        ⚠ Não confunda com <i>PEDIDO FORA DA BASE</i>: lá o pedido não existe, aqui ele existe
+        e está fechado.`],
       ["grave", "PEDIDO FORA DA BASE",
-       `A nota cita um pedido que <b>não existe na SC7</b>. Pedido cancelado, de filial que não
-        entrou na exportação, ou exportação incompleta. O <b>Critério</b> diz qual número era.`],
+       `A nota cita um pedido que <b>não existe na SC7</b> — nem aberto, nem encerrado. Pedido
+        cancelado, de filial que não entrou na exportação, ou exportação incompleta. O
+        <b>Critério</b> diz qual número era.`],
       ["grave", "SEM PEDIDO",
-       `A nota <b>não cita</b> pedido nenhum e <b>nenhum</b> pedido daquele fornecedor bate com o
-        valor dela. Pode ser compra sem pedido — que costuma ser exatamente o que se quer achar.`],
+       `A nota <b>não cita</b> pedido nenhum e <b>nenhum</b> pedido <b>em aberto</b> daquele
+        fornecedor bate com o valor dela. Pode ser compra sem pedido — que costuma ser exatamente
+        o que se quer achar. ⚠ <b>Leia o Critério antes:</b> quando existe um pedido
+        <b>encerrado</b> do mesmo fornecedor com o valor batendo, ele é citado ali com o número —
+        são 142 das 358 linhas de hoje, e nessas a nota provavelmente é daquele pedido.`],
     ],
   },
   sefaz: {
