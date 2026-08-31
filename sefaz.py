@@ -63,18 +63,37 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
-BASE_PADRAO = Path(
-    r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
-    r"\LUCAS ABNER ARAUJO\AUTOMAÇÕES LUCAS\ANALISES BOLETOS\SEFAZ.xlsx"
-)
+# O painel roda em DUAS maquinas: esta pasta e a mesma biblioteca do OneDrive,
+# montada com um nome diferente em cada uma. Mesmo criterio do sc7.py -- este
+# arquivo mora em ...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>\ANALISES BOLETOS\
+# PAINEL ANALISE BOLETOS\sefaz.py, entao um nivel acima esta a pasta das
+# planilhas e quatro niveis acima a raiz. O caminho fixo fica de ultimo recurso,
+# para quem tirar o script da biblioteca.
+_AQUI = Path(__file__).resolve()
+
+BASE_PADRAO = _AQUI.parents[1] / "SEFAZ.xlsx"
+if not BASE_PADRAO.exists():
+    BASE_PADRAO = Path(
+        r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
+        r"\LUCAS ABNER ARAUJO\AUTOMAÇÕES LUCAS\ANALISES BOLETOS\SEFAZ.xlsx"
+    )
 
 # A listagem das empresas do grupo BIOFLOR -- quem manda em quais notas o painel
 # analisa. Base GENERICA (mora fora da pasta do painel): e a mesma lista que
 # outros scripts leem, e por isso nao foi copiada para ca.
-BASE_EMPRESAS = Path(
-    r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
-    r"\LUCAS ABNER ARAUJO\BASES GENERICOS\LISTAGEM EMPRESAS BIOFLOR.xlsx"
-)
+# ⚠ Ao contrario das outras bases, esta NAO tem argumento de linha de comando no
+# gerar_painel.py -- o .cmd nao teria como corrigir o caminho. Enquanto era so o
+# caminho fixo da maquina do "lucas", na OUTRA maquina o ler_cnpjs_empresas()
+# falhava e o gerar_painel PULAVA as tres abas da SEFAZ (inclusive a NF x Pedido
+# de Compra), so com um AVISO no meio da rodada: a aba ficava com o dado da
+# rodada anterior e ninguem percebia.
+_GENERICOS = _AQUI.parents[3] / "BASES GENERICOS"
+BASE_EMPRESAS = _GENERICOS / "LISTAGEM EMPRESAS BIOFLOR.xlsx"
+if not BASE_EMPRESAS.exists():
+    BASE_EMPRESAS = Path(
+        r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
+        r"\LUCAS ABNER ARAUJO\BASES GENERICOS\LISTAGEM EMPRESAS BIOFLOR.xlsx"
+    )
 ABAS_EMPRESAS = ("EMPRESAS",)
 COLUNA_CNPJ_EMPRESAS = "CNPJ"
 COLUNA_RAZAO_EMPRESAS = "RAZAO_SOCIAL"
