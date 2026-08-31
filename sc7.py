@@ -14,11 +14,38 @@ alguma nota, 61 tem MAIS DE UM comprador e 41 mais de uma SC -- em 41% dos casos
 o primeiro valor esconderia o resto sem avisar. Por isso o padrao e juntar os
 distintos com " · " (escolha do usuario, 13/08/2026).
 
+⚠ O MESMO NUMERO DE PEDIDO EXISTE EM VARIAS FILIAIS
+----------------------------------------------------
+`001522` nao identifica pedido nenhum: e um pedido da CAPIVARA (filial 004001,
+LACERDA DINIZ, R$ 115,02, comprador rafael.lima), OUTRO da BIOENERGIA (038001,
+TELEFONICA, fabio.costa) e OUTRO da LOGISTICA (043001, ALANA CAROLINE,
+otoniel.cruz). Medido na base de 31/08/2026: 2.541 dos 3.669 numeros estao em
+mais de uma filial (1.405 em duas, 1.136 em tres) -- os 3.669 numeros sao 7.346
+pedidos de verdade.
+
+Por isso a chave deste modulo e `chave_pedido()` = FILIAL + numero, e nunca o
+numero sozinho. Ate 31/08/2026 era so o numero, e o efeito era colar tres pedidos
+num so: a linha da Capivara mostrava "rafael.lima · fabio.costa · otoniel.cruz",
+somava R$ 803,44 de tres fornecedores diferentes num pedido de R$ 115,02, herdava
+a SC e o solicitante do pedido da Logistica e as datas do da Bioenergia. Como o
+valor somado nao batia com o da nota, a linha ainda caia de PEDIDO CONFIRMADO
+para CONFERIR PEDIDO. Eram 31 das 106 notas com pedido (29%).
+
+⚠ QUEM CASA NOTA COM PEDIDO NAO PODE MAIS BUSCAR "O PEDIDO 1522": o numero
+citado numa nota da uma LISTA de candidatos (um por filial), e quem escolhe entre
+eles e o CNPJ do fornecedor e o valor -- os mesmos criterios de sempre, que antes
+eram aplicados a um Frankenstein das tres filiais. Ver `pedidos_sefaz.escolher()`.
+
 ⚠ O SOLICITANTE NAO EXISTE NA SC7
 ---------------------------------
 A coluna `Solicitante` (CP) esta VAZIA nas 24.402 linhas -- medido, nao suposto.
-Quem tem o nome e a SC1, e o caminho e o numero do pedido: `Num. Pedido` (Z)
-casa com o `Numero PC`, e o nome sai de `Solicitante` (Y). Cobertura medida:
+Quem tem o nome e a SC1, e o caminho e o pedido inteiro: `Filial` (A) +
+`Num. Pedido` (Z) casam com a chave, e o nome sai de `Solicitante` (Y). ⚠ A
+filial entra aqui pelo mesmo motivo de sempre: casando so pelo numero, 2.031
+pedidos ganhavam um solicitante de OUTRA filial (era daniela.fernandes, da
+Logistica, aparecendo no pedido da Capivara). A SC1 concorda com a SC7 sobre a
+filial em 15.626 das 15.631 linhas -- a solicitacao nasce na filial que faz o
+pedido. Cobertura medida:
 2.634 dos 3.377 pedidos. `Usuário SC` (GU) da SC7 tambem quase nao existe (83 de
 24.402, e ZERO nos pedidos que casaram com nota) -- ela vem junto porque o
 usuario pediu, mas nascendo vazia.
@@ -128,6 +155,9 @@ COLUNAS_SC7 = [
 ]
 
 COLUNAS_SC1 = [
+    # ⚠ A filial faz parte da CHAVE do pedido (ver a docstring): sem ela o
+    # solicitante do 001522 da Logistica vazava para o 001522 da Capivara.
+    ("A", "Filial",       "filial"),
     ("Z", "Num. Pedido",  "pc"),
     ("Y", "Solicitante",  "solicitante"),
     ("B", "Numero da SC", "sc"),
@@ -162,6 +192,29 @@ def formatar_pc(valor) -> str:
     return numero.rjust(6, "0") if numero else ""
 
 
+def normalizar_filial(valor) -> str:
+    """A filial como a SC7 a escreve -- texto, sem espacos ("004001").
+
+    ⚠ NAO passa por `normalizar_pc`: os zeros a esquerda da filial sao o nome
+    dela, e "004001" sem eles ("4001") nao existe em lugar nenhum do TOTVS.
+    """
+    return str(valor or "").strip()
+
+
+def chave_pedido(filial, numero) -> str:
+    """A IDENTIDADE de um pedido: filial + numero, nunca o numero sozinho.
+
+    ⚠ E a peca central deste modulo (ver a docstring): o mesmo numero de pedido
+    existe em varias filiais, com fornecedor, comprador, valor e solicitante
+    diferentes em cada uma. Indexar pelo numero cola todos eles num pedido que
+    nao existe.
+
+    O separador "|" nao aparece em filial nem em numero (as duas coisas sao so
+    digito), entao a chave nunca fica ambigua.
+    """
+    return f"{normalizar_filial(filial)}|{normalizar_pc(numero)}"
+
+
 @dataclass
 class Pedido:
     """Um PC inteiro, com os itens ja somados/juntados.
@@ -169,7 +222,11 @@ class Pedido:
     Cada campo sobe de nivel do jeito que faz sentido para ELE -- esta e a parte
     do modulo que nao da para deduzir olhando a planilha.
     """
-    numero: str                                   # normalizado (chave)
+    numero: str                                   # normalizado ("1522")
+    # ⚠ A filial e parte da CHAVE, e por isso e um campo e nao uma lista de
+    # distintos como as de baixo: todos os itens deste objeto sao, por
+    # construcao, da mesma filial. Ver `chave_pedido()`.
+    filial: str = ""
     itens: int = 0
     # somas: as unicas tres em que somar responde a pergunta certa
     qtd_classi: float = 0.0
@@ -190,7 +247,6 @@ class Pedido:
     # quantos itens vieram com a marca de encerrado: e o que separa o pedido
     # encerrado do encerrado PELA METADE (ver a propriedade `encerrado`)
     itens_encerrados: int = 0
-    filiais: list = field(default_factory=list)
     razoes: list = field(default_factory=list)
     # raizes de CNPJ do fornecedor: e por aqui que a nota encontra o pedido
     fornecedores: set = field(default_factory=set)
@@ -219,11 +275,12 @@ class Pedido:
         if emissao:
             self.emissoes.append(emissao)
 
+        # ⚠ `filial` NAO entra aqui: ela e a chave, nao um distinto a juntar.
         for campo, lista in (("sc", self.scs), ("comprador", self.compradores),
                              ("usuario_sc", self.usuarios_sc),
                              ("controle", self.controles),
                              ("encerrado", self.encerrados),
-                             ("filial", self.filiais), ("razao", self.razoes)):
+                             ("razao", self.razoes)):
             valor = sefaz._texto(linha.get(campo))
             if valor and valor not in lista:
                 lista.append(valor)
@@ -238,6 +295,21 @@ class Pedido:
     @property
     def numero_totvs(self) -> str:
         return formatar_pc(self.numero)
+
+    @property
+    def chave(self) -> str:
+        """Como este pedido e indexado em todo lugar. Ver `chave_pedido()`."""
+        return chave_pedido(self.filial, self.numero)
+
+    @property
+    def rotulo(self) -> str:
+        """Como o pedido se identifica para gente: "004001/001522".
+
+        ⚠ Todo texto de tela que NOMEIA um pedido usa isto, e nao
+        `numero_totvs`: "confira o pedido 001522" manda a pessoa procurar em
+        tres filiais.
+        """
+        return f"{self.filial}/{self.numero_totvs}" if self.filial else self.numero_totvs
 
     @property
     def sc(self) -> str:
@@ -291,10 +363,6 @@ class Pedido:
     @property
     def razao(self) -> str:
         return JUNTA.join(self.razoes)
-
-    @property
-    def filial(self) -> str:
-        return JUNTA.join(self.filiais)
 
     @property
     def emissao(self) -> dt.date | None:
@@ -385,22 +453,35 @@ def _ler(caminho: Path, colunas: list) -> list[dict]:
 
 
 def ler_pedidos(caminho: Path | None = None) -> dict[str, Pedido]:
-    """{numero normalizado: Pedido} -- a SC7 inteira, agregada por PC."""
+    """{chave_pedido(): Pedido} -- a SC7 inteira, agregada por FILIAL + numero.
+
+    ⚠ A chave NAO e o numero do pedido (ver a docstring do modulo): 2.541 dos
+    3.669 numeros existem em mais de uma filial, e agrupa-los pelo numero cria um
+    pedido que nao existe -- com o comprador de uma filial, o fornecedor de outra
+    e o valor das tres somado.
+    """
     linhas = _ler(caminho or BASE_SC7, COLUNAS_SC7)
     pedidos: dict[str, Pedido] = {}
     for linha in linhas:
         numero = normalizar_pc(linha.get("pc"))
         if not numero:
             continue
-        pedidos.setdefault(numero, Pedido(numero=numero)).somar(linha)
+        filial = normalizar_filial(linha.get("filial"))
+        pedidos.setdefault(chave_pedido(filial, numero),
+                           Pedido(numero=numero, filial=filial)).somar(linha)
     return pedidos
 
 
 def ler_solicitantes(caminho: Path | None = None) -> dict[str, list[str]]:
-    """{numero do pedido: solicitantes distintos} -- vem da SC1.
+    """{chave_pedido(): solicitantes distintos} -- vem da SC1.
 
     ⚠ Um PC pode nascer de varias SCs, logo de varios solicitantes (21 dos 149
     pedidos casados). Devolve TODOS, na ordem em que aparecem.
+
+    ⚠ A chave e a MESMA do `ler_pedidos()` -- filial + numero. Casando so pelo
+    numero, 2.031 pedidos recebiam o solicitante de outra filial, e a coluna
+    parecia preenchida (5.710 pedidos "com solicitante" em vez de 3.679): errado
+    com cara de completo, que e o pior jeito de errar.
     """
     linhas = _ler(caminho or BASE_SC1, COLUNAS_SC1)
     por_pc: dict[str, list[str]] = {}
@@ -408,13 +489,14 @@ def ler_solicitantes(caminho: Path | None = None) -> dict[str, list[str]]:
         numero = normalizar_pc(linha.get("pc"))
         if not numero:
             continue
+        chave = chave_pedido(linha.get("filial"), numero)
         # `Usuário` (DI) e a reserva: nos exemplos vistos traz o mesmo valor, e
         # sem ela um pedido cuja SC veio sem solicitante ficaria sem ninguem.
         nome = (sefaz._texto(linha.get("solicitante"))
                 or sefaz._texto(linha.get("usuario")))
         if not nome:
             continue
-        lista = por_pc.setdefault(numero, [])
+        lista = por_pc.setdefault(chave, [])
         if nome not in lista:
             lista.append(nome)
     return por_pc
@@ -424,6 +506,10 @@ def carregar(base_sc7: Path | None = None, base_sc1: Path | None = None
              ) -> tuple[dict[str, Pedido], dict[str, list[str]],
                         dict[str, Pedido], dict]:
     """(pedidos EM ABERTO, solicitantes por pedido, pedidos ENCERRADOS, resumo).
+
+    ⚠ Os tres dicionarios sao indexados por `chave_pedido()` (filial + numero),
+    e nao pelo numero do pedido. Quem receber uma `chave` e for mostra-la para
+    gente tem de usar `Pedido.rotulo`: a chave e interna ("004001|1522").
 
     ⚠ E AQUI que o corte de 28/08/2026 mora, e de proposito: `ler_pedidos()`
     continua devolvendo a SC7 inteira (e a leitura da planilha, nao a politica) e
@@ -449,12 +535,16 @@ def carregar(base_sc7: Path | None = None, base_sc1: Path | None = None
     # da docstring. Calculada sobre 507 pedidos em vez de 3.624, ela desceria de
     # 3.6xx para o maior PC aberto e transformaria pedido antigo citado numa nota
     # em "numero acima da faixa", isto e, pedido do fornecedor.
-    numeros = [int(n) for n in todos if n.isdigit()]
+    numeros = [int(p.numero) for p in todos.values() if p.numero.isdigit()]
     resumo = {
         # `pedidos` = os que a analise usa (abertos). O total da base vem ao lado,
         # senao o numero da tela pareceria uma base que encolheu.
         "pedidos": len(pedidos),
         "pedidos_na_base": len(todos),
+        # quantos NUMEROS distintos os pedidos da base usam: e menor que o total
+        # de pedidos justamente porque o numero se repete entre filiais
+        "numeros_na_base": len({p.numero for p in todos.values()}),
+        "filiais": len({p.filial for p in todos.values() if p.filial}),
         "encerrados_fora": len(encerrados),
         "parciais": parciais,
         "itens": sum(p.itens for p in pedidos.values()),

@@ -554,6 +554,12 @@ COMPACTA_PEDIDOS = [
     ("Vlr Duplicata",     "boleto", "DUPLICATA",    5.5),
     ("Duplicatas",        "delta",  "DUPLICATA",    3.5),
     # --- o pedido de compra (SC7) e quem o pediu (SC1) ---
+    # ⚠ A FILIAL ABRE O BLOCO porque o numero do pedido NAO identifica pedido
+    # nenhum sozinho: 2.541 dos 3.669 numeros da SC7 existem em mais de uma
+    # empresa (o 001522 e um pedido da Capivara, outro da Bioenergia e outro da
+    # Logistica). Sem esta coluna, "Numero PC 001522" na tela nao diz onde
+    # conferir. Ver sc7.chave_pedido().
+    ("Filial do PC",      "boleto", "PEDIDO",       4.5),
     ("Numero PC",         "boleto", "PEDIDO",       5),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
@@ -604,6 +610,7 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Venc Duplicata": "Vencimento da 1ª Duplicata",
     "Vlr Duplicata": "Valor da 1ª Duplicata",
     "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
+    "Filial do PC": "Filial dona do Pedido (SC7) — o nº do pedido se repete entre filiais",
     "Numero PC": "Nº do Pedido de Compra (SC7)",
     "Numero da SC": "Nº da Solicitação de Compra (SC7)",
     "Solicitante": "Solicitante da SC (SC1)",
@@ -913,7 +920,12 @@ ABAS = {
         # texto (ver LISTAS_FILTRO no painel_modelo.html).
         # 28/08/2026: `Status da Nota` entrou a pedido do usuario ("permita
         # filtrar o status da nota"). Mesma guarda de 2 a 8 valores.
-        "pills": ["Origem", "Lançada na SF1", "Controle Ap.", "Status da Nota"],
+        # 31/08/2026: `Filial do PC` entrou junto com a chave por filial -- e a
+        # pergunta "de qual empresa e este pedido?", que passou a existir. Cai na
+        # mesma guarda de 2 a 8 valores das outras; se um dia a base trouxer mais
+        # de 8 filiais amarradas a nota, ela simplesmente nao vira barra.
+        "pills": ["Origem", "Lançada na SF1", "Controle Ap.", "Status da Nota",
+                  "Filial do PC"],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   # verde junto do CONFIRMADO: as duas sao "nada a fazer" -- uma
                   # porque o pedido esta amarrado, a outra porque ele ja fechou

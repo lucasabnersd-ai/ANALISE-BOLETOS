@@ -30,8 +30,7 @@ Formato de cada aba em gerarLivro:
     cabecalho: true,              // false = nao emite a linha de titulos (matriz ja traz)
     linhasCabecalho: [0, 7],      // indices em `linhas` que devem sair com estilo de cabecalho
     congelar: {linha:1, coluna:1},// quantas linhas/colunas ficam fixas
-    filtro: true,                 // autofiltro na linha de cabecalho
-    maiusculas: false             // texto SEM caixa alta (abas de backup)
+    filtro: true                  // autofiltro na linha de cabecalho
   }
 """
 
@@ -220,13 +219,6 @@ NUCLEO_JS = r"""
     }
 
     partes.push('<sheetData>');
-    /* CAIXA ALTA e o padrao (decisao do SE2 e do Fluxo), mas uma aba de BACKUP
-       nao pode mexer no dado: e-mail e nome tem de sair como estao. Quem quiser
-       o texto cru passa `maiusculas: false` na aba. O cabecalho continua
-       sempre em caixa alta -- ali e rotulo, nao dado. */
-    var CAIXA = (spec.maiusculas === false)
-      ? function(v){ return String(v); }
-      : maiuscula;
     var r = 1;
     if(comCabecalho){
       partes.push('<row r="1" ht="30" customHeight="1">' + colunas.map(function(c, i){
@@ -244,14 +236,14 @@ NUCLEO_JS = r"""
         var tipo = col.tipo || 'texto';
         if(tipo === 'moeda' || tipo === 'inteiro'){
           var n = numero(bruto);
-          if(n === null) celulas.push(celulaTexto(ref, CAIXA(bruto)));
+          if(n === null) celulas.push(celulaTexto(ref, maiuscula(bruto)));
           else celulas.push('<c r="' + ref + '" s="' + (tipo === 'moeda' ? ESTILOS.moeda : ESTILOS.inteiro) + '"><v>' + n + '</v></c>');
         }else if(tipo === 'data'){
           var s = dataSerial(bruto);
-          if(s === null) celulas.push(celulaTexto(ref, CAIXA(bruto)));
+          if(s === null) celulas.push(celulaTexto(ref, maiuscula(bruto)));
           else celulas.push('<c r="' + ref + '" s="' + ESTILOS.data + '"><v>' + s + '</v></c>');
         }else{
-          celulas.push(celulaTexto(ref, CAIXA(bruto)));
+          celulas.push(celulaTexto(ref, maiuscula(bruto)));
         }
       }
       partes.push('<row r="' + r + (ehCab ? '" ht="26" customHeight="1' : '') + '">' + celulas.join('') + '</row>');

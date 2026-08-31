@@ -1030,6 +1030,13 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
     }
 
     partes.push('<sheetData>');
+    /* CAIXA ALTA e o padrao (decisao do SE2 e do Fluxo), mas uma aba de BACKUP
+       nao pode mexer no dado: e-mail e nome tem de sair como estao. Quem quiser
+       o texto cru passa `maiusculas: false` na aba. O cabecalho continua
+       sempre em caixa alta -- ali e rotulo, nao dado. */
+    var CAIXA = (spec.maiusculas === false)
+      ? function(v){ return String(v); }
+      : maiuscula;
     var r = 1;
     if(comCabecalho){
       partes.push('<row r="1" ht="30" customHeight="1">' + colunas.map(function(c, i){
@@ -1047,14 +1054,14 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
         var tipo = col.tipo || 'texto';
         if(tipo === 'moeda' || tipo === 'inteiro'){
           var n = numero(bruto);
-          if(n === null) celulas.push(celulaTexto(ref, maiuscula(bruto)));
+          if(n === null) celulas.push(celulaTexto(ref, CAIXA(bruto)));
           else celulas.push('<c r="' + ref + '" s="' + (tipo === 'moeda' ? ESTILOS.moeda : ESTILOS.inteiro) + '"><v>' + n + '</v></c>');
         }else if(tipo === 'data'){
           var s = dataSerial(bruto);
-          if(s === null) celulas.push(celulaTexto(ref, maiuscula(bruto)));
+          if(s === null) celulas.push(celulaTexto(ref, CAIXA(bruto)));
           else celulas.push('<c r="' + ref + '" s="' + ESTILOS.data + '"><v>' + s + '</v></c>');
         }else{
-          celulas.push(celulaTexto(ref, maiuscula(bruto)));
+          celulas.push(celulaTexto(ref, CAIXA(bruto)));
         }
       }
       partes.push('<row r="' + r + (ehCab ? '" ht="26" customHeight="1' : '') + '">' + celulas.join('') + '</row>');
@@ -1152,7 +1159,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202608310902"></script>
+<script src="supa.js?v=202608311517"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo

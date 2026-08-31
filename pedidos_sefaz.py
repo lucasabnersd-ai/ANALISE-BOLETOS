@@ -92,6 +92,10 @@ VENC_DUP = "Venc Duplicata"
 VLR_DUP = "Vlr Duplicata"
 QTD_DUP = "Duplicatas"
 # lado do pedido
+# ⚠ A FILIAL VEM ANTES DO NUMERO porque, sem ela, o numero nao identifica
+# pedido nenhum: o 001522 e um pedido da Capivara, outro da Bioenergia e outro
+# da Logistica (ver sc7.py). Quem for conferir no TOTVS precisa das duas coisas.
+FILIAL_PC = "Filial do PC"
 PC = "Numero PC"
 NUM_SC = "Numero da SC"
 SOLICITANTE = "Solicitante"
@@ -122,7 +126,7 @@ CABECALHO = [
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
-    PC, NUM_SC, SOLICITANTE, COMPRADOR,
+    FILIAL_PC, PC, NUM_SC, SOLICITANTE, COMPRADOR,
     QTD_CLASSI, QTD_PC, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
     VLR_PC, FORNEC_PC, ITENS_PC,
     CRITERIO, INFO, CHAVE_NFE,
@@ -307,31 +311,49 @@ def _encerrados_parecidos(nota: dict, encerrados: dict[str, sc7.Pedido],
     """
     raiz = _raiz(nota.get(CNPJ_EMIT))
     achados = []
-    for numero in por_fornecedor_enc.get(raiz, []):
-        pontos, _porque = pontuar(nota, encerrados[numero])
+    for chave in por_fornecedor_enc.get(raiz, []):
+        pontos, _porque = pontuar(nota, encerrados[chave])
         if pontos >= PESO_CNPJ + PESO_VALOR_ITEM:
-            achados.append(numero)
-    # do mais proximo em emissao para o mais distante: se so um numero couber no
+            achados.append(chave)
+    # do mais proximo em emissao para o mais distante: se so um pedido couber no
     # texto, que seja o mais provavel
-    achados.sort(key=lambda n: _distancia(nota, encerrados[n]))
-    return formatar_encerrados(achados[:MAX_ENCERRADOS_CITADOS])
+    achados.sort(key=lambda c: _distancia(nota, encerrados[c]))
+    return [encerrados[c].rotulo for c in achados[:MAX_ENCERRADOS_CITADOS]]
 
 
 def _por_fornecedor(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
-    """{raiz do CNPJ do fornecedor: numeros dos pedidos dele}."""
+    """{raiz do CNPJ do fornecedor: CHAVES dos pedidos dele}."""
     indice: dict[str, list[str]] = {}
-    for numero, pedido in pedidos.items():
+    for chave, pedido in pedidos.items():
         for raiz in pedido.fornecedores:
-            indice.setdefault(raiz, []).append(numero)
+            indice.setdefault(raiz, []).append(chave)
     return indice
 
 
-def formatar_encerrados(numeros: list[str]) -> list[str]:
-    """Os numeros dos pedidos encerrados como o TOTVS os escreve (6 digitos).
+def _por_numero(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
+    """{numero do pedido: CHAVES dos pedidos com esse numero -- um por filial}.
 
-    ⚠ `citados()` devolve a chave NORMALIZADA (sem zeros a esquerda, "2890"), e e
-    ela que casa com a SC7. Na tela ela nao serve: quem for conferir digita
+    ⚠ E o indice que existe porque a chave deixou de ser o numero (31/08/2026,
+    ver sc7.py). O texto de uma nota cita um NUMERO, e um numero pode ser tres
+    pedidos de tres empresas: este dicionario entrega os tres para o `pontuar`
+    escolher, em vez de entregar um pedido colado a partir dos tres.
+    """
+    indice: dict[str, list[str]] = {}
+    for chave, pedido in pedidos.items():
+        indice.setdefault(pedido.numero, []).append(chave)
+    return indice
+
+
+def formatar_numeros(numeros: list[str]) -> list[str]:
+    """Numeros de pedido como o TOTVS os escreve (6 digitos com zeros a frente).
+
+    ⚠ `citados()` devolve o numero NORMALIZADO (sem zeros a esquerda, "2890"),
+    que e o que casa com a SC7. Na tela ele nao serve: quem for conferir digita
     "002890" no TOTVS.
+
+    ⚠ So para numero SOLTO -- o que a nota citou e a base nao tem. Pedido que
+    existe se identifica por `Pedido.rotulo` ("004001/002890"), porque o numero
+    sozinho nao diz em qual das empresas procurar.
     """
     return [sc7.formatar_pc(n) for n in numeros]
 
@@ -346,7 +368,9 @@ def _distancia(nota: dict, pedido: sc7.Pedido) -> int:
 def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
              por_fornecedor: dict[str, list[str]], teto: int,
              encerrados: dict[str, sc7.Pedido] | None = None,
-             por_fornecedor_enc: dict[str, list[str]] | None = None) -> dict:
+             por_fornecedor_enc: dict[str, list[str]] | None = None,
+             por_numero: dict[str, list[str]] | None = None,
+             por_numero_enc: dict[str, list[str]] | None = None) -> dict:
     """O pedido desta nota: quem e, com que forca e por que.
 
     Duas frentes, nesta ordem -- o texto manda, a busca so entra quando o texto
@@ -373,26 +397,52 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     """
     encerrados = encerrados or {}
     por_fornecedor_enc = por_fornecedor_enc or {}
+    por_numero = por_numero or {}
+    por_numero_enc = por_numero_enc or {}
     achados = citados(nota.get(INFO), teto)
-    # os citados que a analise nao tem, quebrados nos dois motivos possiveis
-    ausentes = [n for n, _p in achados if n not in pedidos]
-    citados_encerrados = [n for n in ausentes if n in encerrados]
-    fora_da_base = [n for n in ausentes if n not in encerrados]
 
-    avaliados = [(*pontuar(nota, pedidos[n], peso), pedidos[n])
-                 for n, peso in achados if n in pedidos]
+    # ⚠ UM NUMERO CITADO NAO APONTA UM PEDIDO: aponta um POR FILIAL (o 001522
+    # sao tres pedidos, de tres empresas -- ver sc7.py). Todos viram candidato e
+    # quem separa e o `pontuar`: o CNPJ do fornecedor vale 8 e o valor 4, entao a
+    # filial certa ganha da errada por construcao. Ate 31/08/2026 os tres eram um
+    # objeto so e a nota "casava" com um pedido que nao existe.
+    avaliados = []
+    sem_aberto: list[str] = []          # numeros citados sem pedido EM ABERTO
+    for numero, peso in achados:
+        chaves = por_numero.get(numero, ())
+        if not chaves:
+            sem_aberto.append(numero)
+            continue
+        avaliados += [(*pontuar(nota, pedidos[c], peso), pedidos[c]) for c in chaves]
+
+    # os citados sem pedido aberto, quebrados nos dois motivos possiveis. O
+    # encerrado ja se identifica pela filial; o "fora da base" nao tem filial
+    # nenhuma para mostrar -- e um numero solto, e so.
+    citados_encerrados = [encerrados[c].rotulo for n in sem_aberto
+                          for c in por_numero_enc.get(n, ())]
+    fora_da_base = formatar_numeros([n for n in sem_aberto
+                                     if n not in por_numero_enc])
+
+    # ⚠ Os FECHADOS que levam um numero citado E o fornecedor da nota. Nao sao
+    # os de cima: estes tem um homonimo ABERTO em outra filial, e e justamente
+    # esse conflito que eles resolvem la embaixo. So o CNPJ vale como
+    # corroboracao -- valor sozinho, entre pedidos de empresas diferentes, e o
+    # mesmo palpite que a busca ja recusa.
+    fechados_fortes = [encerrados[c] for n, _peso in achados
+                       for c in por_numero_enc.get(n, ())
+                       if pontuar(nota, encerrados[c])[0] & PESO_CNPJ]
 
     # --- 2) sem numero util no texto: procurar pelo fornecedor + valor
     buscados = []
     if not avaliados:
         raiz = _raiz(nota.get(CNPJ_EMIT))
-        for numero in por_fornecedor.get(raiz, []):
-            pontos, porque = pontuar(nota, pedidos[numero])
+        for chave in por_fornecedor.get(raiz, []):
+            pontos, porque = pontuar(nota, pedidos[chave])
             # ⚠ A BARRA E O VALOR. Sem ele sobra "mesmo fornecedor + emissao
             # proxima", que 37% dos pedidos ERRADOS do mesmo fornecedor tambem
             # tem -- viraria um palpite com cara de resposta.
             if pontos >= PESO_CNPJ + PESO_VALOR_ITEM:
-                buscados.append((pontos, porque, pedidos[numero]))
+                buscados.append((pontos, porque, pedidos[chave]))
         avaliados = buscados
 
     if not avaliados:
@@ -406,7 +456,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
             return {
                 SITUACAO: ENCERRADO_PC,
                 CRITERIO: (
-                    f"A nota cita o pedido {' e '.join(formatar_encerrados(citados_encerrados))}, "
+                    f"A nota cita o pedido {' e '.join(citados_encerrados)}, "
                     f"que está na SC7 com TODOS os itens encerrados (coluna Ped. Encerr. = “E”). "
                     f"A análise só considera pedido em aberto, então as colunas do pedido "
                     f"ficam vazias — nada a fazer nesta nota{extra}"),
@@ -451,6 +501,31 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     tem_cnpj = bool(melhor_pontos & PESO_CNPJ)
     tem_valor = bool(melhor_pontos & (PESO_VALOR | PESO_VALOR_ITEM))
 
+    # ⚠ O NUMERO CITADO PODE ESTAR ABERTO EM OUTRA EMPRESA.
+    # Desde que a chave virou filial+numero (31/08/2026), "o 002672 esta aberto"
+    # pode ser o 002672 da BIOENERGIA -- AVSYSTEMGEO, R$ 38,00 -- enquanto o
+    # pedido DESTA nota e o 002672 da LOGISTICA (EMERSON PRESLEY, R$ 1.528,00,
+    # o valor exato da nota), que ja fechou. Com a chave so no numero os dois
+    # eram um objeto so e o CNPJ do fechado fazia o veredito parecer certo.
+    #
+    # Regra: quando o melhor candidato ABERTO so tem o NUMERO a favor (sem
+    # fornecedor e sem valor) e existe um FECHADO com o mesmo numero citado E o
+    # fornecedor da nota, quem responde e o fechado. Sem isto a aba manda
+    # conferir um pedido de outra empresa -- 5 notas em 31/08/2026 (RR
+    # AGROFLORESTAL, FCL, EMERSON PRESLEY, CONTATO SEGURO, MINUSA).
+    if not (tem_cnpj or tem_valor) and fechados_fortes:
+        certos = " e ".join(dict.fromkeys(p.rotulo for p in fechados_fortes))
+        return {
+            SITUACAO: ENCERRADO_PC,
+            CRITERIO: (
+                f"O pedido desta nota e o {certos} — mesmo fornecedor —, que esta "
+                f"na SC7 com os itens encerrados. O {pedido.rotulo}, que esta em "
+                f"aberto com o mesmo numero, e de outra filial e de outro "
+                f"fornecedor ({pedido.razao or 'sem razao social'}): so o numero "
+                f"coincide. A analise so considera pedido em aberto, entao as "
+                f"colunas do pedido ficam vazias — nada a fazer nesta nota"),
+        }
+
     if tem_texto and tem_cnpj:
         situacao = CONFIRMADO
     elif tem_texto and tem_valor:
@@ -462,7 +537,10 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         situacao = CONFERIR
 
     if len(empatados) > 1:
-        outros = " · ".join(sorted(p.numero_totvs for _pt, _pq, p in empatados
+        # ⚠ `rotulo` e nao `numero_totvs`: os empatados sao quase sempre o MESMO
+        # numero em filiais diferentes, e "001522 · 001522 · 001522" nao ajudaria
+        # ninguem a conferir.
+        outros = " · ".join(sorted(p.rotulo for _pt, _pq, p in empatados
                                    if p is not pedido))
         porque = list(porque) + [f"⚠ {len(empatados)} pedidos empataram ({outros}); "
                                  "ficou o de emissão mais próxima"]
@@ -475,7 +553,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
                                  "que não existe na base de pedidos"]
     if citados_encerrados:
         porque = list(porque) + [
-            f"A nota também cita {' e '.join(formatar_encerrados(citados_encerrados))}, "
+            f"A nota também cita {' e '.join(citados_encerrados)}, "
             "que está na SC7 já encerrado (fora da análise)"]
 
     return {SITUACAO: situacao, CRITERIO: " + ".join(porque), "pedido": pedido,
@@ -486,10 +564,14 @@ def _preencher_pedido(linha: dict, pedido: sc7.Pedido,
                       solicitantes: dict[str, list[str]]) -> None:
     """Escreve as colunas do bloco PEDIDO a partir de um Pedido inteiro."""
     linha.update({
+        FILIAL_PC: pedido.filial,
         PC: pedido.numero_totvs,
         NUM_SC: pedido.sc,
         COMPRADOR: pedido.comprador,
-        SOLICITANTE: " · ".join(solicitantes.get(pedido.numero, [])),
+        # ⚠ pela CHAVE (filial + numero) e nunca pelo numero: era assim que
+        # daniela.fernandes, solicitante do 001522 da Logistica, assinava o
+        # 001522 da Capivara.
+        SOLICITANTE: " · ".join(solicitantes.get(pedido.chave, [])),
         QTD_CLASSI: pedido.qtd_classi,
         QTD_PC: pedido.quantidade,
         CONTROLE: pedido.controle,
@@ -580,8 +662,8 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
         por_forn_notas.setdefault(_raiz(linha.get(CNPJ_EMIT)), []).append(linha)
 
     por_forn_pedidos: dict[str, list[sc7.Pedido]] = {}
-    for numero, pedido in pedidos.items():
-        if numero in pcs_usados or not pedido.vlr:
+    for chave, pedido in pedidos.items():
+        if chave in pcs_usados or not pedido.vlr:
             continue
         for raiz in pedido.fornecedores:
             por_forn_pedidos.setdefault(raiz, []).append(pedido)
@@ -615,7 +697,7 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
                 l[SITUACAO] = AGRUPADO_NF
                 l[CRITERIO] = (
                     f"Esta nota faz parte de {len(escolha)} notas do mesmo fornecedor "
-                    f"que somam o pedido {pedido.numero_totvs} "
+                    f"que somam o pedido {pedido.rotulo} "
                     f"({_moeda(pedido.vlr)}): {nfs}"
                     + ("  ⚠ há outra combinação possível — conferir" if ambiguo else "")
                     + "  — casado por soma de valores, confira")
@@ -635,14 +717,20 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
             combos.sort(key=len)
             escolha = combos[0]
             ambiguo = sum(1 for c in combos if len(c) == len(escolha)) > 1
-            escolha.sort(key=lambda p: p.numero_totvs)
+            escolha.sort(key=lambda p: (p.filial, p.numero_totvs))
             l[SITUACAO] = AGRUPADO_PC
             l[PC] = " · ".join(p.numero_totvs for p in escolha)
+            # ⚠ A soma pode juntar pedidos de FILIAIS diferentes (o balde e por
+            # fornecedor, e a nota nao diz a filial dela). Nao da para proibir sem
+            # inventar um vinculo que a base nao tem -- entao a filial de cada um
+            # aparece, aqui e no Critério, e uma combinacao de duas empresas fica
+            # visivel para quem for conferir.
+            l[FILIAL_PC] = " · ".join(dict.fromkeys(p.filial for p in escolha))
             l[NUM_SC] = " · ".join(dict.fromkeys(
                 s for p in escolha for s in (p.sc.split(" · ") if p.sc else []) if s))
             l[VLR_PC] = round(sum(p.vlr for p in escolha), 2)
             l[FORNEC_PC] = escolha[0].razao
-            pcs = " + ".join(f"PC {p.numero_totvs} ({_moeda(p.vlr)})" for p in escolha)
+            pcs = " + ".join(f"PC {p.rotulo} ({_moeda(p.vlr)})" for p in escolha)
             l[CRITERIO] = (
                 f"O valor da nota ({_moeda(l.get(VLR_SEFAZ))}) = soma de {len(escolha)} "
                 f"pedidos do mesmo fornecedor: {pcs}"
@@ -657,7 +745,7 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
 def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
            solicitantes: dict[str, list[str]], teto: int,
            texto_por_nota: dict[str, str],
-           encerrados: set[str] | None = None) -> list[dict]:
+           encerrados: dict[str, sc7.Pedido] | None = None) -> list[dict]:
     """Uma linha por NOTA, com o lancamento e o pedido do lado.
 
     ⚠ `texto_por_nota` chega ANTES do veredito e nao depois: e desse texto que o
@@ -669,6 +757,10 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     # O MESMO indice sobre os pedidos que o corte deixou de fora: serve so para
     # EXPLICAR o "sem pedido" (ver `escolher`), nunca para escolher um pedido.
     por_fornecedor_enc = _por_fornecedor(encerrados or {})
+    # {numero: chaves} -- e por aqui que o numero citado no texto de uma nota
+    # vira a LISTA de candidatos, um por filial. Ver `_por_numero`.
+    por_numero = _por_numero(pedidos)
+    por_numero_enc = _por_numero(encerrados or {})
 
     # pedidos que o 1:1 ja atribuiu -- a analise agrupada nao os reaproveita
     pcs_usados: set = set()
@@ -709,7 +801,7 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             INFO: texto_por_nota.get(nota.get(csf1.CHAVE_NFE), ""),
         }
         veredito = escolher(linha, pedidos, por_fornecedor, teto, encerrados,
-                            por_fornecedor_enc)
+                            por_fornecedor_enc, por_numero, por_numero_enc)
         linha[SITUACAO] = veredito[SITUACAO]
         linha[CRITERIO] = veredito[CRITERIO]
 
@@ -721,7 +813,9 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             # nota que nao tem pedido nenhum.
             _preencher_pedido(linha, pedido, solicitantes)
             if veredito[SITUACAO] in (CONFIRMADO, PROVAVEL, CONFERIR):
-                pcs_usados.add(pedido.numero)
+                # a CHAVE, nao o numero: o 001522 de outra filial continua livre
+                # para a analise agrupada
+                pcs_usados.add(pedido.chave)
         linha[CHAVE] = PREFIXO + (_digitos(linha[CHAVE_NFE]) or str(linha[CHAVE_NFE]))
         saida.append(linha)
 
