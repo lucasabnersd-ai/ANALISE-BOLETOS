@@ -63,10 +63,20 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-BASE_PADRAO = Path(
-    r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
-    r"\LUCAS ABNER ARAUJO\BASES GENERICOS\SF1.xlsx"
-)
+# Mesmo criterio do sc7.py e do sefaz.py: este arquivo mora em
+# ...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>\ANALISES BOLETOS\PAINEL ANALISE
+# BOLETOS\, entao quatro niveis acima esta a raiz -- e isso vale nas DUAS
+# maquinas, que montam a mesma biblioteca do OneDrive com nomes diferentes.
+# ⚠ Ate 31/08/2026 aqui so havia o caminho fixo do usuario "lucas". Era o unico
+# default sem derivacao entre as bases da aba NF x Pedido de Compra, e o mais
+# caro: sem a SF1 o gerar_painel.py pula de uma vez a aba SEFAZ x SF1 E a de
+# pedidos de compra.
+BASE_PADRAO = Path(__file__).resolve().parents[3] / "BASES GENERICOS" / "SF1.xlsx"
+if not BASE_PADRAO.exists():
+    BASE_PADRAO = Path(
+        r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
+        r"\LUCAS ABNER ARAUJO\BASES GENERICOS\SF1.xlsx"
+    )
 
 PREFIXO = "SF1:"
 

@@ -1700,7 +1700,8 @@ def grupos_de_pills(cfg: dict, compacta: list[dict],
 
 def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
           base_sf1: Path | None = None, base_se2: Path | None = None,
-          base_sefaz: Path | None = None) -> dict:
+          base_sefaz: Path | None = None, base_sc7: Path | None = None,
+          base_sc1: Path | None = None, base_empresas: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -1805,7 +1806,7 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
     empresas_bioflor = None
     erro_empresas = None
     try:
-        empresas_bioflor = sefaz.ler_cnpjs_empresas()
+        empresas_bioflor = sefaz.ler_cnpjs_empresas(base_empresas)
     except Exception as exc:  # noqa: BLE001 - listagem fora do ar/renomeada/mudada
         erro_empresas = exc
     if not caminho_sefaz.exists():
@@ -1865,10 +1866,24 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             # veredito da SF1 e os alertas) MAIS a SC7/SC1. Mesma regra das
             # outras bases de fora: falhar aqui nao derruba o painel, mas tem de
             # aparecer -- aba que para de atualizar calada e o pior dos casos.
-            if sc7.BASE_SC7.exists():
+            # ⚠ A MESMA variavel na conferencia e na leitura: conferir
+            # `sc7.BASE_SC7` e passar outro caminho adiante faria o AVISO falar
+            # de um arquivo que ninguem ia ler.
+            caminho_sc7 = base_sc7 or sc7.BASE_SC7
+            caminho_sc1 = base_sc1 or sc7.BASE_SC1
+            # ⚠ A SC1 e OPCIONAL para o sc7.carregar() (sem ela os pedidos
+            # continuam valendo e so o Solicitante fica vazio) -- por isso ela
+            # nao entra no `if` abaixo. Mas "opcional" nao pode virar "calada":
+            # a coluna vazia e visualmente igual a um pedido sem solicitante.
+            if caminho_sc7.exists() and not caminho_sc1.exists():
+                print(f"AVISO: SC1 nao encontrada -- a aba de pedidos sai com a "
+                      f"coluna Solicitante VAZIA:\n       {caminho_sc1}",
+                      file=sys.stderr)
+            if caminho_sc7.exists():
                 try:
                     cabecalho, brutas, pedidos_resumo = pedidos_sefaz.carregar(
-                        caminho_sefaz, caminho_sf1, pronto=pronto)
+                        caminho_sefaz, caminho_sf1, base_sc7=caminho_sc7,
+                        base_sc1=caminho_sc1, pronto=pronto)
                     if brutas:
                         lidas["pedidos"] = montar_aba(cabecalho, brutas, ABAS["pedidos"])
                 except Exception as exc:  # noqa: BLE001 - planilha aberta, coluna movida...
@@ -1876,7 +1891,16 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
                           file=sys.stderr)
             else:
                 print(f"AVISO: SC7 nao encontrada, aba de pedidos nao criada:\n"
-                      f"       {sc7.BASE_SC7}", file=sys.stderr)
+                      f"       {caminho_sc7}", file=sys.stderr)
+
+        else:
+            # ⚠ Sem a SF1 nao existe cruzamento, e sem cruzamento nao existem NEM
+            # a aba SEFAZ x SF1 NEM a de pedidos de compra -- as duas moram
+            # dentro do `if` acima. Ate 31/08/2026 isso acontecia EM SILENCIO: o
+            # unico AVISO de SF1 e o da aba de classificacao, que sai bem antes e
+            # fala de outra aba. Quem so olhasse a tela juraria que rodou tudo.
+            print(f"AVISO: sem a SF1 as abas SEFAZ x SF1 e NF x Pedido de Compra "
+                  f"NAO foram atualizadas:\n       {caminho_sf1}", file=sys.stderr)
 
         cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas,
                                                          linhas=linhas_sefaz)
@@ -2062,12 +2086,24 @@ def main() -> int:
                         help="base SE2 (posicao diaria) usada para conferir os titulos")
     parser.add_argument("--base-sefaz", type=Path, default=sefaz.BASE_PADRAO,
                         help="base SEFAZ.xlsx (abas NFes SEFAZ e NFS)")
+    # As tres da aba NF x Pedido de Compra. Ate 31/08/2026 so existiam como
+    # constante no modulo: numa maquina onde a biblioteca do OneDrive tem outro
+    # nome, ou com a exportacao salva noutra pasta, nao havia como apontar o
+    # caminho sem editar o .py.
+    parser.add_argument("--base-sc7", type=Path, default=sc7.BASE_SC7,
+                        help="base SC7 (pedidos de compra, por item)")
+    parser.add_argument("--base-sc1", type=Path, default=sc7.BASE_SC1,
+                        help="base SC1 (solicitacoes; e dela que vem o Solicitante)")
+    parser.add_argument("--base-empresas", type=Path, default=sefaz.BASE_EMPRESAS,
+                        help="LISTAGEM EMPRESAS BIOFLOR.xlsx (quais tomadores entram "
+                             "na analise da SEFAZ)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
         dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1,
-                      args.base_se2, args.base_sefaz)
+                      args.base_se2, args.base_sefaz, args.base_sc7,
+                      args.base_sc1, args.base_empresas)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1

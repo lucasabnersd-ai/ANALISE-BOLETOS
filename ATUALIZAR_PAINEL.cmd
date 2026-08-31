@@ -107,6 +107,13 @@ call :usar_base --base           "%BASE_PAINEL%"
 call :usar_base --base-pendentes "%RAIZ%\COPIAR E COLAR BOLETOS PENDENTES.xlsx"
 call :usar_base --base-sf1       "%GENERICOS%\SF1.xlsx"
 call :usar_base --base-sefaz     "%ANALISES%\SEFAZ.xlsx"
+rem As tres da aba NF x Pedido de Compra. Ate 31/08/2026 elas nao tinham
+rem argumento: o caminho vivia dentro do sc7.py/sefaz.py e so dava para apontar
+rem outra pasta editando o .py. Agora seguem a mesma regra das outras -- o que
+rem nao existir cai no default do modulo, com AVISO nome por nome.
+call :usar_base --base-sc7       "%GENERICOS%\SC7.xlsx"
+call :usar_base --base-sc1       "%GENERICOS%\SC1.xlsx"
+call :usar_base --base-empresas  "%GENERICOS%\LISTAGEM EMPRESAS BIOFLOR.xlsx"
 rem "SE2 - POSICAO DIARIA.xlsx" tem cedilha e til no nome de verdade. Escrever o
 rem nome aqui deixaria o acerto por conta da pagina de codigo com que o .cmd for
 rem lido; o curinga pega o nome real do disco. As copias ("... - Copia.xlsx")
