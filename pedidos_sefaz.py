@@ -179,8 +179,22 @@ ROTULO_FRACO = r"PEDIDO"
 # Palavras que, perto do numero, dizem que ele NAO e pedido de compra.
 RUIM = re.compile(r"\b(GDS|VENDAS?|NFC-?E|NOTA|NF-?E|SERIE|SÉRIE)\b")
 
-RE_FORTE = re.compile(rf"\b(?:{ROTULO_FORTE})\s*[:\-\.\s]?\s*(\d{{3,6}})(?!\d)")
-RE_FRACO = re.compile(rf"\b(?:{ROTULO_FRACO})\s*[:\-\.\s]?\s*(\d{{3,6}})(?!\d)")
+# ⚠ O "NUMERO" ENTRE O ROTULO E O NUMERO (31/08/2026). Quem emite a nota
+# escreve "ORDEM DE COMPRA NO: 001522", "PEDIDO DE COMPRA Nº. 003451",
+# "ORDEM DE COMPRA NR. 001467", "PC Nº 001408" -- e o separador de uma casa so
+# (`[:\-\.\s]?`) nao cobria nada disso: o pedido estava escrito na nota e a aba
+# dizia "pedido NAO citado". Eram 19 notas na base de 31/08/2026, 16 delas em
+# SEM PEDIDO com o numero do PC no proprio texto.
+# ⚠ A marca e OPCIONAL e tem de vir COLADA nos digitos: `N[º°ORS]?\.?` pega
+# N/Nº/N°/NO/NR/NS, e o `\s*[:\-\.\s]?\s*` de sempre continua sendo a unica
+# coisa que separa a marca do numero. Por isso "PEDIDO NF 12345" NAO casa (o F
+# nao e separador nem digito) e "PEDIDO NOSSO 123" tambem nao.
+MARCA_NUMERO = r"(?:\s*(?:N[º°ORS]?|NUM(?:ERO)?)\.?)?"
+
+RE_FORTE = re.compile(
+    rf"\b(?:{ROTULO_FORTE}){MARCA_NUMERO}\s*[:\-\.\s]?\s*(\d{{3,6}})(?!\d)")
+RE_FRACO = re.compile(
+    rf"\b(?:{ROTULO_FRACO}){MARCA_NUMERO}\s*[:\-\.\s]?\s*(\d{{3,6}})(?!\d)")
 
 # Quanto texto olhar em volta do numero para o veto acima. 22 antes cobre
 # "Nota fiscal referente ao pedido:", 8 depois cobre o "/1" e o separador.
