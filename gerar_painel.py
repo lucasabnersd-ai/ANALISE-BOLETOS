@@ -543,6 +543,12 @@ COMPACTA_PEDIDOS = [
     # desta aba sobre o pedido): este e o status da nota na SEFAZ, e nota
     # `Cancelada` pode ter PEDIDO CONFIRMADO. Filtravel -- ver `pills` abaixo.
     ("Status da Nota",    "titulo", "",             5.5),
+    # 01/09/2026. O que a EMPRESA respondeu sobre a nota (MESMA PREMISSA.xlsx).
+    # Fica colada no `Status da Nota` de proposito: uma nota `Autorizada` na
+    # SEFAZ e `DesconhecimentoOperacao` aqui e boleto a pagar de nota que a
+    # propria empresa nao reconhece -- e o par que interessa, e ler os dois
+    # separados por meia tela esconderia isso. Filtravel, ver `pills`.
+    ("Manifestação",      "titulo", "",             6),
     ("Emitente",          "titulo", "EMITENTE",    11),
     ("CNPJ Emitente",     "titulo", "EMITENTE",     7),
     ("Nome Fantasia",     "titulo", "EMITENTE",     8),
@@ -601,6 +607,7 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Lançada na SF1": "A nota está lançada no TOTVS (SF1)?",
     "Nº NF": "Nº da NF (SEFAZ)",
     "NF no TOTVS": "Nº da NF no padrão TOTVS (9 dígitos)",
+    "Manifestação": "Manifestação do destinatário (MESMA PREMISSA.xlsx)",
     "Emissão": "Emissão (SEFAZ)",
     "Emitente": "Emitente/Prestador (SEFAZ)",
     "Nome Fantasia": "Nome Fantasia do Emitente",
@@ -929,8 +936,11 @@ ABAS = {
         # pergunta "de qual empresa e este pedido?", que passou a existir. Cai na
         # mesma guarda de 2 a 8 valores das outras; se um dia a base trouxer mais
         # de 8 filiais amarradas a nota, ela simplesmente nao vira barra.
+        # 01/09/2026: `Manifestação` entrou na lista. Cai na mesma guarda de 2 a 8
+        # valores das outras -- na base de hoje sao 6 (os 4 status do TOTVS mais
+        # "nao se aplica (NFS-e)" e "fora do periodo do arquivo").
         "pills": ["Origem", "Lançada na SF1", "Controle Ap.", "Status da Nota",
-                  "Filial do PC"],
+                  "Manifestação", "Filial do PC"],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   # verde junto do CONFIRMADO: as duas sao "nada a fazer" -- uma
                   # porque o pedido esta amarrado, a outra porque ele ja fechou

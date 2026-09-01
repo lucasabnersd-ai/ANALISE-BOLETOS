@@ -78,10 +78,6 @@ EMISSAO = "Emissão"
 # veredito DESTA aba sobre o pedido -- sao perguntas diferentes, e uma nota
 # `Cancelada` pode perfeitamente ter PEDIDO CONFIRMADO. Ver sefaz.STATUS_NOTA.
 STATUS_NOTA = "Status da Nota"
-# 01/09/2026. O que a EMPRESA respondeu sobre a nota, vindo da MESMA
-# PREMISSA.xlsx pelo cruzamento. Boleto a pagar de nota marcada
-# `DesconhecimentoOperacao`/`NaoRealizada` e o caso que ela existe para pegar.
-MANIFESTACAO = "Manifestação"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 FANTASIA = "Nome Fantasia"
@@ -126,7 +122,7 @@ CHAVE_NFE = "Chave NF-e"
 
 CABECALHO = [
     CHAVE, SITUACAO, ALERTA, LANCADA, ORIGEM,
-    NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA, MANIFESTACAO,
+    NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA,
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
@@ -795,7 +791,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             # o status da nota NA SEFAZ, nao um veredito nosso (pedido do
             # usuario, 28/08/2026) -- ver STATUS_NOTA
             STATUS_NOTA: nota.get(csf1.STATUS_NOTA),
-            MANIFESTACAO: nota.get(csf1.MANIFESTACAO),
             NOME_EMIT: nota.get(csf1.NOME_EMIT),
             CNPJ_EMIT: nota.get(csf1.CNPJ_EMIT),
             FANTASIA: nota.get(csf1.FANTASIA),

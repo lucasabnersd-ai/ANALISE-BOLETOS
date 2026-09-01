@@ -44,9 +44,6 @@ EMISSAO = "Emissão"
 # O status da nota NA SEFAZ (`Autorizada`/`Cancelada` na NF-e, `Normal`/
 # `Cancelada`/`Substituída` na NFS-e). Ver sefaz.STATUS_NOTA.
 STATUS_NOTA = "Status da Nota"
-# O que a empresa respondeu sobre a nota (ciencia/confirmacao/desconhecimento/
-# nao realizada). Nao e o `Status da Nota` acima, que e o que a SEFAZ diz.
-MANIFESTACAO = "Manifestação"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 VLR_SEFAZ = "Vlr SEFAZ"
@@ -169,11 +166,6 @@ DA_PRIMEIRA_LINHA = (
     # 28/08/2026: medido nas duas abas, ZERO das 813 notas tem status diferente
     # entre as proprias linhas -- ele e da nota, entao a primeira linha basta.
     (STATUS_NOTA, sefaz.STATUS_NOTA),
-    # 01/09/2026. A manifestacao e da NOTA por construcao, e nao por medicao: o
-    # manifestacao.py grava o mesmo valor em TODAS as linhas de uma chave (o
-    # de-para dele e por chave NF-e). A primeira linha nao so basta como e a
-    # unica resposta possivel. Ver manifestacao.py.
-    (MANIFESTACAO, sefaz.MANIFESTACAO),
 )
 
 
