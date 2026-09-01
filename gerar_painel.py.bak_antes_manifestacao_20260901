@@ -27,7 +27,6 @@ from openpyxl import load_workbook
 
 import cruzamento_classificacao
 import cruzamento_sefaz_sf1
-import manifestacao
 import pedidos_sefaz
 import pendentes_itau
 import planilha_excel_js
@@ -164,10 +163,6 @@ ALERTAS = ((("FATURA",), "FATURA"),
            # a nota esta parada, esta diz que ela sumiu da base. O texto das
            # demais continua inteiro no quadro que abre no selo.
            ((sefaz.PREFIXO_REMOVIDA,), "REMOVIDA DA BASE SEFAZ"),
-           # 01/09/2026. Depois da removida e antes dos de prazo: os de prazo
-           # dizem que a nota esta parada, este diz que talvez ela nao devesse
-           # ser paga -- a empresa manifestou desconhecimento ou nao realizada.
-           ((sefaz.PREFIXO_MANIFESTO,), "NÃO RECONHECIDA"),
            ((sefaz.PREFIXO_VENCE,), "VENCE ≤ 5D"),
            # 14/08/2026, pedido do usuario: era "NÃO LANÇADA", que dizia o efeito
            # mas nao o que o alerta cobra -- o tempo parado. O numero sai da
@@ -1718,8 +1713,7 @@ def grupos_de_pills(cfg: dict, compacta: list[dict],
 def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
           base_sf1: Path | None = None, base_se2: Path | None = None,
           base_sefaz: Path | None = None, base_sc7: Path | None = None,
-          base_sc1: Path | None = None, base_empresas: Path | None = None,
-          base_manifestacao: Path | None = None) -> dict:
+          base_sc1: Path | None = None, base_empresas: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -1863,34 +1857,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         if sefaz_hist["removidas"]:
             print(f"           ⚠ {sefaz_hist['removidas']} nota(s) REMOVIDAS da base "
                   f"continuam no painel, com alerta")
-        # 01/09/2026. A manifestacao do destinatario entra AQUI, entre a leitura
-        # e as abas: assim as tres abas que leem a SEFAZ enxergam a coluna, e o
-        # sefaz_historico.json continua guardando a linha PURA -- manifestacao e
-        # fato de hoje, relido a cada rodada. Congelada no historico, a nota
-        # removida carregaria para sempre o status do dia em que sumiu.
-        # ⚠ Sem a base, a coluna diz que NAO FOI LIDA, e nao fica vazia: vazio
-        # seria lido como "esta nota nao tem manifestacao", afirmacao que ninguem
-        # fez. O painel inteiro continua saindo -- so esta coluna fica sem dado.
-        caminho_manifesto = base_manifestacao or manifestacao.BASE_PADRAO
-        try:
-            manifesto_resumo = manifestacao.anotar(linhas_sefaz, caminho_manifesto)
-            faixa = ""
-            if manifesto_resumo["de"]:
-                faixa = (f" | período {manifesto_resumo['de'].strftime('%d/%m/%Y')}"
-                         f" a {manifesto_resumo['ate'].strftime('%d/%m/%Y')}")
-            print(f"           manifestação: {manifesto_resumo['notas']} notas no "
-                  f"arquivo ({manifesto_resumo['linhas']} linhas, "
-                  f"{manifesto_resumo['repetidas']} repetidas){faixa}")
-            print("           " + " | ".join(
-                f"{n} {s}" for s, n in manifesto_resumo["anotadas"].items()))
-            if manifesto_resumo["graves"]:
-                print(f"           ⚠ {manifesto_resumo['graves']} nota(s) com "
-                      f"DESCONHECIMENTO/NÃO REALIZADA — há boleto ligado a nota "
-                      f"que a empresa não reconhece")
-        except Exception as exc:  # noqa: BLE001 - base fora do ar/renomeada/mudada
-            manifestacao.marcar_sem_base(linhas_sefaz)
-            print(f"AVISO: coluna de manifestação não preenchida:\n       {exc}",
-                  file=sys.stderr)
         print(f"           historico: {sefaz_hist['conhecidas']} notas conhecidas "
               f"-> {HISTORICO_SEFAZ.name}")
 
@@ -2143,17 +2109,13 @@ def main() -> int:
     parser.add_argument("--base-empresas", type=Path, default=sefaz.BASE_EMPRESAS,
                         help="LISTAGEM EMPRESAS BIOFLOR.xlsx (quais tomadores entram "
                              "na analise da SEFAZ)")
-    parser.add_argument("--base-manifestacao", type=Path,
-                        default=manifestacao.BASE_PADRAO,
-                        help="MESMA PREMISSA.xlsx (manifestacao do destinatario; "
-                             "so preenche a coluna, nao acrescenta nota)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
         dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1,
                       args.base_se2, args.base_sefaz, args.base_sc7,
-                      args.base_sc1, args.base_empresas, args.base_manifestacao)
+                      args.base_sc1, args.base_empresas)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1

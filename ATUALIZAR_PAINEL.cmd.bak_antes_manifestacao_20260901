@@ -107,12 +107,6 @@ call :usar_base --base           "%BASE_PAINEL%"
 call :usar_base --base-pendentes "%RAIZ%\COPIAR E COLAR BOLETOS PENDENTES.xlsx"
 call :usar_base --base-sf1       "%GENERICOS%\SF1.xlsx"
 call :usar_base --base-sefaz     "%ANALISES%\SEFAZ.xlsx"
-rem 01/09/2026. A manifestacao do destinatario (o que a empresa respondeu sobre a
-rem nota: ciencia, confirmacao, desconhecimento, nao realizada). SO PREENCHE a
-rem coluna da aba da SEFAZ -- nao acrescenta nota nenhuma ao painel, e de
-rem proposito: 643 das 1.380 linhas do arquivo sao notas de terceiros para a
-rem BRACELL, em que a S&D so aparece como transportadora. Ver manifestacao.py.
-call :usar_base --base-manifestacao "%ANALISES%\MESMA PREMISSA.xlsx"
 rem As tres da aba NF x Pedido de Compra. Ate 31/08/2026 elas nao tinham
 rem argumento: o caminho vivia dentro do sc7.py/sefaz.py e so dava para apontar
 rem outra pasta editando o .py. Agora seguem a mesma regra das outras -- o que

@@ -137,6 +137,15 @@ EMISSAO = "Emissão"
 # Por isso ela sobe de nivel pela PRIMEIRA LINHA (ver DA_PRIMEIRA_LINHA no
 # cruzamento_sefaz_sf1.py) e nao juntando distintos.
 STATUS_NOTA = "Status da Nota"
+# 01/09/2026. O que a EMPRESA disse sobre a nota (ciencia / confirmacao /
+# desconhecimento / nao realizada), vindo da MESMA PREMISSA.xlsx -- ver
+# manifestacao.py, que e quem preenche esta coluna. Nao confundir com o
+# `Status da Nota` acima: aquele e o que a SEFAZ diz da nota (Autorizada /
+# Cancelada), este e o que o destinatario respondeu sobre ela. Uma nota pode
+# estar Autorizada na SEFAZ e DesconhecimentoOperacao aqui -- e justamente esse
+# par que interessa, porque quer dizer boleto a pagar de nota que a propria
+# empresa nao reconhece.
+MANIFESTACAO = "Manifestação"
 SAIDA = "Saída/Entrada"
 TIPO_OP = "Tipo Operação"
 # ⚠ NAO e o "Tipo Operação" acima: aquele diz entrada/saida, este e a natureza
@@ -158,7 +167,7 @@ NOME_DEST = "Destinatário"
 
 ALERTA = "Alerta"
 
-CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, STATUS_NOTA,
+CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, STATUS_NOTA, MANIFESTACAO,
              SAIDA, TIPO_OP, NAT_OP, CFOP,
              NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              VLR_ITEM, VLR_TOTAL, VENC_DUP, VLR_DUP, INFO, CHAVE_NFE]
@@ -193,10 +202,19 @@ PREFIXO_PRAZO = "PRAZO CURTO"
 # vir nao e rotina: ou foi cancelada, ou a exportacao veio incompleta. Nos dois
 # casos e para olhar, e nao para sumir da tela em silencio.
 PREFIXO_REMOVIDA = "REMOVIDA DA BASE SEFAZ"
+# 01/09/2026. A empresa manifestou `DesconhecimentoOperacao` ou `NaoRealizada`
+# na nota -- e mesmo assim existe titulo/boleto ligado a ela. E o caso que a
+# base de manifestacao existe para pegar: nao e nota atrasada, e nota que a
+# propria empresa disse nao reconhecer. Ver manifestacao.py.
+PREFIXO_MANIFESTO = "NOTA NÃO RECONHECIDA PELA EMPRESA"
 
 # ⚠ Chave INTERNA da linha (comeca com "_" e nao esta no CABECALHO): marca a nota
 # que voltou do historico porque a base de hoje nao a trouxe. Nao vira coluna.
 REMOVIDA_EM = "_removida_em"
+# ⚠ Idem, e pelo mesmo motivo: o texto do alerta de manifestacao viaja na
+# propria linha (posto pelo manifestacao.anotar), e nao num parametro a mais nos
+# tres caminhos que chamam o `alertas_por_nota`.
+MANIFESTO_GRAVE = "_manifesto_grave"
 
 
 def _dias(n: int) -> str:
@@ -213,7 +231,8 @@ def vencimentos_por_nota(linhas: list[dict]) -> dict[str, list]:
 
 
 def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
-                    hoje: dt.date, removida_em: dt.date | None = None) -> list[str]:
+                    hoje: dt.date, removida_em: dt.date | None = None,
+                    manifesto_grave: str | None = None) -> list[str]:
     """Os avisos desta nota, do mais urgente para o menos.
 
     O vencimento considerado e o PRIMEIRO da nota: e ele que chega antes, tanto
@@ -231,6 +250,13 @@ def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
             f"{PREFIXO_REMOVIDA}: estava no painel e não veio na exportação de "
             f"{removida_em.strftime('%d/%m/%Y')} — como a base é acumulativa, "
             f"confira se a nota foi cancelada ou se o arquivo veio incompleto")
+
+    # ⚠ Logo depois da removida, e antes dos tres de prazo, de proposito: os de
+    # prazo dizem que a nota esta parada; este diz que talvez ela nao devesse ser
+    # paga. Das condicoes em que a nota pode cair, e a que mais muda o que fazer.
+    if manifesto_grave:
+        avisos.append(f"{PREFIXO_MANIFESTO}: {manifesto_grave} — confira antes de "
+                      f"pagar o boleto ligado a ela")
 
     if venc and nao_lancada:
         faltam = (venc - hoje).days
@@ -270,7 +296,8 @@ def alertas_por_nota(linhas: list[dict], nao_lancadas: set | None,
             # a marca vem na propria linha (posta pelo historico), e nao num
             # parametro a mais: assim os tres caminhos que chamam esta funcao
             # ganham o alerta sem nenhum deles precisar saber que ele existe
-            removida_em=linha.get(REMOVIDA_EM))
+            removida_em=linha.get(REMOVIDA_EM),
+            manifesto_grave=linha.get(MANIFESTO_GRAVE))
     return por_nota
 
 
@@ -283,6 +310,7 @@ def contar_alertas(por_nota: dict[str, list[str]]) -> dict:
         "sem_lancar": tem(PREFIXO_SEM_LANCAR),
         "prazo_curto": tem(PREFIXO_PRAZO),
         "removidas": tem(PREFIXO_REMOVIDA),
+        "manifesto_grave": tem(PREFIXO_MANIFESTO),
         "com_alerta": sum(1 for avisos in por_nota.values() if avisos),
     }
 
