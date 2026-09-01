@@ -109,13 +109,6 @@ PREFIXO = "SEFAZ:"
 # Foi o `if` que custou caro: com a aba renomeada, as 820 linhas de NF-e foram
 # descartadas em silencio e a aba "Análise Base SEFAZ" saiu com 530 notas onde a
 # base tinha as duas metades. Nada na tela dizia que faltava alguma coisa.
-#
-# ⚠ E DESDE 01/09/2026 O NOME NAO DECIDE MAIS NADA -- ver `_achar_aba`. Naquela
-# exportacao os dois nomes vieram TROCADOS: a aba de PRODUTO chegou chamada
-# 'NFSE' e a de SERVICO como "NF'S". Pelo nome as duas caem aqui embaixo, na
-# lista da NFS-e, e a de NF-e nao existiria. Quem identifica a aba agora e o
-# cabecalho dela (COLUNAS_NFE / COLUNAS_NFS); estas duas listas ficaram so para
-# desempatar se duas abas tiverem o MESMO layout, e para a mensagem de erro.
 ABAS_NFE = ("NFes SEFAZ", "NFe", "NF-e", "NFES")
 ABAS_NFS = ("NFS", "NFS-e", "NFSe", "NFSes SEFAZ")
 
@@ -472,12 +465,11 @@ def _abrir(caminho: Path):
                              data_only=True), pasta
 
 
-def _erros_de_layout(cabecalho: list, colunas: list) -> list[str]:
-    """As colunas esperadas que NAO estao onde deveriam, uma frase por coluna.
+def _conferir(cabecalho: list, colunas: list, aba: str) -> None:
+    """Cada coluna esperada continua onde estava? Se nao, para aqui.
 
-    Serve a dois donos: o `_conferir`, que para a leitura quando a aba mudou de
-    forma, e o `_achar_aba`, que trata a lista VAZIA como a prova de que aquela
-    aba e a procurada -- por mais que o nome dela diga outra coisa.
+    Trazer a coluna errada calado seria pior do que nao trazer nada: ninguem
+    descobriria olhando a tela que o CNPJ do emitente virou outra coisa.
     """
     erros = []
     for letra, esperado, _destino in colunas:
@@ -485,16 +477,6 @@ def _erros_de_layout(cabecalho: list, colunas: list) -> list[str]:
         achado = _rotulo(cabecalho[i]) if i < len(cabecalho) else "(nao existe)"
         if achado != _rotulo(esperado):
             erros.append(f"{letra} deveria ser {esperado!r} e esta {achado!r}")
-    return erros
-
-
-def _conferir(cabecalho: list, colunas: list, aba: str) -> None:
-    """Cada coluna esperada continua onde estava? Se nao, para aqui.
-
-    Trazer a coluna errada calado seria pior do que nao trazer nada: ninguem
-    descobriria olhando a tela que o CNPJ do emitente virou outra coisa.
-    """
-    erros = _erros_de_layout(cabecalho, colunas)
     if erros:
         raise RuntimeError(
             f"A aba {aba!r} da SEFAZ.xlsx mudou de layout:\n  - "
@@ -546,61 +528,25 @@ def _nome_aba(nome) -> str:
     return re.sub(r"[^a-z0-9]", "", _sem_acento(nome).lower())
 
 
-def _cabecalho_de(ws) -> list:
-    """So a primeira linha da aba -- para saber QUAL aba e sem ler o resto."""
-    return list(next(ws.iter_rows(max_row=1, values_only=True), ()) or ())
-
-
-def _achar_aba(wb, aceitos: tuple, oque: str, constante: str, colunas: list = None):
-    """A aba da planilha: pelo CABECALHO quando ele e conhecido, senao pelo nome.
+def _achar_aba(wb, aceitos: tuple, oque: str, constante: str):
+    """A aba da planilha, por QUALQUER um dos nomes aceitos.
 
     Nao existir e erro. Antes havia um `if ... in wb.sheetnames` aqui, e ele
     pulava a aba inteira em silencio quando a exportacao mudava o nome -- o
     painel saia com menos notas do que a base tinha e ninguem descobria olhando
     a tela. Parar e melhor do que publicar metade: o ATUALIZAR_PAINEL.cmd nao
     publica nada quando a base falha.
-
-    ⚠ O NOME NAO E IDENTIDADE. Em 01/09/2026 a exportacao veio com os dois
-    nomes trocados: a aba de PRODUTO chamada 'NFSE' (2.096 linhas, 'Chave NF-e'
-    na C) e a de SERVICO como "NF'S" (408 linhas, 'Chave NFS-e' na A). Por nome,
-    ambas caem na busca da NFS-e -- o `_nome_aba` reduz "NFSe" e 'NFSE' ao mesmo
-    "nfse" -- e a de NF-e nao existiria: as 2.096 linhas de produto ficariam
-    fora do painel, o mesmo prejuizo que ja custou 820 linhas aqui (ver
-    ABAS_NFE). Entao quem decide e o LAYOUT: a aba de NF-e e a que tem as
-    colunas de COLUNAS_NFE onde COLUNAS_NFE diz, chame-se ela como for. Os nomes
-    de `aceitos` sobraram para desempatar duas abas de cabecalho igual (e para a
-    mensagem de erro). Sem `colunas` -- o caso da listagem de empresas -- segue
-    valendo o nome, que la nunca mudou.
     """
     procurados = {_nome_aba(a) for a in aceitos}
-    if colunas:
-        candidatas = [n for n in wb.sheetnames
-                      if not _erros_de_layout(_cabecalho_de(wb[n]), colunas)]
-        if len(candidatas) > 1:
-            pelo_nome = [n for n in candidatas if _nome_aba(n) in procurados]
-            candidatas = pelo_nome or candidatas
-        if candidatas:
-            return wb[candidatas[0]]
-    else:
-        for nome in wb.sheetnames:
-            if _nome_aba(nome) in procurados:
-                return wb[nome]
-    colconst = constante.replace("ABAS_", "COLUNAS_")
-    porque = ""
-    if colunas:
-        porque = (
-            f"  nenhuma tem o cabecalho de {colconst}; a 1a diferenca de cada:\n"
-            + "\n".join(
-                f"    {n!r}: {_erros_de_layout(_cabecalho_de(wb[n]), colunas)[0]}"
-                for n in wb.sheetnames) + "\n")
+    for nome in wb.sheetnames:
+        if _nome_aba(nome) in procurados:
+            return wb[nome]
     raise RuntimeError(
         f"A SEFAZ.xlsx nao tem a aba de {oque}.\n"
         f"  procurei por: " + " / ".join(repr(a) for a in aceitos) + "\n"
         f"  a planilha tem: " + " / ".join(repr(n) for n in wb.sheetnames) + "\n"
-        + porque
-        + f"Se a exportacao so renomeou a aba, acrescente o nome novo em "
-        f"{constante} no sefaz.py; se ela mudou as colunas de lugar, corrija "
-        f"{colconst}."
+        f"Se a exportacao passou a chamar de outro jeito, acrescente o nome novo "
+        f"em {constante} no sefaz.py."
     )
 
 
@@ -611,9 +557,9 @@ def _ler_tudo(base: Path) -> list[dict]:
     """
     wb, temporaria = _abrir(base)
     try:
-        return (_ler_aba(_achar_aba(wb, ABAS_NFE, "NF-e", "ABAS_NFE", COLUNAS_NFE),
+        return (_ler_aba(_achar_aba(wb, ABAS_NFE, "NF-e", "ABAS_NFE"),
                          COLUNAS_NFE, NFE, com_item=True)
-                + _ler_aba(_achar_aba(wb, ABAS_NFS, "NFS-e", "ABAS_NFS", COLUNAS_NFS),
+                + _ler_aba(_achar_aba(wb, ABAS_NFS, "NFS-e", "ABAS_NFS"),
                            COLUNAS_NFS, NFSE, com_item=False))
     finally:
         wb.close()
