@@ -2149,7 +2149,7 @@ const PX_POR_PONTO = 12.5;
 
 const px = largura => Math.round((Number(largura) || 0) * PX_POR_PONTO);
 
-function desenharConferencia(itens, ate){
+function desenharConferencia(itens){
   const cols = colunasDaAba();
   const grupos = [];
   cols.forEach(c => {
@@ -2181,81 +2181,21 @@ function desenharConferencia(itens, ate){
     }).join("")}</tr></thead>`;
 
   const corpo = itens.length
-    ? linhasDaGrade(itens, cols, 0, Math.min(ate ?? itens.length, itens.length))
+    ? itens.map((r, i) => {
+        // ⚠ Zebrado pelo BLOCO da chave, não pela posição: as duas linhas do
+        // mesmo título têm de sair do MESMO tom, senão o zebrado parte no meio
+        // justamente o par que a moldura está tentando juntar. Fora da aba
+        // fundida cada linha é um bloco e nada muda.
+        const zebra = (r._bloco ?? i) % 2 ? "zebrada" : "";
+        const dentro = r._elo && r._elo !== "fora";
+        const classes = [zebra, feitoDe(r) ? "feita" : "", r.se2 ? "resolvida" : "",
+                         dentro ? "elo" : "", r._elo === "ini" ? "elo-ini" : "",
+                         r._elo === "fim" ? "elo-fim" : ""].filter(Boolean).join(" ");
+        return `<tr class="${classes}">${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`;
+      }).join("")
     : `<tr><td class="vazio" colspan="${cols.length}">Nenhuma linha encontrada.</td></tr>`;
 
   return cabeca + "<tbody>" + corpo + "</tbody>";
-}
-
-/* As linhas [ini, fim) da grade, em HTML.
-   ⚠ O ÍNDICE É ABSOLUTO e não o da fatia: o zebrado sai de `(r._bloco ?? i) % 2`,
-   e num lote que começa em 120 o `i` da fatia inverteria o tom da tabela
-   inteira dali para baixo. */
-function linhasDaGrade(itens, cols, ini, fim){
-  let saida = "";
-  for (let i = ini; i < fim; i++){
-    const r = itens[i];
-    // ⚠ Zebrado pelo BLOCO da chave, não pela posição: as duas linhas do mesmo
-    // título têm de sair do MESMO tom, senão o zebrado parte no meio justamente
-    // o par que a moldura está tentando juntar. Fora da aba fundida cada linha
-    // é um bloco e nada muda.
-    const zebra = (r._bloco ?? i) % 2 ? "zebrada" : "";
-    const dentro = r._elo && r._elo !== "fora";
-    const classes = [zebra, feitoDe(r) ? "feita" : "", r.se2 ? "resolvida" : "",
-                     dentro ? "elo" : "", r._elo === "ini" ? "elo-ini" : "",
-                     r._elo === "fim" ? "elo-fim" : ""].filter(Boolean).join(" ");
-    saida += `<tr class="${classes}">${cols.map(c => celulaCompacta(r, c)).join("")}</tr>`;
-  }
-  return saida;
-}
-
-/* ---------- a grade sai em LOTES (03/09/2026, ele: "painel está travando
-   muito") ----------------------------------------------------------------
-   MEDIDO nesta base, abrindo a aba três vezes: **717–997 ms de JS + 2.745–
-   3.115 ms de layout** na NF x Pedido (781 linhas x 42 colunas = 32.802
-   células). Não é só dela: "Boletos a Vencer" (1.070 x 15) custa 836 + 1.587.
-   O custo é LINEAR NO NÚMERO DE CÉLULAS -- ~85 µs cada nas duas abas --, ou
-   seja, não há patologia a caçar: há grade demais para uma pintura só.
-
-   ⚠ O QUE JÁ FOI FEITO E NÃO RESOLVE ESTE: `contain:paint` e
-   `will-change:scroll-position` (14/08/2026) atacam a ROLAGEM, que continua
-   valendo. Este aqui é o PRIMEIRO desenho, que a rolagem suave não toca.
-   E encurtar o texto das células foi medido: não muda nada.
-
-   A saída: pintar o primeiro lote (o que cabe na tela, com folga) e ir
-   emendando o resto em `requestIdleCallback`. O trabalho total é o mesmo; o
-   que muda é que ele deixa de ser UM bloqueio de 4 s -- a aba aparece na
-   hora e o resto entra sozinho, sem tirar o mouse do lugar.
-
-   ⚠ SÓ É SEGURO PORQUE OS EVENTOS SÃO DELEGADOS no próprio `#grade` (check,
-   tratativa, copiar, seleção de seleção de selo). Se algum dia um listener
-   passar a ser preso linha a linha, ele não existirá nas linhas dos lotes
-   seguintes -- e isso não dá erro nenhum, só para de funcionar da 121ª linha
-   para baixo. A exportação não corre risco: ela sai de `linhas()`, os DADOS,
-   e nunca do DOM. */
-const LOTE_PRIMEIRO = 120;
-const LOTE = 200;
-// quem manda na pintura atual: lote de desenho antigo vê o número mudar e para
-// (filtro, ordenação e troca de aba redesenham por cima)
-let pinturaAtual = 0;
-const agendarLote = fn => (window.requestIdleCallback
-  ? requestIdleCallback(fn, {timeout: 200}) : setTimeout(fn, 0));
-
-function desenharEmLotes(grade, itens){
-  const minha = ++pinturaAtual;
-  grade.innerHTML = desenharConferencia(itens, LOTE_PRIMEIRO);
-  if (itens.length <= LOTE_PRIMEIRO) return;
-  const corpo = grade.querySelector("tbody");
-  const cols = colunasDaAba();
-  let i = LOTE_PRIMEIRO;
-  const seguir = () => {
-    if (minha !== pinturaAtual || !corpo.isConnected) return;
-    const fim = Math.min(i + LOTE, itens.length);
-    corpo.insertAdjacentHTML("beforeend", linhasDaGrade(itens, cols, i, fim));
-    i = fim;
-    if (i < itens.length) agendarLote(seguir);
-  };
-  agendarLote(seguir);
 }
 
 /* ---------- quadro de hover ----------
@@ -3207,7 +3147,7 @@ function desenhar(){
     mostrarResumo();
     return;
   }
-  desenharEmLotes(grade, linhas());
+  grade.innerHTML = desenharConferencia(linhas());
   atualizarSubabas();
   document.getElementById("limparFiltros").hidden =
     !Object.values(estado.filtros).some(v => (v || "").trim());

@@ -946,6 +946,14 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
     for linha in linhas:
         if linha.get(PC):
             continue
+        # ⚠ SÓ ONDE HÁ TRABALHO A FAZER (03/09/2026, ele: "você não deve
+        # trazer pedidos encerrados"). PEDIDO ENCERRADO é o degrau em que NÃO
+        # HÁ NADA A FAZER -- o pedido foi achado e já fechou --, e encher a
+        # coluna dessas 135 notas com candidatos põe trabalho de volta numa
+        # linha resolvida. Sobram SEM PEDIDO e PEDIDO FORA DA BASE, que são
+        # exatamente as duas que ficam sem resposta.
+        if linha.get(SITUACAO) not in (SEM, FORA):
+            continue
         chaves = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome)
         if not chaves:
             continue

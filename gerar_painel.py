@@ -526,12 +526,13 @@ COMPACTA_PEDIDOS = [
     # "qual pedido e o quanto confiar" -- e continua no bloco PEDIDO, junto do
     # resto do pedido. Duas colunas com a mesma `chave` sao inofensivas: a
     # celula e a mesma e ordenar por qualquer uma das duas ordena igual.
-    # ⚠ 03/09/2026: as duas ficaram mais largas porque a celula deixou de ter
-    # sempre UM numero -- na nota sem pedido ela lista os PCs em aberto daquele
-    # fornecedor (ate 20). A largura e em PIXEL desde 13/08 e a tabela e
-    # `max-content`, entao alargar aqui NAO espreme as outras colunas: so
-    # empurra a rolagem horizontal. Ver pedidos_sefaz.possibilidades().
-    ("Numero PC",         "",       "",             8),
+    # ⚠ A LARGURA VOLTOU A 5 em 03/09/2026, no mesmo dia em que foi para 8:
+    # ele: "mova a coluna Numero PC para onde ela estava antes de voce mover
+    # ela". Alargar a coluna EMPURRA todas as outras para a direita, e a aba
+    # tem 42 colunas -- de longe, a grade inteira "andou". A lista de
+    # possibilidades cabe do mesmo jeito: a célula corta com "…" e o texto
+    # completo, com valor de cada pedido, está no quadro do Critério.
+    ("Numero PC",         "",       "",             5),
     # ⚠ 15 pontos (≈187px) porque o selo mais longo desta coluna passou a ser
     # "PENDENTE A MAIS DE 3 DIAS": `.selo` e nowrap + ellipsis, entao com os 6,5
     # de antes ele sairia cortado ("PENDENTE A M…") sem erro nenhum aparecer.
@@ -576,7 +577,7 @@ COMPACTA_PEDIDOS = [
     # Logistica). Sem esta coluna, "Numero PC 001522" na tela nao diz onde
     # conferir. Ver sc7.chave_pedido().
     ("Filial do PC",      "boleto", "PEDIDO",       4.5),
-    ("Numero PC",         "boleto", "PEDIDO",      12),
+    ("Numero PC",         "boleto", "PEDIDO",       5),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
