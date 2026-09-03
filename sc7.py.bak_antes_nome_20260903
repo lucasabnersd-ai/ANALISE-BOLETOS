@@ -107,7 +107,6 @@ from __future__ import annotations
 import datetime as dt
 import re
 import sys
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -202,98 +201,6 @@ def normalizar_filial(valor) -> str:
     return str(valor or "").strip()
 
 
-# --------------------------------------------------- o NOME do fornecedor
-# ⚠ CRUZAR TAMBEM PELO NOME (03/09/2026, pedido do usuario: "cruze os nomes de
-# emitente e razao social"). O nome NAO substitui o CNPJ -- entra ao lado dele,
-# como segunda porta para achar os pedidos de um fornecedor.
-#
-# MEDIDO ANTES DE ESCREVER A REGRA (base de 03/09/2026: 781 notas, 7.404
-# pedidos): o codigo do fornecedor na SC7 (coluna AG) e a RAIZ DO CNPJ nos 7.404
-# pedidos -- os 7.403 codigos distintos tem 8 digitos. Por isso o nome nao acha
-# HOJE nenhum pedido que o CNPJ ja nao ache (zero por igualdade, zero por
-# contencao). O que ele acrescenta:
-#   1. rede de seguranca para o fornecedor cadastrado com codigo que NAO e o
-#      CNPJ e para a nota que chega sem CNPJ do emitente -- os dois casos em que
-#      hoje a nota sai sem pedido nenhum e ninguem descobre por que;
-#   2. corroboracao no Criterio ("o nome do fornecedor tambem confere").
-#
-# ⚠ POR QUE NAO E SEMELHANCA (fuzzy/Jaccard). Testado com Jaccard >= 0,6 sobre
-# os tokens: o nome trouxe 2 pedidos que o CNPJ nao trazia e OS DOIS ESTAVAM
-# ERRADOS -- "LAVA JATO OLIVEIRA" casando com "LAVA JATO SHALOM OLIVEIRA"
-# (0,75) e "DRUMAR PECAS E SERVICOS DIESEL" com "ARAMAR PECAS E SERVICOS
-# DIESEL" (0,60). Depois do corte dos sufixos o que sobra ainda e generico
-# (PECAS, SERVICOS, DIESEL, LAVA, JATO) e o nome proprio -- justamente o que
-# distingue as duas empresas -- pesa uma fracao. Logo: igualdade do nome
-# normalizado, ou contencao ANCORADA no primeiro token. Sem nota de corte.
-
-# Sufixo societario esta em quase toda razao social e nao distingue ninguem.
-# ⚠ SO SAI NO FIM DO NOME (ver `normalizar_nome`): "S", "A" e "ME" tambem sao
-# palavras do meio de nome de gente e de empresa.
-SUFIXOS_SOCIETARIOS = {"LTDA", "LTD", "LT", "ME", "EPP", "EIRELI", "MEI",
-                       "SA", "S", "A", "CIA", "EI", "SS"}
-LIGACOES = {"DA", "DE", "DO", "DOS", "DAS", "E", "EM"}
-
-
-def normalizar_nome(valor) -> str:
-    """A razao social sem acento, sem pontuacao e sem sufixo societario.
-
-    "S&D Florestal Bioenergia Ltda." e "S & D FLORESTAL BIOENERGIA LTDA" viram
-    o mesmo texto -- e sao o mesmo fornecedor escrito pela SEFAZ e pelo TOTVS.
-
-    ⚠ O SUFIXO SO CAI NO FIM, e nao onde estiver. Tirando "S" e "A" do nome
-    inteiro, "S&D FLORESTAL BIOENERGIA" virava "D FLORESTAL BIOENERGIA" -- o
-    nome da empresa do grupo perdia a inicial, e qualquer outra empresa
-    "* D FLORESTAL *" passaria a bater com ela. No fim, a mesma lista devolve
-    "ALELO S.A." -> "ALELO" e "TOXICOLOGIA PARDINI LABORATORIOS S/A" ->
-    "TOXICOLOGIA PARDINI LABORATORIOS", que e o que se quer.
-
-    ⚠ OS DIGITOS FICAM. "47.086.187 ANDRE BONIFACIO" e o nome do MEI nos dois
-    lados: tirar o numero encostaria todos os "ANDRE BONIFACIO" da base um no
-    outro.
-    """
-    texto = unicodedata.normalize("NFKD", str(valor or ""))
-    texto = texto.encode("ascii", "ignore").decode().upper()
-    texto = re.sub(r"[^A-Z0-9]+", " ", texto)
-    palavras = [p for p in texto.split() if p not in LIGACOES]
-    while palavras and palavras[-1] in SUFIXOS_SOCIETARIOS:
-        palavras.pop()
-    return " ".join(palavras)
-
-
-def ancora_nome(nome: str) -> str:
-    """O token que indexa o nome: o primeiro com 3 letras ou mais.
-
-    ⚠ Indexar pelo nome INTEIRO impediria a contencao de `mesmo_nome` de achar
-    qualquer coisa (o texto teria de ser igual para bater no dicionario);
-    indexar por TODOS os tokens traria "COMERCIO" e "PECAS" inteiros para
-    comparar. E o "primeiro com 3 letras" existe porque o primeiro token cru,
-    em "S D FLORESTAL BIOENERGIA", e "S": um balde onde caberia meia base.
-    """
-    for token in nome.split(" "):
-        if len(token) >= 3:
-            return token
-    return nome.split(" ")[0] if nome else ""
-
-
-def mesmo_nome(a: str, b: str) -> bool:
-    """Dois nomes JA normalizados sao do mesmo fornecedor?
-
-    Igualdade, ou um contido no outro com a MESMA ancora e pelo menos duas
-    palavras do lado curto. ⚠ As duas palavras sao o que impede "ALELO" de casar
-    com "ALELO INSTITUICAO PAGAMENTO" so por comecar igual: um token sozinho nao
-    identifica empresa nenhuma, e a base tem 203 razoes distintas nos pedidos em
-    aberto.
-    """
-    if not a or not b:
-        return False
-    if a == b:
-        return True
-    curto, longo = (a, b) if len(a) <= len(b) else (b, a)
-    if len(curto.split(" ")) < 2 or ancora_nome(curto) != ancora_nome(longo):
-        return False
-    return f" {curto} " in f" {longo} "
-
-
 def chave_pedido(filial, numero) -> str:
     """A IDENTIDADE de um pedido: filial + numero, nunca o numero sozinho.
 
@@ -349,9 +256,6 @@ class Pedido:
     valores_item: list = field(default_factory=list)
 
     def somar(self, linha: dict) -> None:
-        # ⚠ o objeto ainda esta crescendo: a razao social que chega agora tem de
-        # entrar no `nomes` (ver a propriedade)
-        self.__dict__.pop("_nomes", None)
         self.itens += 1
         for campo in ("qtd_classi", "quantidade", "vlr"):
             valor = sefaz._numero(linha.get(campo))
@@ -459,25 +363,6 @@ class Pedido:
     @property
     def razao(self) -> str:
         return JUNTA.join(self.razoes)
-
-    @property
-    def nomes(self) -> list:
-        """As razoes sociais deste fornecedor, normalizadas para cruzamento.
-
-        ⚠ FICA EM CACHE porque e lida MUITAS vezes: sao 781 notas contra 7.404
-        pedidos, e normalizar a cada comparacao faria o mesmo texto passar pelo
-        `unicodedata` milhoes de vezes. O `somar()` derruba o cache -- o objeto
-        ainda esta sendo montado quando a leitura roda.
-        """
-        cache = self.__dict__.get("_nomes")
-        if cache is None:
-            cache = []
-            for razao in self.razoes:
-                nome = normalizar_nome(razao)
-                if nome and nome not in cache:
-                    cache.append(nome)
-            self.__dict__["_nomes"] = cache
-        return cache
 
     @property
     def emissao(self) -> dt.date | None:

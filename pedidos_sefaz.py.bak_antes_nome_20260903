@@ -211,32 +211,12 @@ FOLGA_FAIXA = 100
 # ---------------------------------------------------------------------- pesos
 # Bits distintos: a soma ordena do mais forte para o mais fraco e o melhor
 # candidato sai de um `max`. Mesma ideia do cruzamento_sefaz_sf1.
-# ⚠ OS NUMEROS MUDARAM EM 03/09/2026 (era 32/16/8/4/2/1) para abrir uma casa
-# para o PESO_NOME. Sao bits, entao o que importa e a ORDEM, e ela ficou
-# IDENTICA: texto forte > texto fraco > CNPJ > valor total > valor de item >
-# nome > emissao. Nenhum veredito de antes muda de lugar por causa da troca.
-PESO_TEXTO_FORTE = 128
-PESO_TEXTO_FRACO = 64
-PESO_CNPJ = 32
-PESO_VALOR = 16       # total do pedido = total da nota
-PESO_VALOR_ITEM = 8   # total da nota = valor de um item (entrega parcial)
-# ⚠ O NOME DO FORNECEDOR (03/09/2026, pedido do usuario: "cruze os nomes de
-# emitente e razao social"). Entra ABAIXO do valor de proposito: e um sinal de
-# IDENTIDADE (que fornecedor e este), e nao de discriminacao (qual pedido dele e
-# este) -- e quem discrimina, medido, so e o valor. Quando o CNPJ ja bateu, o
-# nome so acrescenta a frase no Criterio; quando o CNPJ NAO bate (fornecedor
-# cadastrado com codigo que nao e o CNPJ, nota sem CNPJ do emitente), e ele que
-# acha o pedido. Ver sc7.normalizar_nome/mesmo_nome.
-PESO_NOME = 4
-PESO_EMISSAO = 2
-
-# ⚠ AS DUAS PERGUNTAS QUE VALEM COMO BARRA, escritas como MASCARA e nao como
-# soma. "e o fornecedor certo?" passou a ter duas respostas possiveis (CNPJ ou
-# nome), e a barra antiga -- `pontos >= PESO_CNPJ + PESO_VALOR_ITEM` -- so
-# funcionava porque os pesos estavam numa ordem especifica. Com bit, a pergunta
-# nao depende mais de quanto cada sinal vale.
-FORNECEDOR_OK = PESO_CNPJ | PESO_NOME
-VALOR_OK = PESO_VALOR | PESO_VALOR_ITEM
+PESO_TEXTO_FORTE = 32
+PESO_TEXTO_FRACO = 16
+PESO_CNPJ = 8
+PESO_VALOR = 4        # total do pedido = total da nota
+PESO_VALOR_ITEM = 2   # total da nota = valor de um item (entrega parcial)
+PESO_EMISSAO = 1
 
 DIAS_EMISSAO = 45     # pedido e nota costumam ficar dentro disso
 CENTAVO = 0.01
@@ -298,27 +278,6 @@ def citados(texto: str, teto: int) -> list[tuple[str, int]]:
     return list(achados.items())
 
 
-def _nome_nota(nota: dict) -> str:
-    """O nome do emitente/prestador da nota, normalizado -- guardado na linha.
-
-    ⚠ O cache nao e luxo: `pontuar` roda 781 notas x ate 7.404 pedidos, e sem
-    ele a mesma razao social passaria pelo `unicodedata` milhoes de vezes. A
-    chave comeca com "_" porque a linha vira tupla pelo CABECALHO -- campo que
-    nao esta la nao chega na tela nem no .xlsx.
-    """
-    nome = nota.get("_nome_norm")
-    if nome is None:
-        nome = sc7.normalizar_nome(nota.get(NOME_EMIT))
-        nota["_nome_norm"] = nome
-    return nome
-
-
-def _mesmo_fornecedor_por_nome(nota: dict, pedido: sc7.Pedido) -> bool:
-    """O nome do emitente da nota e o do fornecedor do pedido sao o mesmo?"""
-    nome = _nome_nota(nota)
-    return bool(nome) and any(sc7.mesmo_nome(nome, n) for n in pedido.nomes)
-
-
 def pontuar(nota: dict, pedido: sc7.Pedido, peso_texto: int = 0) -> tuple[int, list[str]]:
     """Quanto este pedido combina com esta nota, e por que.
 
@@ -332,23 +291,9 @@ def pontuar(nota: dict, pedido: sc7.Pedido, peso_texto: int = 0) -> tuple[int, l
         porque.append("Nº citado como “pedido” (rótulo fraco: pode ser o pedido do fornecedor)")
 
     raiz = _raiz(nota.get(CNPJ_EMIT))
-    tem_cnpj = bool(raiz and raiz in pedido.fornecedores)
-    if tem_cnpj:
+    if raiz and raiz in pedido.fornecedores:
         pontos += PESO_CNPJ
         porque.append("Fornecedor confere (raiz do CNPJ = cód. do fornecedor no PC)")
-
-    # ⚠ O NOME entra SEMPRE, tenha o CNPJ batido ou nao (03/09/2026). Com o CNPJ
-    # batendo ele e so confirmacao no Criterio; sem o CNPJ, e a unica coisa que
-    # liga a nota ao pedido -- e e o cruzamento que o usuario pediu. ⚠ O nome
-    # DIVERGIR nao tira ponto nenhum: medido, em 40 notas o CNPJ bate e o nome
-    # nao ("ALELO S.A." x "ALELO INSTITUICAO DE PAGAMENTO SA"), e a nota estava
-    # certa nas 40.
-    if _mesmo_fornecedor_por_nome(nota, pedido):
-        pontos += PESO_NOME
-        porque.append("Razão social do emitente = razão social do fornecedor do PC"
-                      if tem_cnpj else
-                      "Fornecedor confere pela RAZÃO SOCIAL (o CNPJ do emitente "
-                      "não é o código do fornecedor no PC)")
 
     valor = nota.get(VLR_SEFAZ)
     if valor and pedido.vlr and abs(valor - pedido.vlr) < CENTAVO:
@@ -372,30 +317,21 @@ def pontuar(nota: dict, pedido: sc7.Pedido, peso_texto: int = 0) -> tuple[int, l
 # "confira se e um destes 178" nao e uma pista.
 MAX_ENCERRADOS_CITADOS = 3
 
-# Como as possibilidades se separam dentro da celula `Numero PC`. ⚠ E o MESMO
-# " · " com que o painel junta distintos em toda coluna (sc7.JUNTA), e por isso
-# a busca com dropdown do navegador ja sabe quebrar a celula em varios valores.
-JUNTA_POSSIVEIS = " · "
-
 
 def _encerrados_parecidos(nota: dict, encerrados: dict[str, sc7.Pedido],
-                          por_fornecedor_enc: dict[str, list[str]],
-                          por_nome_enc: dict[str, list[str]] | None = None) -> list[str]:
+                          por_fornecedor_enc: dict[str, list[str]]) -> list[str]:
     """Pedidos FECHADOS do mesmo fornecedor cujo valor bate com a nota.
 
-    ⚠ Mesma barra da busca dos abertos (fornecedor + valor), e pelo mesmo
-    motivo: sem o valor sobra "mesmo fornecedor + emissao proxima", que 37% dos
-    pedidos ERRADOS do mesmo fornecedor tambem tem. Isto aqui nao escolhe pedido
-    nenhum -- so diz "olhe ali antes de dar por sem pedido".
-
-    03/09/2026: "do mesmo fornecedor" passou a incluir o casamento pela RAZAO
-    SOCIAL, como no resto da aba. Ver `chaves_do_fornecedor`.
+    ⚠ Mesma barra da busca dos abertos (`PESO_CNPJ + PESO_VALOR_ITEM`), e pelo
+    mesmo motivo: sem o valor sobra "mesmo fornecedor + emissao proxima", que 37%
+    dos pedidos ERRADOS do mesmo fornecedor tambem tem. Isto aqui nao escolhe
+    pedido nenhum -- so diz "olhe ali antes de dar por sem pedido".
     """
+    raiz = _raiz(nota.get(CNPJ_EMIT))
     achados = []
-    for chave in chaves_do_fornecedor(nota, encerrados, por_fornecedor_enc,
-                                      por_nome_enc or {}):
+    for chave in por_fornecedor_enc.get(raiz, []):
         pontos, _porque = pontuar(nota, encerrados[chave])
-        if (pontos & FORNECEDOR_OK) and (pontos & VALOR_OK):
+        if pontos >= PESO_CNPJ + PESO_VALOR_ITEM:
             achados.append(chave)
     # do mais proximo em emissao para o mais distante: se so um pedido couber no
     # texto, que seja o mais provavel
@@ -410,47 +346,6 @@ def _por_fornecedor(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
         for raiz in pedido.fornecedores:
             indice.setdefault(raiz, []).append(chave)
     return indice
-
-
-def _por_nome(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
-    """{âncora da razão social: CHAVES dos pedidos daquele fornecedor}.
-
-    A segunda porta para achar os pedidos de um fornecedor (03/09/2026). ⚠ E
-    indexado pela ANCORA e nao pelo nome inteiro justamente para a contencao de
-    `sc7.mesmo_nome` ter o que comparar -- o dicionario devolve os candidatos, e
-    quem decide se e o mesmo fornecedor e ela. Ver sc7.ancora_nome.
-    """
-    indice: dict[str, list[str]] = {}
-    for chave, pedido in pedidos.items():
-        for nome in pedido.nomes:
-            indice.setdefault(sc7.ancora_nome(nome), []).append(chave)
-    return indice
-
-
-def chaves_do_fornecedor(nota: dict, pedidos: dict[str, sc7.Pedido],
-                         por_fornecedor: dict[str, list[str]],
-                         por_nome: dict[str, list[str]]) -> list[str]:
-    """TODOS os pedidos deste fornecedor: pelo CNPJ e pela RAZAO SOCIAL.
-
-    E o unico lugar que responde "quais pedidos sao deste fornecedor?" -- a
-    busca 1:1, a analise agrupada, a pista dos encerrados e a lista de
-    possibilidades chamam esta funcao, e nao o indice cru.
-
-    Ordem: primeiro os do CNPJ (a identidade mais dura), depois os que so o nome
-    trouxe. Sem repetir.
-    """
-    chaves = list(por_fornecedor.get(_raiz(nota.get(CNPJ_EMIT)), []))
-    nome = _nome_nota(nota)
-    if not nome:
-        return chaves
-    vistos = set(chaves)
-    for chave in por_nome.get(sc7.ancora_nome(nome), []):
-        if chave in vistos:
-            continue
-        if any(sc7.mesmo_nome(nome, n) for n in pedidos[chave].nomes):
-            chaves.append(chave)
-            vistos.add(chave)
-    return chaves
 
 
 def _por_numero(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
@@ -493,9 +388,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
              encerrados: dict[str, sc7.Pedido] | None = None,
              por_fornecedor_enc: dict[str, list[str]] | None = None,
              por_numero: dict[str, list[str]] | None = None,
-             por_numero_enc: dict[str, list[str]] | None = None,
-             por_nome: dict[str, list[str]] | None = None,
-             por_nome_enc: dict[str, list[str]] | None = None) -> dict:
+             por_numero_enc: dict[str, list[str]] | None = None) -> dict:
     """O pedido desta nota: quem e, com que forca e por que.
 
     Duas frentes, nesta ordem -- o texto manda, a busca so entra quando o texto
@@ -524,8 +417,6 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     por_fornecedor_enc = por_fornecedor_enc or {}
     por_numero = por_numero or {}
     por_numero_enc = por_numero_enc or {}
-    por_nome = por_nome or {}
-    por_nome_enc = por_nome_enc or {}
     achados = citados(nota.get(INFO), teto)
 
     # ⚠ UM NUMERO CITADO NAO APONTA UM PEDIDO: aponta um POR FILIAL (o 001522
@@ -557,20 +448,18 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     # mesmo palpite que a busca ja recusa.
     fechados_fortes = [encerrados[c] for n, _peso in achados
                        for c in por_numero_enc.get(n, ())
-                       if pontuar(nota, encerrados[c])[0] & FORNECEDOR_OK]
+                       if pontuar(nota, encerrados[c])[0] & PESO_CNPJ]
 
     # --- 2) sem numero util no texto: procurar pelo fornecedor + valor
     buscados = []
     if not avaliados:
-        # ⚠ "os pedidos deste fornecedor" passou a ser CNPJ **ou** RAZAO SOCIAL
-        # em 03/09/2026 -- ver `chaves_do_fornecedor`. E a mesma busca de
-        # sempre; o que mudou foi a porta de entrada.
-        for chave in chaves_do_fornecedor(nota, pedidos, por_fornecedor, por_nome):
+        raiz = _raiz(nota.get(CNPJ_EMIT))
+        for chave in por_fornecedor.get(raiz, []):
             pontos, porque = pontuar(nota, pedidos[chave])
             # ⚠ A BARRA E O VALOR. Sem ele sobra "mesmo fornecedor + emissao
             # proxima", que 37% dos pedidos ERRADOS do mesmo fornecedor tambem
             # tem -- viraria um palpite com cara de resposta.
-            if (pontos & FORNECEDOR_OK) and (pontos & VALOR_OK):
+            if pontos >= PESO_CNPJ + PESO_VALOR_ITEM:
                 buscados.append((pontos, porque, pedidos[chave]))
         avaliados = buscados
 
@@ -601,8 +490,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         # Nada citado e nada aberto casou. Antes de dizer "nenhum pedido deste
         # fornecedor bate com o valor dela", conferir se algum FECHADO batia:
         # senao a frase e falsa. Ver o item 2 da docstring.
-        parecidos = _encerrados_parecidos(nota, encerrados, por_fornecedor_enc,
-                                          por_nome_enc)
+        parecidos = _encerrados_parecidos(nota, encerrados, por_fornecedor_enc)
         if parecidos:
             return {
                 SITUACAO: SEM,
@@ -628,12 +516,8 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
     # Os pesos sao bits distintos de proposito: da para perguntar "tem valor?"
     # sem refazer a comparacao e sem depender da ordem em que foram somados.
     tem_texto = bool(melhor_pontos & (PESO_TEXTO_FORTE | PESO_TEXTO_FRACO))
-    # ⚠ "o fornecedor confere" agora tem duas respostas (CNPJ ou razao social,
-    # 03/09/2026). O nome sozinho sustenta o veredito pelo mesmo motivo que o
-    # CNPJ: os dois dizem DE QUEM e o pedido, e nenhum diz QUAL pedido e -- quem
-    # discrimina continua sendo o valor.
-    tem_cnpj = bool(melhor_pontos & FORNECEDOR_OK)
-    tem_valor = bool(melhor_pontos & VALOR_OK)
+    tem_cnpj = bool(melhor_pontos & PESO_CNPJ)
+    tem_valor = bool(melhor_pontos & (PESO_VALOR | PESO_VALOR_ITEM))
 
     # ⚠ O NUMERO CITADO PODE ESTAR ABERTO EM OUTRA EMPRESA.
     # Desde que a chave virou filial+numero (31/08/2026), "o 002672 esta aberto"
@@ -786,46 +670,24 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
     """
     contagem = {AGRUPADO_NF: 0, AGRUPADO_PC: 0}
 
-    # ⚠ O BALDE DO FORNECEDOR TEM DUAS CHAVES POSSIVEIS desde 03/09/2026: a
-    # raiz do CNPJ (a de sempre) e a RAZAO SOCIAL normalizada. O pedido entra nas
-    # duas -- ele sabe as duas coisas --, e a nota escolhe a do CNPJ quando ela
-    # tem pedido e cai na do nome quando nao tem. Sem isso, o fornecedor achado
-    # so pelo nome teria pedido no 1:1 e sumiria da soma, que e justamente onde a
-    # nota sem citacao mais precisa dele.
-    por_forn_pedidos: dict[tuple, list[sc7.Pedido]] = {}
-    nomes_por_ancora: dict[str, list[str]] = {}
-    for chave, pedido in pedidos.items():
-        if chave in pcs_usados or not pedido.vlr:
-            continue
-        for raiz in pedido.fornecedores:
-            por_forn_pedidos.setdefault(("cnpj", raiz), []).append(pedido)
-        for nome in pedido.nomes:
-            por_forn_pedidos.setdefault(("nome", nome), []).append(pedido)
-            ancora = nomes_por_ancora.setdefault(sc7.ancora_nome(nome), [])
-            if nome not in ancora:
-                ancora.append(nome)
-
-    def balde_da_nota(linha: dict) -> tuple:
-        raiz = _raiz(linha.get(CNPJ_EMIT))
-        if por_forn_pedidos.get(("cnpj", raiz)):
-            return ("cnpj", raiz)
-        nome = _nome_nota(linha)
-        for candidato in nomes_por_ancora.get(sc7.ancora_nome(nome), []):
-            if sc7.mesmo_nome(nome, candidato):
-                return ("nome", candidato)
-        return ("cnpj", raiz)
-
-    # baldes por fornecedor (CNPJ do emitente da nota ou, na falta dele, nome)
-    por_forn_notas: dict[tuple, list[dict]] = {}
+    # baldes por fornecedor (raiz do CNPJ do emitente da nota)
+    por_forn_notas: dict[str, list[dict]] = {}
     for linha in linhas:
         if linha.get(SITUACAO) not in (SEM, FORA):
             continue
         if not linha.get(VLR_SEFAZ):
             continue
-        por_forn_notas.setdefault(balde_da_nota(linha), []).append(linha)
+        por_forn_notas.setdefault(_raiz(linha.get(CNPJ_EMIT)), []).append(linha)
 
-    for _balde, notas in por_forn_notas.items():
-        peds = por_forn_pedidos.get(_balde, [])
+    por_forn_pedidos: dict[str, list[sc7.Pedido]] = {}
+    for chave, pedido in pedidos.items():
+        if chave in pcs_usados or not pedido.vlr:
+            continue
+        for raiz in pedido.fornecedores:
+            por_forn_pedidos.setdefault(raiz, []).append(pedido)
+
+    for raiz, notas in por_forn_notas.items():
+        peds = por_forn_pedidos.get(raiz, [])
         if not peds:
             continue
         pendentes = {id(l): l for l in notas}   # notas ainda nao agrupadas
@@ -897,83 +759,6 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
     return contagem
 
 
-# ------------------------------------------------------------ possibilidades
-# Quantos pedidos do fornecedor cabem na coluna `Numero PC` de uma nota que
-# ficou sem pedido. ⚠ Medido na base de 03/09/2026: o pior caso amarrado a uma
-# nota sem pedido tem 16 candidatos (KOMATSU) e 122 das 395 notas tem UM so. O
-# teto e maior que o maior caso de proposito -- hoje nao esconde nada --, e
-# quando cortar o Criterio diz quantos ficaram de fora. Corte calado seria pior
-# que a coluna vazia de antes: pareceria a lista inteira.
-MAX_POSSIVEIS = 20
-
-
-def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
-                   por_fornecedor: dict[str, list[str]],
-                   por_nome: dict[str, list[str]]) -> int:
-    """Nas notas SEM pedido amarrado, lista em `Numero PC` os PCs do fornecedor.
-
-    03/09/2026, pedido do usuario: *"traga as possibilidades dos pedidos de
-    compra daquele emitente ou prestador para aquela NF, insira as possibilidades
-    na coluna Numero PC, para poder mapear e analisar"*.
-
-    ⚠ ISTO NAO E UM VEREDITO E NAO ESCOLHE PEDIDO NENHUM. Sao os pedidos EM
-    ABERTO daquele fornecedor que a analise JA RECUSOU: por construcao nenhum
-    deles tem o valor da nota, porque o que tivesse ja teria virado PEDIDO
-    PROVAVEL na busca do `escolher()`. E material de conferencia -- ate 03/09 a
-    coluna nascia vazia e a pessoa tinha de abrir a SC7 para descobrir se aquele
-    fornecedor sequer tinha pedido em aberto.
-
-    ⚠ TRES COISAS QUE ESTA FUNCAO NAO PODE FAZER, e o motivo de cada uma:
-      1. **nao mexe na `Situação`** -- SEM PEDIDO continua SEM PEDIDO. O selo e a
-         ordem da fila de trabalho saem dela, e "achei 3 pedidos do fornecedor"
-         nao e o mesmo que "achei o pedido";
-      2. **nao preenche o resto do bloco PEDIDO** (`Vlr Pedido`, `Fornecedor do
-         PC`, `Filial do PC`, datas). Aqueles campos descrevem UM pedido; com
-         varios candidatos eles ou mentem ou viram lista. ⚠ `Filial do PC` em
-         especial e barra de filtro no painel, e so vira barra com 2 a 8 valores
-         distintos: enchendo-a de combinacoes ("004001 · 043001") a barra some da
-         tela sem erro nenhum aparecer;
-      3. **nao conta no `com_pedido`** do resumo -- a marca `_possiveis` fica na
-         linha so para o resumo saber separar. A chave comeca com "_" porque a
-         linha vira tupla pelo CABECALHO: campo fora dele nao chega na tela nem
-         no .xlsx.
-
-    ⚠ O rotulo levado para a coluna tem a FILIAL ("043001/003754") e nao so o
-    numero: 2.541 dos numeros da SC7 existem em mais de uma empresa, e "confira o
-    003754" manda procurar em tres. Ver sc7.chave_pedido().
-    """
-    marcadas = 0
-    for linha in linhas:
-        if linha.get(PC):
-            continue
-        chaves = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome)
-        if not chaves:
-            continue
-        # do mais provavel para o menos: o que a pontuacao aproxima primeiro
-        # (valor de um item, nome, emissao dentro da janela) e, empatando, o
-        # pedido emitido mais perto da nota. E so ORDEM -- nenhum foi escolhido.
-        ordenadas = sorted(
-            chaves,
-            key=lambda c: (-pontuar(linha, pedidos[c])[0],
-                           _distancia(linha, pedidos[c]),
-                           pedidos[c].rotulo))
-        mostrados = [pedidos[c] for c in ordenadas[:MAX_POSSIVEIS]]
-        linha[PC] = JUNTA_POSSIVEIS.join(p.rotulo for p in mostrados)
-        linha["_possiveis"] = len(mostrados)
-        detalhe = JUNTA_POSSIVEIS.join(f"{p.rotulo} ({_moeda(p.vlr)})"
-                                       for p in mostrados)
-        sobra = len(ordenadas) - len(mostrados)
-        criterio = linha.get(CRITERIO) or ""
-        linha[CRITERIO] = (
-            f"{criterio}  ⚠ POSSIBILIDADES: este fornecedor tem "
-            f"{len(ordenadas)} pedido(s) EM ABERTO na SC7 e nenhum bate com o "
-            f"valor da nota. Estão listados em “Numero PC” só para conferência "
-            f"— o pedido NÃO foi escolhido: {detalhe}"
-            + (f" — e mais {sobra} que não couberam na coluna" if sobra else ""))
-        marcadas += 1
-    return marcadas
-
-
 # ---------------------------------------------------------------------- saida
 def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
            solicitantes: dict[str, list[str]], teto: int,
@@ -994,10 +779,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     # vira a LISTA de candidatos, um por filial. Ver `_por_numero`.
     por_numero = _por_numero(pedidos)
     por_numero_enc = _por_numero(encerrados or {})
-    # {âncora da razão social: chaves} -- a segunda porta para os pedidos de um
-    # fornecedor (03/09/2026). Ver `_por_nome` e `chaves_do_fornecedor`.
-    por_nome = _por_nome(pedidos)
-    por_nome_enc = _por_nome(encerrados or {})
 
     # pedidos que o 1:1 ja atribuiu -- a analise agrupada nao os reaproveita
     pcs_usados: set = set()
@@ -1039,8 +820,7 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             INFO: texto_por_nota.get(nota.get(csf1.CHAVE_NFE), ""),
         }
         veredito = escolher(linha, pedidos, por_fornecedor, teto, encerrados,
-                            por_fornecedor_enc, por_numero, por_numero_enc,
-                            por_nome, por_nome_enc)
+                            por_fornecedor_enc, por_numero, por_numero_enc)
         linha[SITUACAO] = veredito[SITUACAO]
         linha[CRITERIO] = veredito[CRITERIO]
 
@@ -1062,13 +842,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     # -- varias notas para um pedido, ou varios pedidos para uma nota. Roda depois
     # de tudo e so mexe nas linhas SEM PEDIDO / FORA DA BASE. Ver `analise_agrupada`.
     analise_agrupada(saida, pedidos, solicitantes, pcs_usados)
-
-    # DEPOIS DE TUDO: o que continua sem pedido ganha, na coluna `Numero PC`, a
-    # lista dos pedidos EM ABERTO daquele fornecedor -- material de conferência,
-    # não veredito. ⚠ Roda por ÚLTIMO de propósito: rodando antes, a análise
-    # agrupada veria a coluna preenchida e não poderia mais casar por soma
-    # (ela e a busca 1:1 escrevem PEDIDO DE VERDADE ali). Ver `possibilidades`.
-    possibilidades(saida, pedidos, por_fornecedor, por_nome)
     return saida
 
 
@@ -1117,13 +890,7 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
     resumo = {
         **sefaz.contar_alertas(cruzamento.alertas),
         "notas": len(linhas),
-        # ⚠ `and not _possiveis`: desde 03/09/2026 a coluna `Numero PC` também
-        # carrega os pedidos CANDIDATOS de uma nota sem pedido. Contando a
-        # coluna crua, o painel passaria a dizer que 464 notas têm pedido
-        # quando 69 têm. Ver `possibilidades`.
-        "com_pedido": sum(1 for l in linhas
-                          if l.get(PC) and not l.get("_possiveis")),
-        "com_possiveis": sum(1 for l in linhas if l.get("_possiveis")),
+        "com_pedido": sum(1 for l in linhas if l.get(PC)),
         "confirmados": contagem.get(CONFIRMADO, 0),
         "provaveis": contagem.get(PROVAVEL, 0),
         "conferir": contagem.get(CONFERIR, 0),

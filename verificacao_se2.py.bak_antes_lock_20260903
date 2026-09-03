@@ -40,9 +40,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
-import shutil
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -255,19 +253,7 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
             return Conferencia(arquivo, guardado["situacoes"],
                                guardado.get("tipos"), guardado.get("notas"))
 
-    # ⚠ A SE2 vive ABERTA NO EXCEL enquanto se trabalha. Sem esta copia o
-    # `load_workbook` levanta PermissionError, a conferência inteira cai e o
-    # painel volta a mostrar título que já tem boleto -- e o gerador ainda
-    # parava no resumo. Mesmo jeito do `sefaz._abrir()`, que faz isso desde
-    # sempre com a SEFAZ.xlsx.
-    temporaria = None
-    try:
-        wb = load_workbook(arquivo, read_only=True, data_only=True)
-    except (PermissionError, OSError):
-        temporaria = tempfile.mkdtemp(prefix="se2_")
-        copia = Path(temporaria) / arquivo.name
-        shutil.copy2(arquivo, copia)
-        wb = load_workbook(copia, read_only=True, data_only=True)
+    wb = load_workbook(arquivo, read_only=True, data_only=True)
     try:
         ws = wb[ABA] if ABA in wb.sheetnames else wb[wb.sheetnames[0]]
         linhas = ws.iter_rows(values_only=True)
@@ -329,8 +315,6 @@ def ler(caminho: Path | None = None, usar_cache: bool = True) -> Conferencia | N
             }
     finally:
         wb.close()
-        if temporaria:
-            shutil.rmtree(temporaria, ignore_errors=True)
 
     # do mais usado para o menos: e assim que a lista vira menu no painel
     tipos = [t for t, _ in quantos_tipos.most_common()]

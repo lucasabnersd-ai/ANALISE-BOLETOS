@@ -526,12 +526,7 @@ COMPACTA_PEDIDOS = [
     # "qual pedido e o quanto confiar" -- e continua no bloco PEDIDO, junto do
     # resto do pedido. Duas colunas com a mesma `chave` sao inofensivas: a
     # celula e a mesma e ordenar por qualquer uma das duas ordena igual.
-    # ⚠ 03/09/2026: as duas ficaram mais largas porque a celula deixou de ter
-    # sempre UM numero -- na nota sem pedido ela lista os PCs em aberto daquele
-    # fornecedor (ate 20). A largura e em PIXEL desde 13/08 e a tabela e
-    # `max-content`, entao alargar aqui NAO espreme as outras colunas: so
-    # empurra a rolagem horizontal. Ver pedidos_sefaz.possibilidades().
-    ("Numero PC",         "",       "",             8),
+    ("Numero PC",         "",       "",             5),
     # ⚠ 15 pontos (≈187px) porque o selo mais longo desta coluna passou a ser
     # "PENDENTE A MAIS DE 3 DIAS": `.selo` e nowrap + ellipsis, entao com os 6,5
     # de antes ele sairia cortado ("PENDENTE A M…") sem erro nenhum aparecer.
@@ -576,7 +571,7 @@ COMPACTA_PEDIDOS = [
     # Logistica). Sem esta coluna, "Numero PC 001522" na tela nao diz onde
     # conferir. Ver sc7.chave_pedido().
     ("Filial do PC",      "boleto", "PEDIDO",       4.5),
-    ("Numero PC",         "boleto", "PEDIDO",      12),
+    ("Numero PC",         "boleto", "PEDIDO",       5),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
@@ -628,13 +623,7 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Vlr Duplicata": "Valor da 1ª Duplicata",
     "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
     "Filial do PC": "Filial dona do Pedido (SC7) — o nº do pedido se repete entre filiais",
-    # ⚠ O rótulo diz as DUAS coisas porque a célula tem dois sentidos desde
-    # 03/09/2026: quando a nota tem pedido, é O pedido; quando não tem, são os
-    # PCs EM ABERTO daquele fornecedor, listados só para conferência (nada foi
-    # escolhido -- o resto do bloco PEDIDO fica vazio, e é assim que se
-    # distingue um caso do outro na tela). Este texto é o título do quadro que
-    # abre no clique da célula E o cabeçalho da coluna no .xlsx.
-    "Numero PC": "Nº do Pedido de Compra (SC7) — ou os PCs possíveis do fornecedor",
+    "Numero PC": "Nº do Pedido de Compra (SC7)",
     "Numero da SC": "Nº da Solicitação de Compra (SC7)",
     "Solicitante": "Solicitante da SC (SC1)",
     "Comprador": "Comprador do Pedido (SC7)",
@@ -2232,12 +2221,7 @@ def main() -> int:
               f" | com alerta: {aba['com_alerta']} | boleto difere: {aba['divergentes']}"
               f" | NFs com drill: {len(aba['parcelas'])}")
         conferido = aba.get("se2")
-        # ⚠ `.get("fora")` e nao `["fora"]`: quando a SE2 nao pode ser lida o
-        # `meta_se2` devolve so o mapa de tipos, DE PROPOSITO (o navegador so
-        # corta linha quando `fora` existe). Com o colchete, o resumo estourava
-        # com KeyError depois de o painel inteiro estar montado -- a geracao
-        # morria no ultimo print e nada era publicado.
-        if conferido and conferido.get("fora") is not None:
+        if conferido:
             motivos = [m["m"] for m in conferido["fora"].values()]
             print(f"           SE2: {conferido['abertos']} em aberto sem boleto (ficam)"
                   f" | {motivos.count('BOLETO')} ja com boleto lancado"
