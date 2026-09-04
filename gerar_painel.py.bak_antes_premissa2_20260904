@@ -28,7 +28,6 @@ from openpyxl import load_workbook
 import cruzamento_classificacao
 import cruzamento_sefaz_sf1
 import manifestacao
-import premissa2
 import pedidos_sefaz
 import pendentes_itau
 import planilha_excel_js
@@ -1745,8 +1744,7 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
           base_sf1: Path | None = None, base_se2: Path | None = None,
           base_sefaz: Path | None = None, base_sc7: Path | None = None,
           base_sc1: Path | None = None, base_empresas: Path | None = None,
-          base_manifestacao: Path | None = None,
-          base_premissa2: Path | None = None) -> dict:
+          base_manifestacao: Path | None = None) -> dict:
     if not base.exists():
         raise FileNotFoundError(f"Base nao encontrada: {base}")
     if not MODELO.exists():
@@ -1920,29 +1918,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
                   file=sys.stderr)
         print(f"           historico: {sefaz_hist['conhecidas']} notas conhecidas "
               f"-> {HISTORICO_SEFAZ.name}")
-        # 04/09/2026. PREMISSA 2: as notas de MESMA PREMISSA - ORGANIZADA.xlsx que
-        # a SEFAZ.xlsx NAO tem entram como LINHAS, com Origem "PREMISSA 2", e
-        # seguem o mesmo caminho das outras (SF1, pedidos). Entra AQUI, e nao
-        # antes: (1) DEPOIS do `ler_com_historico`, porque estas linhas nao
-        # podem ir para o sefaz_historico.json -- a SEFAZ e acumulativa e o
-        # historico existe para acusar nota que SUMIU dela; nota que nunca
-        # esteve la viraria "removida" na rodada em que o arquivo mudasse;
-        # (2) DEPOIS do `manifestacao.anotar`, porque a manifestacao destas
-        # linhas vem do proprio arquivo e o anotar as marcaria "NAO ENCONTRADA"
-        # (a MESMA PREMISSA.xlsx, csv, pode nao ter as mesmas notas). Falhar
-        # aqui nao derruba o painel: avisa e segue sem elas.
-        caminho_p2 = base_premissa2 or premissa2.BASE_PADRAO
-        try:
-            novas_p2, p2_resumo = premissa2.linhas_novas(linhas_sefaz, empresas_bioflor,
-                                                         caminho_p2)
-            linhas_sefaz.extend(novas_p2)
-            print(f"           PREMISSA 2: {p2_resumo['linhas']} linhas no arquivo | "
-                  f"{p2_resumo['do_grupo']} do grupo ({p2_resumo['terceiros']} de terceiros fora) | "
-                  f"{p2_resumo['ja_na_sefaz']} ja na SEFAZ | "
-                  f"{p2_resumo['novas']} NOVAS entram no painel")
-        except Exception as exc:  # noqa: BLE001 - arquivo fora do ar/renomeado/mudado
-            print(f"AVISO: PREMISSA 2 nao entrou no painel:\n       {exc}",
-                  file=sys.stderr)
 
         nao_lancadas = None
         if caminho_sf1.exists():
@@ -2197,17 +2172,13 @@ def main() -> int:
                         default=manifestacao.BASE_PADRAO,
                         help="MESMA PREMISSA.xlsx (manifestacao do destinatario; "
                              "so preenche a coluna, nao acrescenta nota)")
-    parser.add_argument("--base-premissa2", type=Path, default=premissa2.BASE_PADRAO,
-                        help="MESMA PREMISSA - ORGANIZADA.xlsx (notas que a SEFAZ.xlsx "
-                             "nao tem entram no painel como Origem PREMISSA 2)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 
     try:
         dados = gerar(args.base, args.saida, args.base_pendentes, args.base_sf1,
                       args.base_se2, args.base_sefaz, args.base_sc7,
-                      args.base_sc1, args.base_empresas, args.base_manifestacao,
-                      args.base_premissa2)
+                      args.base_sc1, args.base_empresas, args.base_manifestacao)
     except Exception as exc:  # noqa: BLE001 - mensagem amigavel no .cmd
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1

@@ -113,10 +113,6 @@ rem coluna da aba da SEFAZ -- nao acrescenta nota nenhuma ao painel, e de
 rem proposito: 643 das 1.380 linhas do arquivo sao notas de terceiros para a
 rem BRACELL, em que a S&D so aparece como transportadora. Ver manifestacao.py.
 call :usar_base --base-manifestacao "%ANALISES%\MESMA PREMISSA.xlsx"
-rem 04/09/2026. PREMISSA 2: a versao ORGANIZADA do mesmo arquivo. Ao contrario
-rem da de cima, esta ACRESCENTA nota ao painel -- as do grupo que a SEFAZ.xlsx
-rem nao tem entram com Origem "PREMISSA 2" e passam pela SF1 e pelos pedidos.
-call :usar_base --base-premissa2 "%ANALISES%\MESMA PREMISSA - ORGANIZADA.xlsx"
 rem As tres da aba NF x Pedido de Compra. Ate 31/08/2026 elas nao tinham
 rem argumento: o caminho vivia dentro do sc7.py/sefaz.py e so dava para apontar
 rem outra pasta editando o .py. Agora seguem a mesma regra das outras -- o que

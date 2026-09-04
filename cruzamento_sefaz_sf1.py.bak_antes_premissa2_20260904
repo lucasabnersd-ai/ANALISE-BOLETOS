@@ -31,7 +31,6 @@ import shutil
 from pathlib import Path
 
 import cruzamento_classificacao as cc
-import sc7
 import sefaz
 
 PREFIXO = "SFZ1:"
@@ -103,13 +102,6 @@ PESO_CHAVE = 32      # chave NF-e de 44 digitos identica: nao ha o que discutir
 PESO_CNPJ = 8        # raiz do CNPJ do emitente = codigo do fornecedor na SF1
 PESO_VALOR = 4
 PESO_EMISSAO = 2
-# 04/09/2026, pedido do usuario: "use o nome do emissor pra cruzar". MEDIDO
-# antes, nos 319 titulos cuja chave de 44 bate com uma nota: o CNPJ confere
-# em 319, o nome em 249, e o nome NUNCA confere onde o CNPJ nao confere. E
-# corroboracao, nao descoberta -- por isso vale 1 e entra no Criterio, mas
-# nao muda sozinho um veredito. Onde ele diverge (70), e abreviacao ou corte:
-# "BORRACHARIA DO JOAQUIM COM PNEUS L" x "...COMERCIO DE PNEUS LTDA".
-PESO_NOME = 1
 
 
 def _raiz(cnpj) -> str:
@@ -261,39 +253,7 @@ def _nota_do_par(nota: dict, titulo: dict) -> tuple[int, list[str]]:
         pontos += PESO_EMISSAO
         porque.append("Emissão no mesmo dia")
 
-    if _mesmo_emissor(nota.get(NOME_EMIT), titulo.get(RAZAO)):
-        pontos += PESO_NOME
-        porque.append("Nome do emissor = razão social do fornecedor na SF1")
-
     return pontos, porque
-
-
-def _mesmo_emissor(nome_nota, razao_sf1) -> bool:
-    """O emissor da nota e o fornecedor do titulo tem o mesmo nome?
-
-    Normaliza os dois com `sc7.normalizar_nome` (acento, pontuacao, sufixo) e
-    aceita, alem da igualdade/contencao de `sc7.mesmo_nome`, o caso em que um
-    lado e PREFIXO do outro: a SEFAZ corta o nome do emitente em ~34 caracteres
-    ("MUNDIAL ALTERNADORES IMPORTACAO E ") e a SF1 traz inteiro.
-
-    ⚠ PREFIXO POR PALAVRA INTEIRA, e com pelo menos DUAS. Testado antes de
-    entrar: `longo.startswith(curto)` casava "BORRACHA" com "BORRACHARIA X" -- e
-    um ponto de nome basta para virar CONFERIR uma nota que so tinha homonimo
-    de numero (`if not pontos`). A ultima palavra do lado curto pode estar
-    cortada pela metade (e o corte da SEFAZ), as anteriores tem de ser iguais.
-    Abreviacao ("COM" x "COMERCIO") NAO casa, de proposito: e o CNPJ que decide.
-    """
-    a, b = sc7.normalizar_nome(nome_nota), sc7.normalizar_nome(razao_sf1)
-    if not a or not b:
-        return False
-    if sc7.mesmo_nome(a, b):
-        return True
-    curto, longo = (a.split(" "), b.split(" ")) if len(a) <= len(b) else (b.split(" "), a.split(" "))
-    if len(curto) < 2 or len(curto) > len(longo):
-        return False
-    if curto[:-1] != longo[:len(curto) - 1]:
-        return False
-    return longo[len(curto) - 1].startswith(curto[-1])
 
 
 def cruzar(notas: list[dict], titulos: list[dict]) -> list[dict]:
