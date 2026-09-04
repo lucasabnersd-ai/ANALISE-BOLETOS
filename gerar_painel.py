@@ -1936,7 +1936,8 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             novas_p2, p2_resumo = premissa2.linhas_novas(linhas_sefaz, empresas_bioflor,
                                                          caminho_p2)
             linhas_sefaz.extend(novas_p2)
-            print(f"           PREMISSA 2: {p2_resumo['linhas']} linhas no arquivo | "
+            print(f"           PREMISSA 2 ({p2_resumo['nome']}): "
+                  f"{p2_resumo['linhas']} linhas no arquivo | "
                   f"{p2_resumo['do_grupo']} do grupo ({p2_resumo['terceiros']} de terceiros fora) | "
                   f"{p2_resumo['ja_na_sefaz']} ja na SEFAZ | "
                   f"{p2_resumo['novas']} NOVAS entram no painel")
