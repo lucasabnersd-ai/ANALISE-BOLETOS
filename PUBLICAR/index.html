@@ -635,6 +635,29 @@ td.acao{padding:3px 6px}
   padding:3px 7px; cursor:pointer; text-align:left}
 .botao-copia code{flex:1; font-family:"Cascadia Mono", Consolas, monospace; font-size:10px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--txt)}
+/* ---------- célula de copiar com LISTA (03/09/2026, achado por medição) ------
+   Ele: "mova a coluna Numero PC para onde ela estava antes de você mover ela"
+   -- e a largura no `<colgroup>` JÁ estava de volta em 63px. A coluna
+   renderizava **1528px**.
+
+   ⚠ `table-layout:fixed` NÃO basta: com `width:max-content` na tabela (posto em
+   13/08 para a grade transbordar em vez de espremer as colunas), a largura
+   declarada vira um MÍNIMO -- o conteúdo ainda estica a coluna. Dá para ver em
+   toda a grade (Chave NF-e: 44px declarados, 75px na tela); só não incomodava
+   porque nenhuma célula tinha texto longo e sem quebra. As possibilidades do
+   pedido têm 253 caracteres `nowrap`, e aí a coluna inteira foi atrás.
+
+   `width:0` zera o que esta célula pede para a largura da coluna; `min-width:100%`
+   a devolve ao tamanho da célula no momento do layout, quando a coluna já está
+   medida -- então o "…" volta a funcionar. Medido: `Numero PC` 1528 -> 121px,
+   a grade inteira 8.532 -> 5.626px, e NENHUMA outra coluna mudou (Chave NF-e,
+   Nº NF e Alerta ficaram iguais).
+
+   ⚠ O TEXTO NÃO SE PERDE: os 253 caracteres continuam no DOM e no `data-copiar`
+   -- o botão copia a lista inteira e o Ctrl+F do navegador ainda a encontra. O
+   corte é só visual, e o texto completo (com o valor de cada pedido) está no
+   quadro do Critério. */
+table.conferencia td.acao.lista .botao-copia code{width:0; min-width:100%}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
 .botao-copia:hover{border-color:var(--azul-2)}
 /* aviso de copiado: o botao inteiro fica verde por um instante */
@@ -1159,7 +1182,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609031718"></script>
+<script src="supa.js?v=202609040957"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2283,6 +2306,12 @@ function seloSE2(r){
         digitável: ${esc(r.se2.d)}. Confira se lançaram o boleto certo.">OUTRO</span>`;
 }
 
+/* O separador com que o gerador junta vários valores numa célula (`sc7.JUNTA`,
+   `pedidos_sefaz.JUNTA_POSSIVEIS`). Achar isto numa célula de copiar quer dizer
+   "aqui tem LISTA, não um valor" -- e lista não pode mandar na largura da
+   coluna (ver `td.acao.lista` no CSS). */
+const JUNTA_CELULA = " · ";
+
 function celulaCompacta(r, col){
   const zona = col.lado ? `z-${col.lado === "delta" ? "delta" : col.lado}` : "z-titulo";
 
@@ -2390,7 +2419,11 @@ function celulaCompacta(r, col){
         data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span class="rot">${esc(col.copiar)}</span></button></td>`;
     }
     // o proprio valor e o botao: clicou, copiou (numero do titulo, cod. do fornecedor)
-    return `<td class="acao ${zona}"><button class="botao-copia" type="button"
+    // ⚠ `lista`: célula com VÁRIOS valores não pode esticar a coluna (ver o CSS).
+    // Sai do VALOR e não do nome da coluna de propósito -- qualquer coluna de
+    // copiar que um dia junte valores já nasce comportada.
+    const lista = String(valor).includes(JUNTA_CELULA) ? "lista " : "";
+    return `<td class="acao ${lista}${zona}"><button class="botao-copia" type="button"
       data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
   if (col.papel === "status"){
