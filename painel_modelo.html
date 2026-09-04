@@ -667,17 +667,30 @@ td.acao{padding:3px 6px}
    porque nenhuma célula tinha texto longo e sem quebra. As possibilidades do
    pedido têm 253 caracteres `nowrap`, e aí a coluna inteira foi atrás.
 
-   `width:0` zera o que esta célula pede para a largura da coluna; `min-width:100%`
-   a devolve ao tamanho da célula no momento do layout, quando a coluna já está
-   medida -- então o "…" volta a funcionar. Medido: `Numero PC` 1528 -> 121px,
-   a grade inteira 8.532 -> 5.626px, e NENHUMA outra coluna mudou (Chave NF-e,
-   Nº NF e Alerta ficaram iguais).
+   São DUAS declarações, e cada uma resolve METADE do problema -- as duas
+   tentativas de fazer só uma delas estão medidas aqui para ninguém repetir:
+     `max-width:0` no **td**  ...... zera o que a célula pede para a largura da
+        coluna. É o truque canônico de ellipsis em tabela, e vai no `td` porque é
+        a CÉLULA que negocia a largura da coluna.
+     `min-width:0` no **code** .... deixa o item de flex encolher. ⚠ Aqui NÃO
+        serve o `width:0; min-width:100%` do truque de tabela: o `<code>` é item
+        de flex (`.botao-copia` é `display:flex`) e o `min-width:100%` o fazia
+        ocupar 100% da largura do botão, **empurrando o ⧉ para fora da caixa** --
+        foi o "está desformatado" de 04/09.
+   ⚠ E `min-width:0` SOZINHO não basta: sem o `max-width:0` no td a coluna voltou
+   a **965px** (medido) -- zerar o mínimo do item de flex não zera o que o
+   container flex pede para a tabela.
+   Medido com as duas: `Numero PC Prováveis` **965 -> 130px**, a grade 6.784 ->
+   5.592px, ⧉ dentro da caixa, "…" cortando -- e `Chave NF-e` (75px) e `Nº NF`
+   (121px) IDÊNTICAS. ⚠ Por isso o seletor é `.lista` e não `td.acao`: em todas
+   as células de copiar, o `Nº NF` cairia de 121 para 82px.
 
    ⚠ O TEXTO NÃO SE PERDE: os 253 caracteres continuam no DOM e no `data-copiar`
    -- o botão copia a lista inteira e o Ctrl+F do navegador ainda a encontra. O
    corte é só visual, e o texto completo (com o valor de cada pedido) está no
    quadro do Critério. */
-table.conferencia td.acao.lista .botao-copia code{width:0; min-width:100%}
+table.conferencia td.acao.lista{max-width:0}
+table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
 .botao-copia:hover{border-color:var(--azul-2)}
 /* aviso de copiado: o botao inteiro fica verde por um instante */
@@ -2597,9 +2610,18 @@ document.addEventListener("mouseout", e => {
   // ⚠ Quem fecha depois é o `mouseleave` do cartão, logo abaixo -- sem ele o
   // quadro ficaria aberto para sempre depois da primeira visita.
   if (e.relatedTarget && cartao.contains(e.relatedTarget)) return;
-  if (e.target.closest("[data-cartao]") || e.target.closest("[data-match]")
-      || e.target.closest("[data-prov]")
-      || e.target.closest("[data-trat]") || e.target.closest("[data-texto]")) fecharCartao();
+  const gatilho = e.target.closest("[data-cartao],[data-match],[data-prov],[data-trat],[data-texto]");
+  if (!gatilho) return;
+  /* ⚠ ANDAR DENTRO DO MESMO GATILHO NÃO É SAIR DELE (04/09/2026). A célula de
+     copiar tem TRÊS elementos aninhados -- `td > button > code` e o `span` do ⧉
+     --, e o mouse real cruza a fronteira entre eles o tempo todo. Cada travessia
+     emitia um `mouseout` que FECHAVA o quadro; o `mouseover` seguinte reabria, e
+     o resultado, com o mouse em movimento, era um quadro piscando que parecia
+     nunca abrir. Medido: entrar no `<code>` abria (true), mover para o ⧉ fechava
+     (false) e reabria (true). Vale para TODOS os quadros -- o selo, o alerta e a
+     tratativa também têm filhos. */
+  if (e.relatedTarget && gatilho.contains(e.relatedTarget)) return;
+  fecharCartao();
 });
 // ⚠ `passive`: este ouvinte roda em CAPTURA, então pega o scroll da grade também
 // -- em aba de 700 linhas é um `scroll` por quadro. Sem `passive` o navegador
