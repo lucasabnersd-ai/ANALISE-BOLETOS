@@ -56,7 +56,6 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-import sys
 from pathlib import Path
 
 import cruzamento_sefaz_sf1 as csf1
@@ -216,21 +215,11 @@ FOLGA_FAIXA = 100
 # para o PESO_NOME. Sao bits, entao o que importa e a ORDEM, e ela ficou
 # IDENTICA: texto forte > texto fraco > CNPJ > valor total > valor de item >
 # nome > emissao. Nenhum veredito de antes muda de lugar por causa da troca.
-PESO_TEXTO_FORTE = 256
-PESO_TEXTO_FRACO = 128
-PESO_CNPJ = 64
-PESO_VALOR = 32       # total do pedido = total da nota
-PESO_VALOR_ITEM = 16  # total da nota = valor de um item (entrega parcial)
-# ⚠ A EMPRESA DA NOTA (03/09/2026, ele: "quero que você associe os pedidos de
-# compra dentro das suas respectivas filiais"). Medido antes: dos 66 pedidos
-# já amarrados, **62 são da mesma filial da nota e 4 não** -- a empresa é a
-# regra, mas cruzar empresa existe. Por isso a filial é FILTRO onde não há
-# prova (a busca por fornecedor+valor e a lista de possibilidades) e só PESO
-# onde há (o número citado no texto da nota): filtrar também ali mataria um
-# PEDIDO CONFIRMADO em que a nota cita o número E o CNPJ do fornecedor bate.
-# Como peso, é ele que finalmente decide entre o mesmo número em 3 empresas
-# (o caso do 001522, ver sc7.py) -- até aqui isso saa do desempate por emissão.
-PESO_FILIAL = 8
+PESO_TEXTO_FORTE = 128
+PESO_TEXTO_FRACO = 64
+PESO_CNPJ = 32
+PESO_VALOR = 16       # total do pedido = total da nota
+PESO_VALOR_ITEM = 8   # total da nota = valor de um item (entrega parcial)
 # ⚠ O NOME DO FORNECEDOR (03/09/2026, pedido do usuario: "cruze os nomes de
 # emitente e razao social"). Entra ABAIXO do valor de proposito: e um sinal de
 # IDENTIDADE (que fornecedor e este), e nao de discriminacao (qual pedido dele e
@@ -309,14 +298,6 @@ def citados(texto: str, teto: int) -> list[tuple[str, int]]:
     return list(achados.items())
 
 
-# A empresa DA NOTA, resolvida pelo CNPJ do destinatário/tomador contra a
-# listagem das empresas do grupo (`sefaz.ler_filiais_empresas`). ⚠ A chave começa
-# com "_" porque a linha vira tupla pelo CABECALHO: campo fora dele não chega na
-# tela nem no .xlsx. Vazia quer dizer "não sei de qual empresa é" -- e aí nada é
-# filtrado, que é o comportamento de antes de 03/09/2026.
-FILIAL_NOTA = "_filial_nota"
-
-
 def _nome_nota(nota: dict) -> str:
     """O nome do emitente/prestador da nota, normalizado -- guardado na linha.
 
@@ -369,11 +350,6 @@ def pontuar(nota: dict, pedido: sc7.Pedido, peso_texto: int = 0) -> tuple[int, l
                       "Fornecedor confere pela RAZÃO SOCIAL (o CNPJ do emitente "
                       "não é o código do fornecedor no PC)")
 
-    filial_nota = nota.get(FILIAL_NOTA)
-    if filial_nota and pedido.filial == filial_nota:
-        pontos += PESO_FILIAL
-        porque.append(f"Pedido é da MESMA empresa da nota (filial {filial_nota})")
-
     valor = nota.get(VLR_SEFAZ)
     if valor and pedido.vlr and abs(valor - pedido.vlr) < CENTAVO:
         pontos += PESO_VALOR
@@ -417,7 +393,7 @@ def _encerrados_parecidos(nota: dict, encerrados: dict[str, sc7.Pedido],
     """
     achados = []
     for chave in chaves_do_fornecedor(nota, encerrados, por_fornecedor_enc,
-                                      por_nome_enc or {}, so_da_filial=True):
+                                      por_nome_enc or {}):
         pontos, _porque = pontuar(nota, encerrados[chave])
         if (pontos & FORNECEDOR_OK) and (pontos & VALOR_OK):
             achados.append(chave)
@@ -453,15 +429,8 @@ def _por_nome(pedidos: dict[str, sc7.Pedido]) -> dict[str, list[str]]:
 
 def chaves_do_fornecedor(nota: dict, pedidos: dict[str, sc7.Pedido],
                          por_fornecedor: dict[str, list[str]],
-                         por_nome: dict[str, list[str]],
-                         so_da_filial: bool = False) -> list[str]:
+                         por_nome: dict[str, list[str]]) -> list[str]:
     """TODOS os pedidos deste fornecedor: pelo CNPJ e pela RAZAO SOCIAL.
-
-    ⚠ `so_da_filial=True` corta os pedidos que NAO sao da empresa da nota
-    (03/09/2026). Quem pede o corte e quem nao tem prova nenhuma do vinculo -- a
-    busca por fornecedor+valor e a lista de possibilidades. O numero citado no
-    texto NAO pede: ali a filial entra como peso (ver PESO_FILIAL). Sem
-    `FILIAL_NOTA` na linha nada e cortado.
 
     E o unico lugar que responde "quais pedidos sao deste fornecedor?" -- a
     busca 1:1, a analise agrupada, a pista dos encerrados e a lista de
@@ -472,17 +441,15 @@ def chaves_do_fornecedor(nota: dict, pedidos: dict[str, sc7.Pedido],
     """
     chaves = list(por_fornecedor.get(_raiz(nota.get(CNPJ_EMIT)), []))
     nome = _nome_nota(nota)
-    if nome:
-        vistos = set(chaves)
-        for chave in por_nome.get(sc7.ancora_nome(nome), []):
-            if chave in vistos:
-                continue
-            if any(sc7.mesmo_nome(nome, n) for n in pedidos[chave].nomes):
-                chaves.append(chave)
-                vistos.add(chave)
-    filial = nota.get(FILIAL_NOTA)
-    if so_da_filial and filial:
-        chaves = [c for c in chaves if pedidos[c].filial == filial]
+    if not nome:
+        return chaves
+    vistos = set(chaves)
+    for chave in por_nome.get(sc7.ancora_nome(nome), []):
+        if chave in vistos:
+            continue
+        if any(sc7.mesmo_nome(nome, n) for n in pedidos[chave].nomes):
+            chaves.append(chave)
+            vistos.add(chave)
     return chaves
 
 
@@ -598,11 +565,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         # ⚠ "os pedidos deste fornecedor" passou a ser CNPJ **ou** RAZAO SOCIAL
         # em 03/09/2026 -- ver `chaves_do_fornecedor`. E a mesma busca de
         # sempre; o que mudou foi a porta de entrada.
-        # ⚠ `so_da_filial=True`: sem citacao no texto, um pedido de OUTRA das
-        # nossas empresas e palpite em dobro (o fornecedor e o mesmo, mas quem
-        # comprou nao foi esta empresa). Mexeu em 3 linhas na base de 03/09.
-        for chave in chaves_do_fornecedor(nota, pedidos, por_fornecedor, por_nome,
-                                          so_da_filial=True):
+        for chave in chaves_do_fornecedor(nota, pedidos, por_fornecedor, por_nome):
             pontos, porque = pontuar(nota, pedidos[chave])
             # ⚠ A BARRA E O VALOR. Sem ele sobra "mesmo fornecedor + emissao
             # proxima", que 37% dos pedidos ERRADOS do mesmo fornecedor tambem
@@ -638,12 +601,6 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         # Nada citado e nada aberto casou. Antes de dizer "nenhum pedido deste
         # fornecedor bate com o valor dela", conferir se algum FECHADO batia:
         # senao a frase e falsa. Ver o item 2 da docstring.
-        # ⚠ O TEXTO TEM DE DIZER O RECORTE. Desde 03/09/2026 a busca só olha os
-        # pedidos da EMPRESA da nota; dizer "nenhum pedido deste fornecedor"
-        # afirmaria sobre o grupo inteiro algo que a análise não conferiu. Serve
-        # às DUAS saídas abaixo, e por isso é calculado antes das duas.
-        onde = (f" nesta empresa (filial {nota[FILIAL_NOTA]})"
-                if nota.get(FILIAL_NOTA) else "")
         parecidos = _encerrados_parecidos(nota, encerrados, por_fornecedor_enc,
                                           por_nome_enc)
         if parecidos:
@@ -651,7 +608,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
                 SITUACAO: SEM,
                 CRITERIO: (
                     "A nota não cita pedido de compra e nenhum pedido EM ABERTO deste "
-                    f"fornecedor{onde} bate com o valor dela — mas o pedido "
+                    "fornecedor bate com o valor dela — mas o pedido "
                     f"{' ou '.join(parecidos)}, do mesmo fornecedor e com o valor batendo, "
                     "está na SC7 já encerrado (a análise só considera pedido em aberto). "
                     "Confira se a nota é dele antes de tratar como sem pedido"),
@@ -659,7 +616,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         return {
             SITUACAO: SEM,
             CRITERIO: ("A nota não cita pedido de compra e nenhum pedido deste "
-                       f"fornecedor{onde} bate com o valor dela"),
+                       "fornecedor bate com o valor dela"),
         }
 
     melhor_pontos = max(a[0] for a in avaliados)
@@ -724,8 +681,7 @@ def escolher(nota: dict, pedidos: dict[str, sc7.Pedido],
         if situacao == CONFIRMADO:
             situacao = PROVAVEL
     if not tem_texto:
-        porque = ["Pedido NÃO citado na nota — achado pelo fornecedor, pela "
-                  "empresa da nota e pelo valor"] + list(porque)
+        porque = ["Pedido NÃO citado na nota — achado pelo fornecedor e pelo valor"] + list(porque)
     if fora_da_base:
         porque = list(porque) + [f"A nota também cita {' e '.join(fora_da_base)}, "
                                  "que não existe na base de pedidos"]
@@ -842,26 +798,22 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
         if chave in pcs_usados or not pedido.vlr:
             continue
         for raiz in pedido.fornecedores:
-            por_forn_pedidos.setdefault((pedido.filial, "cnpj", raiz), []).append(pedido)
+            por_forn_pedidos.setdefault(("cnpj", raiz), []).append(pedido)
         for nome in pedido.nomes:
-            por_forn_pedidos.setdefault((pedido.filial, "nome", nome), []).append(pedido)
+            por_forn_pedidos.setdefault(("nome", nome), []).append(pedido)
             ancora = nomes_por_ancora.setdefault(sc7.ancora_nome(nome), [])
             if nome not in ancora:
                 ancora.append(nome)
 
-    # ⚠ A EMPRESA ENTRA NA CHAVE DO BALDE (03/09/2026): somar notas de uma
-    # empresa com pedidos de outra e o mesmo cruzamento que o 1:1 deixou de
-    # fazer, e aqui sairia ainda mais solto -- casa so por SOMA de valores.
     def balde_da_nota(linha: dict) -> tuple:
-        filial = linha.get(FILIAL_NOTA) or ""
         raiz = _raiz(linha.get(CNPJ_EMIT))
-        if por_forn_pedidos.get((filial, "cnpj", raiz)):
-            return (filial, "cnpj", raiz)
+        if por_forn_pedidos.get(("cnpj", raiz)):
+            return ("cnpj", raiz)
         nome = _nome_nota(linha)
         for candidato in nomes_por_ancora.get(sc7.ancora_nome(nome), []):
             if sc7.mesmo_nome(nome, candidato):
-                return (filial, "nome", candidato)
-        return (filial, "cnpj", raiz)
+                return ("nome", candidato)
+        return ("cnpj", raiz)
 
     # baldes por fornecedor (CNPJ do emitente da nota ou, na falta dele, nome)
     por_forn_notas: dict[tuple, list[dict]] = {}
@@ -1002,13 +954,7 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
         # exatamente as duas que ficam sem resposta.
         if linha.get(SITUACAO) not in (SEM, FORA):
             continue
-        # ⚠ SO OS PEDIDOS DA EMPRESA DA NOTA (03/09/2026). Antes a lista vinha do
-        # grupo inteiro e 51 das 262 linhas ofereciam pedidos de outra empresa --
-        # era o que punha o codigo da filial na celula e obrigava a coluna
-        # `Filial do PC` a ficar vazia. Agora todo candidato e da mesma empresa,
-        # entao a filial vai inteira na coluna dela.
-        chaves = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome,
-                                      so_da_filial=True)
+        chaves = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome)
         if not chaves:
             continue
         # do mais provavel para o menos: o que a pontuacao aproxima primeiro
@@ -1060,7 +1006,7 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
         criterio = linha.get(CRITERIO) or ""
         linha[CRITERIO] = (
             f"{criterio}  ⚠ POSSIBILIDADES: este fornecedor tem "
-            f"{len(ordenadas)} pedido(s) EM ABERTO na SC7 nesta empresa e nenhum bate com o "
+            f"{len(ordenadas)} pedido(s) EM ABERTO na SC7 e nenhum bate com o "
             f"valor da nota. Estão listados em “Numero PC” só para conferência "
             f"— o pedido NÃO foi escolhido: {detalhe}"
             + (f" — e mais {sobra} que não couberam na coluna" if sobra else "")
@@ -1073,8 +1019,7 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
 def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
            solicitantes: dict[str, list[str]], teto: int,
            texto_por_nota: dict[str, str],
-           encerrados: dict[str, sc7.Pedido] | None = None,
-           filiais_empresas: dict[str, str] | None = None) -> list[dict]:
+           encerrados: dict[str, sc7.Pedido] | None = None) -> list[dict]:
     """Uma linha por NOTA, com o lancamento e o pedido do lado.
 
     ⚠ `texto_por_nota` chega ANTES do veredito e nao depois: e desse texto que o
@@ -1094,7 +1039,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     # fornecedor (03/09/2026). Ver `_por_nome` e `chaves_do_fornecedor`.
     por_nome = _por_nome(pedidos)
     por_nome_enc = _por_nome(encerrados or {})
-    filiais_empresas = filiais_empresas or {}
 
     # pedidos que o 1:1 ja atribuiu -- a analise agrupada nao os reaproveita
     pcs_usados: set = set()
@@ -1117,12 +1061,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             FANTASIA: nota.get(csf1.FANTASIA),
             NOME_DEST: nota.get(csf1.NOME_DEST),
             CNPJ_DEST: nota.get(csf1.CNPJ_DEST),
-            # ⚠ De qual das NOSSAS empresas é esta nota, pelo CNPJ do
-            # destinatário/tomador. É o que faz o pedido ser procurado dentro
-            # da empresa (ver FILIAL_NOTA e PESO_FILIAL). Vazio = não sei, e
-            # aí nada é filtrado.
-            FILIAL_NOTA: filiais_empresas.get(
-                _digitos(nota.get(csf1.CNPJ_DEST)), ""),
             TIPO_OP: nota.get(csf1.TIPO_OP),
             NAT_OP: nota.get(csf1.NAT_OP),
             SAIDA: nota.get(csf1.SAIDA),
@@ -1211,21 +1149,8 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
         for l in cruzamento.linhas:
             texto_por_nota.setdefault(l[sefaz.CHAVE_NFE], l.get(sefaz.INFO) or "")
 
-    # De qual empresa é cada nota -- sem isso a análise volta a olhar o grupo
-    # inteiro. ⚠ AVISA E SEGUE: a listagem é a mesma que já filtra os tomadores
-    # (e sem ela a aba nem existiria), então o que pode faltar aqui é só a
-    # COLUNA da filial. Morrer por causa dela deixaria o painel sem a aba; e
-    # seguir calado esconderia que a restrição por empresa não está valendo.
-    try:
-        filiais_empresas = sefaz.ler_filiais_empresas()
-    except Exception as exc:  # noqa: BLE001 - coluna renomeada, planilha aberta...
-        print(f"AVISO: nao consegui ler a filial das empresas ({exc}) -- o pedido"
-              f" sera procurado no GRUPO INTEIRO, e nao dentro da empresa da nota.",
-              file=sys.stderr)
-        filiais_empresas = {}
-
     linhas = montar(cruzamento, pedidos, solicitantes, teto, texto_por_nota,
-                    encerrados, filiais_empresas)
+                    encerrados)
 
     contagem: dict[str, int] = {}
     for l in linhas:

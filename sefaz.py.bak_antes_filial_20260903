@@ -97,11 +97,6 @@ if not BASE_EMPRESAS.exists():
 ABAS_EMPRESAS = ("EMPRESAS",)
 COLUNA_CNPJ_EMPRESAS = "CNPJ"
 COLUNA_RAZAO_EMPRESAS = "RAZAO_SOCIAL"
-# A filial do TOTVS de cada CNPJ do grupo ("004001"). ⚠ A listagem é por
-# ESTABELECIMENTO: a Capivara tem 004001..004008, um CNPJ cada. É o que
-# permite dizer "esta nota é da empresa 043001" e amarrar o pedido dentro
-# dela -- ver pedidos_sefaz.FILIAL_NOTA.
-COLUNA_FILIAL_EMPRESAS = "FILIAL TOTVS"
 
 # Prefixo do uuid, no mesmo espirito do "ITAU:" e do "BOL:": as marcacoes de
 # todas as abas moram na mesma tabela, e chave repetida seria marcacao trocada.
@@ -492,61 +487,6 @@ def ler_cnpjs_empresas(base: Path | None = None) -> dict[str, str]:
             "da SEFAZ ficaria vazia, e isso nao pode acontecer calado."
         )
     return empresas
-
-
-def ler_filiais_empresas(base: Path | None = None) -> dict[str, str]:
-    """{CNPJ so digitos: filial do TOTVS} das empresas do grupo.
-
-    Irma da `ler_cnpjs_empresas()` e lida do MESMO arquivo. Serve a uma pergunta
-    que so a aba NF x Pedido faz: de qual das nossas empresas e esta nota? Com
-    ela o pedido passa a ser procurado DENTRO da empresa da nota, e nao no grupo
-    inteiro (03/09/2026, pedido do usuario).
-
-    ⚠ FALHA ALTO como a irma, mas quem chama a trata de outro jeito: sem o mapa
-    a analise volta a olhar o grupo todo, entao `pedidos_sefaz.carregar()` avisa
-    e segue. Devolver {} calado seria pior -- a restricao desapareceria da
-    analise sem ninguem perceber que ela nao esta valendo.
-    """
-    base = base or BASE_EMPRESAS
-    if not base.exists():
-        raise RuntimeError(
-            f"A listagem das empresas BIOFLOR nao foi encontrada:\n  {base}"
-        )
-    wb, temporaria = _abrir(base)
-    try:
-        ws = _achar_aba(wb, ABAS_EMPRESAS, "empresas BIOFLOR", "ABAS_EMPRESAS")
-        brutas = ws.iter_rows(values_only=True)
-        cabecalho = [_rotulo(c) for c in next(brutas, [])]
-        try:
-            i_cnpj = cabecalho.index(_rotulo(COLUNA_CNPJ_EMPRESAS))
-            i_filial = cabecalho.index(_rotulo(COLUNA_FILIAL_EMPRESAS))
-        except ValueError:
-            raise RuntimeError(
-                f"{base.name} mudou de layout: nao achei as colunas "
-                f"{COLUNA_CNPJ_EMPRESAS!r} e {COLUNA_FILIAL_EMPRESAS!r}.\n"
-                "  o arquivo tem: " + " / ".join(repr(c) for c in cabecalho)
-            ) from None
-        filiais: dict[str, str] = {}
-        for linha in brutas:
-            cnpj = so_digitos(linha[i_cnpj] if i_cnpj < len(linha) else "")
-            filial = _texto(linha[i_filial] if i_filial < len(linha) else "")
-            # 14 digitos: linha de rodape/total ou celula vazia nao vira empresa
-            if len(cnpj) != 14 or not filial:
-                continue
-            # ⚠ `setdefault`: se o mesmo CNPJ aparecer duas vezes, vale a
-            # PRIMEIRA -- trocar de filial no meio faria a nota mudar de empresa
-            # conforme a ordem das linhas da planilha.
-            filiais.setdefault(cnpj, filial)
-    finally:
-        wb.close()
-        if temporaria:
-            shutil.rmtree(temporaria, ignore_errors=True)
-    if not filiais:
-        raise RuntimeError(
-            f"{base.name} nao trouxe nenhuma filial valida na coluna "
-            f"{COLUNA_FILIAL_EMPRESAS!r}."
-        )
-    return filiais
 
 
 def _abrir(caminho: Path):
