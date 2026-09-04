@@ -523,6 +523,26 @@ td.z-delta{white-space:nowrap; overflow:hidden; padding:5px 3px}
 .cartao.texto .topo-cartao{background:var(--sel); color:var(--azul-2)}
 .cartao.texto .frase{max-height:44vh; overflow-y:auto; white-space:pre-wrap;
   word-break:break-word; pointer-events:auto}
+/* ---------- quadro dos PC prováveis (04/09/2026) ----------
+   Ele: "inclua na coluna numero pc provaveis o porque voce associou aqueles PC
+   com uma janela no modelo do print". Mesmo desenho do quadro do selo, com um
+   BLOCO por pedido -- cada um com os seus ✓.
+   ⚠ O conteúdo ROLA: são até 12 pedidos com 2 a 4 motivos cada, e sem o teto de
+   altura o quadro passava da tela. `pointer-events:auto` só no conteúdo (o
+   `.cartao` inteiro é `none`, senão ele roubaria o hover da própria célula). */
+.cartao.provaveis{max-width:470px}
+.cartao.provaveis .topo-cartao{background:var(--sel); color:var(--azul-2)}
+.cartao.provaveis .conteudo{max-height:52vh; overflow-y:auto; pointer-events:auto}
+.cartao .pc-bloco{padding-top:7px; border-top:1px solid var(--line)}
+.cartao .pc-bloco:first-of-type{padding-top:0; border-top:0}
+.cartao .pc-bloco + .pc-bloco{margin-top:7px}
+.cartao .pc-cabeca{display:flex; align-items:baseline; gap:7px; margin-bottom:4px}
+.cartao .pc-num{font-family:"Cascadia Mono", Consolas, monospace; font-weight:800;
+  font-size:11.5px; color:var(--txt)}
+.cartao .pc-tag{font-size:9px; font-weight:800; letter-spacing:.4px; padding:1px 5px;
+  border-radius:999px; background:var(--verde-bg); color:var(--verde-txt)}
+.cartao .pc-tag.fechado{background:var(--ambar-bg); color:var(--ambar-txt)}
+.cartao .pc-meta{margin-left:auto; font-size:10px; color:var(--txt-3); white-space:nowrap}
 .cartao ul.criterios{margin:0; padding:0 0 0 16px; list-style:none}
 .cartao ul.criterios li{position:relative; margin-bottom:4px; color:var(--txt-2)}
 .cartao ul.criterios li::before{content:"✓"; position:absolute; left:-16px; color:var(--verde-linha);
@@ -2102,8 +2122,14 @@ function celulaCompacta(r, col){
     // Sai do VALOR e não do nome da coluna de propósito -- qualquer coluna de
     // copiar que um dia junte valores já nasce comportada.
     const lista = String(valor).includes(JUNTA_CELULA) ? "lista " : "";
-    return `<td class="acao ${lista}${zona}"><button class="botao-copia" type="button"
-      data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
+    // ⚠ O quadro do POR QUE só existe na coluna de `papel:"provaveis"` E quando
+    // a linha tem motivos -- célula vazia não abre quadro nenhum. O gatilho vai
+    // no `td` e não no `button`: o botão já tem `title` próprio ("clique para
+    // copiar"), e dois avisos no mesmo alvo brigam.
+    const prov = (col.papel === "provaveis" && ((r.pcprov || {}).itens || []).length)
+      ? ` data-prov="${esc(r.uuid)}"` : "";
+    return `<td class="acao ${lista}${zona}"${prov}><button class="botao-copia" type="button"
+      data-copiar="${esc(copia)}" title="${prov ? "Passe o mouse para ver o porquê" : "Clique para copiar " + esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
   if (col.papel === "status"){
     // sem title: quem explica o match agora e o quadro que abre no hover.
@@ -2333,6 +2359,38 @@ function abrirCartaoAlerta(alvo, uuid){
   posicionarCartao(alvo);
 }
 
+/* O POR QUE de cada PC provável: um bloco por pedido, com os mesmos ✓ do quadro
+   do selo. Os motivos vêm do `pontuar()` do pedidos_sefaz -- os MESMOS que
+   ordenaram a lista, para o quadro não contar história diferente da coluna. */
+function abrirCartaoProvaveis(alvo, uuid){
+  const r = A().linhas.find(l => l.uuid === uuid);
+  const p = (r || {}).pcprov || {};
+  const itens = p.itens || [];
+  if (!itens.length) return;
+  const blocos = itens.map(i => `
+    <div class="pc-bloco">
+      <div class="pc-cabeca">
+        <span class="pc-num">${esc(i.pc)}</span>
+        <span class="pc-tag ${i.aberto ? "" : "fechado"}">${i.aberto ? "EM ABERTO" : "ENCERRADO"}</span>
+        <span class="pc-meta">${esc([i.vlr, i.emissao].filter(Boolean).join(" · "))}</span>
+      </div>
+      <ul class="criterios">${(i.motivos || []).map(m => `<li>${esc(m)}</li>`).join("")}</ul>
+    </div>`).join("");
+  const sobra = (p.total || itens.length) - itens.length;
+  cartao.className = "cartao provaveis";
+  cartao.innerHTML =
+    `<div class="topo-cartao">Por que estes PC são prováveis</div>
+     <div class="conteudo">
+       <p class="frase">Cruzamento <b>só por fornecedor</b> (CNPJ ou razão social),
+         dentro da empresa da nota${p.filial ? ` (filial ${esc(p.filial)})` : ""}.
+         Nenhum pedido foi escolhido — é material de conferência.</p>
+       ${blocos}
+     </div>
+     <div class="rodape-cartao">${esc(`${p.abertos || 0} em aberto · ${p.fechados || 0} encerrado(s) deste fornecedor`)}${
+       sobra ? esc(` · mais ${sobra} fora da lista`) : ""}</div>`;
+  posicionarCartao(alvo);
+}
+
 /* Resumo do match: as evidencias que a base somou para casar boleto e titulo. */
 function abrirCartaoMatch(alvo, uuid){
   const r = A().linhas.find(l => l.uuid === uuid);
@@ -2485,18 +2543,30 @@ document.addEventListener("mouseover", e => {
   if (selo) return abrirCartaoAlerta(selo, selo.dataset.cartao);
   const match = e.target.closest("[data-match]");
   if (match) return abrirCartaoMatch(match, match.dataset.match);
+  const prov = e.target.closest("[data-prov]");
+  if (prov) return abrirCartaoProvaveis(prov, prov.dataset.prov);
   const trat = e.target.closest("[data-trat]");
   if (trat) return abrirCartaoTratativa(trat, trat.dataset.trat);
   const txt = e.target.closest("[data-texto]");
   if (txt) return abrirCartaoTexto(txt, txt.dataset.texto, txt.dataset.col);
 });
 document.addEventListener("mouseout", e => {
+  // ⚠ NÃO fecha quando o mouse ENTRA no próprio quadro (04/09/2026). O quadro
+  // dos PC prováveis tem até 12 pedidos e rola por dentro; sem isto ele sumia no
+  // caminho da célula até a barra de rolagem, e não havia como ler o resto. Vale
+  // para o quadro de texto longo também, que já tinha `pointer-events:auto` na
+  // frase justamente para ser rolável e fechava do mesmo jeito.
+  // ⚠ Quem fecha depois é o `mouseleave` do cartão, logo abaixo -- sem ele o
+  // quadro ficaria aberto para sempre depois da primeira visita.
+  if (e.relatedTarget && cartao.contains(e.relatedTarget)) return;
   if (e.target.closest("[data-cartao]") || e.target.closest("[data-match]")
+      || e.target.closest("[data-prov]")
       || e.target.closest("[data-trat]") || e.target.closest("[data-texto]")) fecharCartao();
 });
 // ⚠ `passive`: este ouvinte roda em CAPTURA, então pega o scroll da grade também
 // -- em aba de 700 linhas é um `scroll` por quadro. Sem `passive` o navegador
 // tem de esperar o JS antes de rolar.
+cartao.addEventListener("mouseleave", fecharCartao);
 addEventListener("scroll", fecharCartao, {capture:true, passive:true});
 
 /* ---------- drill: todas as parcelas daquela NF ----------

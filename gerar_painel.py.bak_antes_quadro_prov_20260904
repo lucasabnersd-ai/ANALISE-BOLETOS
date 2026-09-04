@@ -979,13 +979,6 @@ ABAS = {
         "col_alerta": "Alerta",
         "resumo": {"alerta": "com alerta", "divergentes": "valor difere do pedido"},
         "rotulos_planilha": ROTULOS_PLANILHA_PEDIDOS,
-        # 04/09/2026: a coluna dos PC provaveis ganha quadro proprio, com o
-        # porque de cada pedido. `col_provaveis` e a que aparece na tela (vira
-        # `papel: "provaveis"`); `col_provaveis_motivos` e a escondida que
-        # carrega o JSON -- e que fica fora da busca pelo mesmo motivo.
-        "col_provaveis": "Numero PC Prováveis",
-        "col_provaveis_motivos": pedidos_sefaz.MOTIVOS_PROVAVEIS,
-        "fora_da_busca": (pedidos_sefaz.MOTIVOS_PROVAVEIS,),
     },
 }
 
@@ -1336,19 +1329,11 @@ def montar_aba(cabecalho: list[str], brutas: list, cfg: dict):
             "ocr": ocr_suspeito(origem),
             "alerta": montar_alerta(origem, cfg),
             "match": montar_match(origem, cfg),
-            # o quadro do POR QUE dos PC provaveis -- {} nas abas que nao o declaram
-            "pcprov": montar_provaveis(origem, cfg),
             # texto que nao cabe na celula, por coluna: abre no quadro
             "texto": {chave_de(col): texto(origem.get(col))
                       for col in cfg.get("texto_longo", ())
                       if texto(origem.get(col))},
-            # ⚠ O JSON dos motivos FICA DE FORA da busca: sao centenas de
-            # caracteres por linha com as MESMAS palavras em todas ("Fornecedor
-            # confere", "Pedido EM ABERTO"), e digitar qualquer uma devolveria a
-            # aba inteira. O que interessa buscar (os numeros dos PC) esta na
-            # coluna visivel, que continua entrando.
-            "busca": " ".join(texto(v) for c, v in origem.items()
-                              if texto(v) and c not in cfg.get("fora_da_busca", ())).lower(),
+            "busca": " ".join(texto(v) for v in origem.values() if texto(v)).lower(),
         })
 
     if cfg["col_score"]:
@@ -1403,10 +1388,6 @@ def montar_compacta(cabecalho: list[str], definicao: list, cfg: dict) -> list[di
                       # texto que nao cabe em celula (Info Comp da SEFAZ chega a
                       # 5.000 caracteres): a celula vira botao e o texto abre no
                       # quadro flutuante
-                      # 04/09/2026: a celula dos PC provaveis abre um quadro com o
-                      # porque de cada pedido. Pelo PAPEL, como as outras: o
-                      # navegador nao precisa saber o nome da coluna.
-                      else "provaveis" if rotulo == cfg.get("col_provaveis")
                       else "texto" if rotulo in cfg.get("texto_longo", ()) else ""),
             "copiavel": copiavel,
             "copiar": copiaveis.get(rotulo, "") if copiavel else "",
@@ -1504,29 +1485,6 @@ def montar_match(origem: dict, cfg: dict) -> dict:
         "score2": texto(origem.get("2º Score")),
         "margem": texto(origem.get("Margem")),
     }
-
-
-def montar_provaveis(origem: dict, cfg: dict) -> dict:
-    """O quadro do POR QUE da coluna `Numero PC Prováveis` (04/09/2026).
-
-    Ele: "inclua na coluna numero pc provaveis o porque voce associou aqueles PC
-    com uma janela no modelo do print" -- o print e o quadro do selo da Situacao.
-
-    A coluna de origem e ESCONDIDA (esta no CABECALHO do pedidos_sefaz e nao no
-    COMPACTA_PEDIDOS): ela carrega o JSON com um item por pedido. ⚠ JSON quebrado
-    nao pode derrubar o painel inteiro por causa de um quadro -- devolve vazio, a
-    celula continua na tela e so o quadro deixa de abrir.
-    """
-    coluna = cfg.get("col_provaveis_motivos")
-    if not coluna:
-        return {}
-    bruto = texto(origem.get(coluna))
-    if not bruto:
-        return {}
-    try:
-        return json.loads(bruto)
-    except ValueError:
-        return {}
 
 
 def montar_alerta(origem: dict, cfg: dict) -> dict:

@@ -55,7 +55,6 @@ SC7 (`resumo["maior_pc"]`), com folga, e nao de um numero escrito aqui.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import re
 import sys
 from pathlib import Path
@@ -106,14 +105,6 @@ PC = "Numero PC"
 # 03/09/2026: os pedidos PROVÁVEIS do fornecedor (abertos e fechados), numa
 # coluna própria -- ver `possibilidades()`. `Numero PC` voltou a ser só O pedido.
 PC_PROVAVEIS = "Numero PC Prováveis"
-# ⚠ COLUNA QUE NAO APARECE NA TELA (04/09/2026): o POR QUE de cada PC provavel,
-# em JSON, para o quadro que abre ao passar o mouse na celula. Esta no
-# CABECALHO (senao nao viaja ate o gerador) e NAO esta no COMPACTA_PEDIDOS --
-# e o que a mantem fora da grade e fora do .xlsx, que sai da `compacta`.
-# ⚠ JSON, e nao texto com separador: os motivos ja usam " + ", " · " e ":", e
-# qualquer separador escolhido aqui apareceria dentro de um motivo um dia.
-# Ver `gerar_painel.montar_provaveis` e `abrirCartaoProvaveis`.
-MOTIVOS_PROVAVEIS = "Motivos dos PC Prováveis"
 NUM_SC = "Numero da SC"
 SOLICITANTE = "Solicitante"
 COMPRADOR = "Comprador"
@@ -147,7 +138,6 @@ CABECALHO = [
     QTD_CLASSI, QTD_PC, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
     VLR_PC, FORNEC_PC, ITENS_PC,
     CRITERIO, INFO, CHAVE_NFE,
-    MOTIVOS_PROVAVEIS,
 ]
 
 # ------------------------------------------------------------------- vereditos
@@ -985,33 +975,6 @@ MAX_POSSIVEIS = 20
 MAX_PROVAVEIS = 12
 
 
-def _motivos_do_provavel(nota: dict, pedido: sc7.Pedido, aberto: bool) -> dict:
-    """O POR QUE de UM pedido estar na lista de prováveis -- para o quadro.
-
-    ⚠ Os motivos saem do MESMO `pontuar()` que ORDENA a lista. Se o quadro
-    tivesse texto proprio, ele poderia dizer "o valor bate" numa linha em que a
-    ordenacao nao viu valor nenhum -- duas verdades para a mesma pergunta. O que
-    o `pontuar` nao sabe entra depois: se o pedido esta aberto ou fechado.
-    """
-    _pontos, porque = pontuar(nota, pedido)
-    # ⚠ O motivo da FILIAL sai daqui -- e so daqui. Ele aparecia em TODOS os
-    # 2.512 itens ("Pedido é da MESMA empresa da nota (filial 043001)") porque
-    # o `possibilidades()` ja so olha a empresa da nota: dizer isso item a item
-    # e repetir o cabecalho do quadro, que ja abre com "dentro da empresa da
-    # nota (filial X)". No Criterio das linhas COM pedido ele continua valendo,
-    # e por isso o corte e aqui e nao no `pontuar()`.
-    motivos = [m for m in porque if not m.startswith("Pedido é da MESMA empresa")]
-    motivos.append("Pedido EM ABERTO na SC7" if aberto
-                   else "⚠ Pedido ENCERRADO na SC7 (todos os itens com “E”)")
-    return {
-        "pc": pedido.numero_totvs,
-        "aberto": aberto,
-        "vlr": _moeda(pedido.vlr),
-        "emissao": pedido.emissao.strftime("%d/%m/%Y") if pedido.emissao else "",
-        "motivos": motivos,
-    }
-
-
 def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
                    por_fornecedor: dict[str, list[str]],
                    por_nome: dict[str, list[str]],
@@ -1083,24 +1046,15 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
 
         mostrados = candidatos[:MAX_PROVAVEIS]
         vistos: list[str] = []
-        motivos: list[dict] = []
         for pedido, aberto in mostrados:
             texto = pedido.numero_totvs + ("" if aberto else " (E)")
             if texto not in vistos:
                 vistos.append(texto)
-                motivos.append(_motivos_do_provavel(linha, pedido, aberto))
         sobra = len(candidatos) - len(mostrados)
         linha[PC_PROVAVEIS] = JUNTA_POSSIVEIS.join(vistos) + (f" +{sobra}" if sobra else "")
         linha["_possiveis"] = len(candidatos)
 
         n_ab, n_fe = len(abertos), len(fechados)
-        # ⚠ Aqui, e nao junto do `linha[PC_PROVAVEIS]` la em cima: `n_ab`/`n_fe`
-        # so existem a partir desta linha. `separators` compacto porque a
-        # coluna viaja como TEXTO e o `gerar_painel.texto()` colapsa espaco.
-        linha[MOTIVOS_PROVAVEIS] = json.dumps(
-            {"total": len(candidatos), "abertos": n_ab, "fechados": n_fe,
-             "filial": linha.get(FILIAL_NOTA) or "", "itens": motivos},
-            ensure_ascii=False, separators=(",", ":"))
         detalhe = JUNTA_POSSIVEIS.join(
             f"{p.numero_totvs}{'' if ab else ' (E)'} ({_moeda(p.vlr)}"
             f"{', ' + p.emissao.strftime('%d/%m/%Y') if p.emissao else ''})"
