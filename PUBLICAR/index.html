@@ -1202,7 +1202,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609041503"></script>
+<script src="supa.js?v=202609041528"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2646,13 +2646,51 @@ const cartao = document.getElementById("cartao");
 function posicionarCartao(alvo){
   const r = alvo.getBoundingClientRect();
   cartao.classList.add("aberto");                 // precisa medir ja visivel
-  const c = cartao.getBoundingClientRect();
   const folga = 8;
+  /* ⚠ O QUADRO NUNCA PODE SER MAIOR QUE A JANELA (04/09/2026). Prender só a
+     POSIÇÃO não basta: o quadro dos PC prováveis vai a 547px com 12 pedidos, e
+     numa janela baixa não há onde pôr um quadro que não cabe -- ele nascia com o
+     rodapé cortado. Aqui o CONTEÚDO é que encolhe e passa a rolar; o título e o
+     rodapé ficam sempre visíveis, que é o que diz de qual nota é o quadro.
+     ⚠ Zerar antes de medir é obrigatório: o `#cartao` é UM SÓ, reaproveitado por
+     todos os quadros -- sem isto o teto do quadro anterior (mais alto) apertaria
+     o seguinte, e o erro só apareceria depois de visitar duas células. */
+  const conteudo = cartao.querySelector(".conteudo");
+  if (conteudo){ conteudo.style.maxHeight = ""; conteudo.style.overflowY = ""; }
+  let c = cartao.getBoundingClientRect();
+  const teto = innerHeight - 2 * folga;
+  if (conteudo && c.height > teto){
+    conteudo.style.maxHeight =
+      Math.max(60, conteudo.getBoundingClientRect().height - (c.height - teto)) + "px";
+    conteudo.style.overflowY = "auto";
+    c = cartao.getBoundingClientRect();
+  }
   let x = Math.min(Math.max(folga, r.left), innerWidth  - c.width  - folga);
   let y = r.bottom + folga;
-  if (y + c.height > innerHeight - folga) y = Math.max(folga, r.top - c.height - folga);
+  if (y + c.height > innerHeight - folga) y = r.top - c.height - folga;
+  /* ⚠ PRENDE NA JANELA, nos dois eixos (04/09/2026). O `Math.max(folga, …)` de
+     antes só protegia o TOPO: com a célula fora da tela -- que é o normal numa
+     grade rolada, onde o mouse pode estar sobre uma linha e o `getBoundingClientRect`
+     dela devolver y > innerHeight -- o quadro ia para 791 com 531 de altura numa
+     janela de 900 e nascia CORTADO embaixo. Medido no quadro dos PC prováveis,
+     que é o mais alto do painel; os outros escapavam por serem pequenos.
+     ⚠ O `Math.max(folga, …)` de fora existe porque `innerHeight - c.height - folga`
+     fica NEGATIVO quando o quadro é mais alto que a janela: sem ele, um quadro
+     grande numa janela baixa seria empurrado para cima da tela e perderia o
+     título. Assim ele começa no topo e o conteúdo rola por dentro. */
+  y = Math.min(Math.max(folga, y), Math.max(folga, innerHeight - c.height - folga));
+  x = Math.min(Math.max(folga, x), Math.max(folga, innerWidth  - c.width  - folga));
   cartao.style.left = x + "px";
   cartao.style.top  = y + "px";
+  /* ⚠ SEGUNDA PASSADA. A altura MUDA depois de posicionar: ao ganhar a posição
+     final o conteúdo mostra a barra de rolagem, a caixa estreita e a frase do
+     topo quebra em mais uma linha. Medido no quadro dos PC prováveis com 12
+     pedidos: 531px na hora do cálculo, 547px depois -- e o quadro passava 7px da
+     janela, cortando o rodapé. Remedir e corrigir é mais barato e mais seguro do
+     que tentar prever o reflow. */
+  const d = cartao.getBoundingClientRect();
+  if (d.bottom > innerHeight - folga)
+    cartao.style.top = Math.max(folga, innerHeight - d.height - folga) + "px";
 }
 
 function abrirCartaoAlerta(alvo, uuid){
