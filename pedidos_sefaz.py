@@ -172,6 +172,19 @@ ENCERRADO_PC = "PEDIDO ENCERRADO"
 ORDEM_SITUACAO = {SEM: 0, FORA: 1, CONFERIR: 2, AGRUPADO_NF: 3, AGRUPADO_PC: 4,
                   PROVAVEL: 5, CONFIRMADO: 6, ENCERRADO_PC: 7}
 
+# ⚠ SÓ O QUE NÃO ESTÁ NA SF1 (03/09/2026, ele: "eu preciso saber o que não está
+# na SF1, mapeando essas possibilidades cruzando os pedidos de compra na SC7").
+# A aba é uma FILA DE TRABALHO: nota que a SEFAZ emitiu e o TOTVS ainda não tem,
+# e qual pedido em aberto ela pode ser. Nota já lançada (ACHADA NA SF1) não tem
+# pergunta a responder aqui -- e eram **579 das 781** linhas, 227 delas em
+# PEDIDO ENCERRADO (lançada E pedido fechado = resolvida duas vezes). Ficam as
+# NÃO ACHADA e as CONFERIR (o cruzamento com a SF1 não teve certeza, então
+# ainda é trabalho). ⚠ O corte é DEPOIS de tudo: os vereditos, a análise
+# agrupada e as possibilidades são calculados sobre as 781, como antes -- só a
+# saída encolhe. Quantas saíram vai no resumo (`lancadas_fora`), nunca calado.
+# Para voltar a ver tudo: False.
+SO_NAO_LANCADAS = True
+
 # ------------------------------------------------------------------- extracao
 # Rotulo FORTE: e a nossa ordem de compra, escrita por extenso ou abreviada.
 ROTULO_FORTE = (r"P\.?\s?C\.?"
@@ -1227,12 +1240,22 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
     linhas = montar(cruzamento, pedidos, solicitantes, teto, texto_por_nota,
                     encerrados, filiais_empresas)
 
+    # Ver SO_NAO_LANCADAS. `!= ACHADA` e nao `== NAO_ACHADA`: a CONFERIR fica,
+    # porque "talvez esteja na SF1" ainda nao e "esta".
+    total_notas = len(linhas)
+    if SO_NAO_LANCADAS:
+        linhas = [l for l in linhas if l.get(LANCADA) != csf1.ACHADA]
+
     contagem: dict[str, int] = {}
     for l in linhas:
         contagem[l[SITUACAO]] = contagem.get(l[SITUACAO], 0) + 1
     resumo = {
         **sefaz.contar_alertas(cruzamento.alertas),
         "notas": len(linhas),
+        # quantas notas a SEFAZ tem e quantas sairam por ja estarem na SF1 --
+        # e o que separa "a aba encolheu" de "a base encolheu"
+        "notas_sefaz": total_notas,
+        "lancadas_fora": total_notas - len(linhas),
         # ⚠ `and not _possiveis`: desde 03/09/2026 a coluna `Numero PC` também
         # carrega os pedidos CANDIDATOS de uma nota sem pedido. Contando a
         # coluna crua, o painel passaria a dizer que 464 notas têm pedido
