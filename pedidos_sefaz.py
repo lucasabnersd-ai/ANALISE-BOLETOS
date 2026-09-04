@@ -966,18 +966,51 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
                            _distancia(linha, pedidos[c]),
                            pedidos[c].rotulo))
         mostrados = [pedidos[c] for c in ordenadas[:MAX_POSSIVEIS]]
-        linha[PC] = JUNTA_POSSIVEIS.join(p.rotulo for p in mostrados)
+
+        # ⚠ SÓ O NÚMERO NA COLUNA DO NÚMERO (03/09/2026, ele: "você está
+        # trazendo também o código da filial como PC. os códigos 043001 -
+        # 004001 - 038004 são código de filiais"). Até aqui a célula levava o
+        # `rotulo` ("043001/003488"), que é como um pedido se identifica em
+        # TEXTO -- mas numa coluna chamada `Numero PC`, ao lado de uma coluna
+        # `Filial do PC`, os 6 dígitos da frente se leem como pedido. A filial
+        # passa a sair na coluna dela, no MESMO formato do pedido escolhido.
+        # ⚠ Sem repetir número: dois candidatos de filiais diferentes podem ter
+        # o mesmo número, e sem a filial na célula "003488 · 003488" não diz
+        # nada. Os dois continuam nomeados, com a empresa, no Critério.
+        numeros = list(dict.fromkeys(p.numero_totvs for p in mostrados))
+        linha[PC] = JUNTA_POSSIVEIS.join(numeros)
+
+        # ⚠ A FILIAL SÓ QUANDO É UMA. Juntar as filiais dos candidatos com
+        # " · " daria 13 valores distintos na coluna (medido: 5 hoje + 8
+        # combinações), e `Filial do PC` é BARRA DE FILTRO -- ela só vira barra
+        # com 2 a 8 valores distintos (`grupos_de_pills`), então a barra
+        # desapareceria da tela sem erro nenhum. Nas 211 linhas em que todos os
+        # candidatos são da mesma empresa a coluna fica igualzinha à do pedido
+        # escolhido e NÃO cria valor novo; nas 51 em que há mais de uma, fica
+        # vazia e quem responde é o Critério, que nomeia a empresa de cada um.
+        filiais = list(dict.fromkeys(p.filial for p in mostrados if p.filial))
+        linha[FILIAL_PC] = filiais[0] if len(filiais) == 1 else ""
+
         linha["_possiveis"] = len(mostrados)
         detalhe = JUNTA_POSSIVEIS.join(f"{p.rotulo} ({_moeda(p.vlr)})"
                                        for p in mostrados)
         sobra = len(ordenadas) - len(mostrados)
+        # ⚠ Quando os candidatos estão em mais de uma empresa, isto é a ÚNICA
+        # coisa na tela que diz onde procurar: a coluna da filial fica vazia de
+        # propósito (ver acima) e a do número já não carrega a empresa.
+        empresas = ("" if len(filiais) < 2 else
+                    f"  ⚠ Estes pedidos estão em MAIS DE UMA EMPRESA "
+                    f"({JUNTA_POSSIVEIS.join(filiais)}) — a coluna “Filial do "
+                    f"PC” fica vazia por isso; a empresa de cada pedido está no "
+                    f"número completo abaixo")
         criterio = linha.get(CRITERIO) or ""
         linha[CRITERIO] = (
             f"{criterio}  ⚠ POSSIBILIDADES: este fornecedor tem "
             f"{len(ordenadas)} pedido(s) EM ABERTO na SC7 e nenhum bate com o "
             f"valor da nota. Estão listados em “Numero PC” só para conferência "
             f"— o pedido NÃO foi escolhido: {detalhe}"
-            + (f" — e mais {sobra} que não couberam na coluna" if sobra else ""))
+            + (f" — e mais {sobra} que não couberam na coluna" if sobra else "")
+            + empresas)
         marcadas += 1
     return marcadas
 
