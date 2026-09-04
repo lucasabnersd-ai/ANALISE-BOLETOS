@@ -102,6 +102,9 @@ QTD_DUP = "Duplicatas"
 # da Logistica (ver sc7.py). Quem for conferir no TOTVS precisa das duas coisas.
 FILIAL_PC = "Filial do PC"
 PC = "Numero PC"
+# 03/09/2026: os pedidos PROVÁVEIS do fornecedor (abertos e fechados), numa
+# coluna própria -- ver `possibilidades()`. `Numero PC` voltou a ser só O pedido.
+PC_PROVAVEIS = "Numero PC Prováveis"
 NUM_SC = "Numero da SC"
 SOLICITANTE = "Solicitante"
 COMPRADOR = "Comprador"
@@ -131,7 +134,7 @@ CABECALHO = [
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
-    FILIAL_PC, PC, NUM_SC, SOLICITANTE, COMPRADOR,
+    FILIAL_PC, PC, PC_PROVAVEIS, NUM_SC, SOLICITANTE, COMPRADOR,
     QTD_CLASSI, QTD_PC, CONTROLE, ENCERRADO, ENTREGA, VENC_PC,
     VLR_PC, FORNEC_PC, ITENS_PC,
     CRITERIO, INFO, CHAVE_NFE,
@@ -966,118 +969,105 @@ def analise_agrupada(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
 # quando cortar o Criterio diz quantos ficaram de fora. Corte calado seria pior
 # que a coluna vazia de antes: pareceria a lista inteira.
 MAX_POSSIVEIS = 20
+# Quantos pedidos PROVÁVEIS cabem na célula. Com os encerrados dentro, 50 das
+# 202 notas passam de 30 candidatos; a ordem põe os que importam na frente e
+# o "+N" no fim da célula diz quantos ficaram de fora.
+MAX_PROVAVEIS = 12
 
 
 def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
                    por_fornecedor: dict[str, list[str]],
-                   por_nome: dict[str, list[str]]) -> int:
-    """Nas notas SEM pedido amarrado, lista em `Numero PC` os PCs do fornecedor.
+                   por_nome: dict[str, list[str]],
+                   encerrados: dict[str, sc7.Pedido] | None = None,
+                   por_fornecedor_enc: dict[str, list[str]] | None = None,
+                   por_nome_enc: dict[str, list[str]] | None = None) -> int:
+    """Preenche `Numero PC Prováveis`: os pedidos DO FORNECEDOR, abertos e fechados.
 
-    03/09/2026, pedido do usuario: *"traga as possibilidades dos pedidos de
-    compra daquele emitente ou prestador para aquela NF, insira as possibilidades
-    na coluna Numero PC, para poder mapear e analisar"*.
+    03/09/2026, ele: *"crie uma segunda coluna, Numero PC Prováveis... cruzando
+    somente os fornecedores: se aquele fornecedor tem uma nota fiscal que não
+    está na SF1 e na SC7 tem pedidos de compra para aquele fornecedor em aberto
+    ou até encerrado, traga nessa coluna os pedidos prováveis"*.
 
-    ⚠ ISTO NAO E UM VEREDITO E NAO ESCOLHE PEDIDO NENHUM. Sao os pedidos EM
-    ABERTO daquele fornecedor que a analise JA RECUSOU: por construcao nenhum
-    deles tem o valor da nota, porque o que tivesse ja teria virado PEDIDO
-    PROVAVEL na busca do `escolher()`. E material de conferencia -- ate 03/09 a
-    coluna nascia vazia e a pessoa tinha de abrir a SC7 para descobrir se aquele
-    fornecedor sequer tinha pedido em aberto.
+    ⚠ É UMA COLUNA SEPARADA de `Numero PC` DE PROPÓSITO. Até aqui a lista ia na
+    própria `Numero PC`, e a célula passou a ter dois sentidos -- O pedido, ou
+    candidatos --, o que custou uma tarde: ora lia-se filial como pedido, ora
+    a coluna esticava para 1.500px. Agora `Numero PC` é só o pedido escolhido, e
+    esta coluna é só palpite -- o rótulo diz isso no nome.
 
-    ⚠ TRES COISAS QUE ESTA FUNCAO NAO PODE FAZER, e o motivo de cada uma:
-      1. **nao mexe na `Situação`** -- SEM PEDIDO continua SEM PEDIDO. O selo e a
-         ordem da fila de trabalho saem dela, e "achei 3 pedidos do fornecedor"
-         nao e o mesmo que "achei o pedido";
-      2. **nao preenche o resto do bloco PEDIDO** (`Vlr Pedido`, `Fornecedor do
-         PC`, `Filial do PC`, datas). Aqueles campos descrevem UM pedido; com
-         varios candidatos eles ou mentem ou viram lista. ⚠ `Filial do PC` em
-         especial e barra de filtro no painel, e so vira barra com 2 a 8 valores
-         distintos: enchendo-a de combinacoes ("004001 · 043001") a barra some da
-         tela sem erro nenhum aparecer;
-      3. **nao conta no `com_pedido`** do resumo -- a marca `_possiveis` fica na
-         linha so para o resumo saber separar. A chave comeca com "_" porque a
-         linha vira tupla pelo CABECALHO: campo fora dele nao chega na tela nem
-         no .xlsx.
+    O CRUZAMENTO É SÓ FORNECEDOR (CNPJ ou razão social, ver
+    `chaves_do_fornecedor`) DENTRO DA EMPRESA DA NOTA -- sem exigir valor, sem
+    exigir citação. Por isso NÃO É VEREDITO: a `Situação` não muda, `Vlr Pedido`
+    e o bloco PEDIDO continuam descrevendo só o pedido escolhido.
 
-    ⚠ O rotulo levado para a coluna tem a FILIAL ("043001/003754") e nao so o
-    numero: 2.541 dos numeros da SC7 existem em mais de uma empresa, e "confira o
-    003754" manda procurar em tres. Ver sc7.chave_pedido().
+    ⚠ ENCERRADO ENTRA, E ENTRA MARCADO. Medido: incluir os fechados leva 50 das
+    202 notas a 30+ candidatos (Komatsu, Tracbel...). Ordem: valor da nota
+    batendo primeiro (é o único sinal que discrimina), depois os EM ABERTO,
+    depois a emissão mais próxima da nota. Os fechados saem com "(E)" -- a
+    mesma letra da coluna `Ped. Encerr.` da SC7 -- para ninguém tentar lançar
+    contra pedido que já fechou. Teto de MAX_PROVAVEIS na célula com o "+N" no
+    fim: corte calado pareceria a lista inteira.
+
+    ⚠ Só o NÚMERO na célula (ele, mais cedo: "043001 é código de filial, não
+    PC"). Todo candidato é da empresa da nota, então a filial é a da própria
+    nota e não precisa aparecer. Quando o fornecedor SÓ tem pedido em OUTRA
+    empresa, a célula fica vazia e o Critério diz onde eles estão.
     """
+    encerrados = encerrados or {}
+    por_fornecedor_enc = por_fornecedor_enc or {}
+    por_nome_enc = por_nome_enc or {}
     marcadas = 0
     for linha in linhas:
-        if linha.get(PC):
+        abertos = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome,
+                                       so_da_filial=True)
+        fechados = chaves_do_fornecedor(linha, encerrados, por_fornecedor_enc,
+                                        por_nome_enc, so_da_filial=True)
+        candidatos = ([(pedidos[c], True) for c in abertos]
+                      + [(encerrados[c], False) for c in fechados])
+        if not candidatos:
+            # o fornecedor tem pedido, mas em OUTRA das nossas empresas?
+            outras = (chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome)
+                      + chaves_do_fornecedor(linha, encerrados, por_fornecedor_enc,
+                                             por_nome_enc))
+            if outras and linha.get(FILIAL_NOTA):
+                filiais = sorted({(pedidos.get(c) or encerrados[c]).filial for c in outras})
+                linha[CRITERIO] = (
+                    f"{linha.get(CRITERIO) or ''}  ⚠ PC PROVÁVEIS: este fornecedor "
+                    f"não tem pedido nesta empresa (filial {linha[FILIAL_NOTA]}), "
+                    f"mas tem {len(outras)} em outra(s): {JUNTA_POSSIVEIS.join(filiais)}")
             continue
-        # ⚠ SÓ ONDE HÁ TRABALHO A FAZER (03/09/2026, ele: "você não deve
-        # trazer pedidos encerrados"). PEDIDO ENCERRADO é o degrau em que NÃO
-        # HÁ NADA A FAZER -- o pedido foi achado e já fechou --, e encher a
-        # coluna dessas 135 notas com candidatos põe trabalho de volta numa
-        # linha resolvida. Sobram SEM PEDIDO e PEDIDO FORA DA BASE, que são
-        # exatamente as duas que ficam sem resposta.
-        if linha.get(SITUACAO) not in (SEM, FORA):
-            continue
-        # ⚠ SO OS PEDIDOS DA EMPRESA DA NOTA (03/09/2026). Antes a lista vinha do
-        # grupo inteiro e 51 das 262 linhas ofereciam pedidos de outra empresa --
-        # era o que punha o codigo da filial na celula e obrigava a coluna
-        # `Filial do PC` a ficar vazia. Agora todo candidato e da mesma empresa,
-        # entao a filial vai inteira na coluna dela.
-        chaves = chaves_do_fornecedor(linha, pedidos, por_fornecedor, por_nome,
-                                      so_da_filial=True)
-        if not chaves:
-            continue
-        # do mais provavel para o menos: o que a pontuacao aproxima primeiro
-        # (valor de um item, nome, emissao dentro da janela) e, empatando, o
-        # pedido emitido mais perto da nota. E so ORDEM -- nenhum foi escolhido.
-        ordenadas = sorted(
-            chaves,
-            key=lambda c: (-pontuar(linha, pedidos[c])[0],
-                           _distancia(linha, pedidos[c]),
-                           pedidos[c].rotulo))
-        mostrados = [pedidos[c] for c in ordenadas[:MAX_POSSIVEIS]]
 
-        # ⚠ SÓ O NÚMERO NA COLUNA DO NÚMERO (03/09/2026, ele: "você está
-        # trazendo também o código da filial como PC. os códigos 043001 -
-        # 004001 - 038004 são código de filiais"). Até aqui a célula levava o
-        # `rotulo` ("043001/003488"), que é como um pedido se identifica em
-        # TEXTO -- mas numa coluna chamada `Numero PC`, ao lado de uma coluna
-        # `Filial do PC`, os 6 dígitos da frente se leem como pedido. A filial
-        # passa a sair na coluna dela, no MESMO formato do pedido escolhido.
-        # ⚠ Sem repetir número: dois candidatos de filiais diferentes podem ter
-        # o mesmo número, e sem a filial na célula "003488 · 003488" não diz
-        # nada. Os dois continuam nomeados, com a empresa, no Critério.
-        numeros = list(dict.fromkeys(p.numero_totvs for p in mostrados))
-        linha[PC] = JUNTA_POSSIVEIS.join(numeros)
+        # ordem: valor batendo > em aberto > emissão mais próxima > número
+        def ordem(item):
+            pedido, aberto = item
+            pontos, _porque = pontuar(linha, pedido)
+            return (-(pontos & VALOR_OK), not aberto, _distancia(linha, pedido),
+                    pedido.numero_totvs)
+        candidatos.sort(key=ordem)
 
-        # ⚠ A FILIAL SÓ QUANDO É UMA. Juntar as filiais dos candidatos com
-        # " · " daria 13 valores distintos na coluna (medido: 5 hoje + 8
-        # combinações), e `Filial do PC` é BARRA DE FILTRO -- ela só vira barra
-        # com 2 a 8 valores distintos (`grupos_de_pills`), então a barra
-        # desapareceria da tela sem erro nenhum. Nas 211 linhas em que todos os
-        # candidatos são da mesma empresa a coluna fica igualzinha à do pedido
-        # escolhido e NÃO cria valor novo; nas 51 em que há mais de uma, fica
-        # vazia e quem responde é o Critério, que nomeia a empresa de cada um.
-        filiais = list(dict.fromkeys(p.filial for p in mostrados if p.filial))
-        linha[FILIAL_PC] = filiais[0] if len(filiais) == 1 else ""
+        mostrados = candidatos[:MAX_PROVAVEIS]
+        vistos: list[str] = []
+        for pedido, aberto in mostrados:
+            texto = pedido.numero_totvs + ("" if aberto else " (E)")
+            if texto not in vistos:
+                vistos.append(texto)
+        sobra = len(candidatos) - len(mostrados)
+        linha[PC_PROVAVEIS] = JUNTA_POSSIVEIS.join(vistos) + (f" +{sobra}" if sobra else "")
+        linha["_possiveis"] = len(candidatos)
 
-        linha["_possiveis"] = len(mostrados)
-        detalhe = JUNTA_POSSIVEIS.join(f"{p.rotulo} ({_moeda(p.vlr)})"
-                                       for p in mostrados)
-        sobra = len(ordenadas) - len(mostrados)
-        # ⚠ Quando os candidatos estão em mais de uma empresa, isto é a ÚNICA
-        # coisa na tela que diz onde procurar: a coluna da filial fica vazia de
-        # propósito (ver acima) e a do número já não carrega a empresa.
-        empresas = ("" if len(filiais) < 2 else
-                    f"  ⚠ Estes pedidos estão em MAIS DE UMA EMPRESA "
-                    f"({JUNTA_POSSIVEIS.join(filiais)}) — a coluna “Filial do "
-                    f"PC” fica vazia por isso; a empresa de cada pedido está no "
-                    f"número completo abaixo")
-        criterio = linha.get(CRITERIO) or ""
+        n_ab, n_fe = len(abertos), len(fechados)
+        detalhe = JUNTA_POSSIVEIS.join(
+            f"{p.numero_totvs}{'' if ab else ' (E)'} ({_moeda(p.vlr)}"
+            f"{', ' + p.emissao.strftime('%d/%m/%Y') if p.emissao else ''})"
+            for p, ab in mostrados)
         linha[CRITERIO] = (
-            f"{criterio}  ⚠ POSSIBILIDADES: este fornecedor tem "
-            f"{len(ordenadas)} pedido(s) EM ABERTO na SC7 nesta empresa e nenhum bate com o "
-            f"valor da nota. Estão listados em “Numero PC” só para conferência "
-            f"— o pedido NÃO foi escolhido: {detalhe}"
-            + (f" — e mais {sobra} que não couberam na coluna" if sobra else "")
-            + empresas)
+            f"{linha.get(CRITERIO) or ''}  ⚠ PC PROVÁVEIS: este fornecedor tem "
+            f"{n_ab} pedido(s) em aberto e {n_fe} encerrado(s) nesta empresa "
+            f"(filial {linha.get(FILIAL_NOTA) or '?'}) — cruzamento SÓ por "
+            f"fornecedor, o pedido NÃO foi escolhido. "
+            + (f"Os {len(mostrados)} mais prováveis (valor batendo, depois em aberto, "
+               f"depois emissão mais próxima): " if sobra else "")
+            + detalhe
+            + (f" — e mais {sobra} que não couberam na coluna" if sobra else ""))
         marcadas += 1
     return marcadas
 
@@ -1184,7 +1174,8 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
     # não veredito. ⚠ Roda por ÚLTIMO de propósito: rodando antes, a análise
     # agrupada veria a coluna preenchida e não poderia mais casar por soma
     # (ela e a busca 1:1 escrevem PEDIDO DE VERDADE ali). Ver `possibilidades`.
-    possibilidades(saida, pedidos, por_fornecedor, por_nome)
+    possibilidades(saida, pedidos, por_fornecedor, por_nome,
+                   encerrados, por_fornecedor_enc, por_nome_enc)
     return saida
 
 
@@ -1256,12 +1247,9 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
         # e o que separa "a aba encolheu" de "a base encolheu"
         "notas_sefaz": total_notas,
         "lancadas_fora": total_notas - len(linhas),
-        # ⚠ `and not _possiveis`: desde 03/09/2026 a coluna `Numero PC` também
-        # carrega os pedidos CANDIDATOS de uma nota sem pedido. Contando a
-        # coluna crua, o painel passaria a dizer que 464 notas têm pedido
-        # quando 69 têm. Ver `possibilidades`.
-        "com_pedido": sum(1 for l in linhas
-                          if l.get(PC) and not l.get("_possiveis")),
+        # `Numero PC` volta a carregar SO o pedido escolhido (os provaveis tem
+        # coluna propria desde 03/09/2026), entao a coluna crua e a conta certa
+        "com_pedido": sum(1 for l in linhas if l.get(PC)),
         "com_possiveis": sum(1 for l in linhas if l.get("_possiveis")),
         "confirmados": contagem.get(CONFIRMADO, 0),
         "provaveis": contagem.get(PROVAVEL, 0),

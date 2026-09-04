@@ -576,6 +576,13 @@ COMPACTA_PEDIDOS = [
     # conferir. Ver sc7.chave_pedido().
     ("Filial do PC",      "boleto", "PEDIDO",       4.5),
     ("Numero PC",         "boleto", "PEDIDO",       5),
+    # 03/09/2026 (pedido do usuario): os pedidos PROVAVEIS do fornecedor --
+    # abertos e encerrados, cruzando SO o fornecedor (CNPJ ou razao social),
+    # dentro da empresa da nota. Colada em `Numero PC` para a leitura ser "o
+    # que foi escolhido | o que mais poderia ser". E palpite, nao veredito: a
+    # Situacao nao a le. Copiavel como a vizinha, e por isso a celula com lista
+    # ja nasce cortada com "..." (ver `td.acao.lista` no painel_modelo.html).
+    ("Numero PC Prováveis", "boleto", "PEDIDO",     8),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
@@ -627,13 +634,10 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Vlr Duplicata": "Valor da 1ª Duplicata",
     "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
     "Filial do PC": "Filial dona do Pedido (SC7) — o nº do pedido se repete entre filiais",
-    # ⚠ O rótulo diz as DUAS coisas porque a célula tem dois sentidos desde
-    # 03/09/2026: quando a nota tem pedido, é O pedido; quando não tem, são os
-    # PCs EM ABERTO daquele fornecedor, listados só para conferência (nada foi
-    # escolhido -- o resto do bloco PEDIDO fica vazio, e é assim que se
-    # distingue um caso do outro na tela). Este texto é o título do quadro que
-    # abre no clique da célula E o cabeçalho da coluna no .xlsx.
-    "Numero PC": "Nº do Pedido de Compra (SC7) — ou os PCs possíveis do fornecedor",
+    "Numero PC": "Nº do Pedido de Compra (SC7)",
+    # Este texto é o título do quadro que abre no clique da célula E o
+    # cabeçalho da coluna no .xlsx. "(E)" = encerrado, a letra da SC7.
+    "Numero PC Prováveis": "PCs prováveis do fornecedor na empresa da nota — abertos e encerrados (E)",
     "Numero da SC": "Nº da Solicitação de Compra (SC7)",
     "Solicitante": "Solicitante da SC (SC1)",
     "Comprador": "Comprador do Pedido (SC7)",
@@ -968,6 +972,7 @@ ABAS = {
         "nao_copiar": {"Emitente", "Nome Fantasia", "Fornecedor do PC",
                        "Solicitante", "Comprador"},
         "copiar_extra": {"Nº NF": "", "NF no TOTVS": "", "Numero PC": "",
+                         "Numero PC Prováveis": "",
                          "Numero da SC": "", "Destinatário": "",
                          "CNPJ Destinatário": ""},
         "col_alerta": "Alerta",
