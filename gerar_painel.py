@@ -520,19 +520,17 @@ COMPACTA_PEDIDOS = [
     # atravessar 36 colunas para chegar nela.
     ("Chave NF-e",        "",       "",             3.5),
     ("Situação",          "",       "",            10),
-    # ⚠ O MESMO `Numero PC` aparece DUAS vezes de propósito (pedido do usuario,
-    # 13/08/2026: "coloque o numero do pedido depois da coluna situação
-    # também"). Aqui ele fica colado no veredito -- que e a leitura de sempre,
-    # "qual pedido e o quanto confiar" -- e continua no bloco PEDIDO, junto do
-    # resto do pedido. Duas colunas com a mesma `chave` sao inofensivas: a
-    # celula e a mesma e ordenar por qualquer uma das duas ordena igual.
-    # ⚠ A LARGURA VOLTOU A 5 em 03/09/2026, no mesmo dia em que foi para 8:
-    # ele: "mova a coluna Numero PC para onde ela estava antes de voce mover
-    # ela". Alargar a coluna EMPURRA todas as outras para a direita, e a aba
-    # tem 42 colunas -- de longe, a grade inteira "andou". A lista de
-    # possibilidades cabe do mesmo jeito: a célula corta com "…" e o texto
-    # completo, com valor de cada pedido, está no quadro do Critério.
-    ("Numero PC",         "",       "",             5),
+    # ⚠ AQUI HAVIA UM SEGUNDO `Numero PC`, colado na Situação, e ele SAIU em
+    # 03/09/2026 ("remova a coluna de numero do pc do inicio e deixe so onde
+    # esta no meio"). Tinha sido pedido em 13/08/2026 -- "coloque o numero do
+    # pedido depois da coluna situação também" -- e deixou de fazer sentido no
+    # dia em que a célula parou de ser um número e passou a ser a lista de
+    # possibilidades (ver pedidos_sefaz.possibilidades()): duas cópias de uma
+    # lista de 253 caracteres não são duas leituras, são a mesma leitura duas
+    # vezes. O `Numero PC` continua no bloco PEDIDO, junto do resto do pedido.
+    # Para trazer de volta: reinserir ("Numero PC", "", "", 5) nesta linha --
+    # duas colunas com a mesma `chave` são inofensivas (a célula é a mesma e
+    # ordenar por qualquer uma das duas ordena igual).
     # ⚠ 15 pontos (≈187px) porque o selo mais longo desta coluna passou a ser
     # "PENDENTE A MAIS DE 3 DIAS": `.selo` e nowrap + ellipsis, entao com os 6,5
     # de antes ele sairia cortado ("PENDENTE A M…") sem erro nenhum aparecer.
