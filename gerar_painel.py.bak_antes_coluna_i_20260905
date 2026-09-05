@@ -592,8 +592,6 @@ COMPACTA_PEDIDOS = [
     # inclua o icone"): com 13 (163px) o botao ficava com 134px e o texto do
     # 1o PC ja cortava; 18 = 225px deixa 2 pedidos legiveis + ⧉ + ⓘ.
     ("Numero PC Prováveis", "boleto", "PEDIDO",    18),
-    # o icone "i" que abre o quadro do POR QUE -- coluna propria, colada na lista
-    ("@porque_pc",          "boleto", "PEDIDO",     2.5),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
@@ -1011,7 +1009,6 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     # mentia na metade das linhas.
                     "@tipo_pgto": "Tipo Pgto", "@tipo_real": "Tipo real",
                     "@alerta_tipo": "Confere?",
-                    "@porque_pc": "?",
                     "CHECK (FEITO)": "OK", "No. Titulo": "Nº título",
                     "NF/Doc Boleto": "NF boleto", "Prefixo": "Pref.",
                     "Parcela": "Parc.", "Razão Social": "Razão social",
@@ -1381,10 +1378,6 @@ TIPOS_VIRTUAIS = {
     "@tipo_pgto": "tipo_pgto",      # so leitura, vem da SE2
     "@tipo_real": "tipo_real",      # menu; grava no banco, por titulo
     "@alerta_tipo": "alerta_tipo",  # calculado na hora, no navegador
-    # 05/09/2026: o icone que abre o quadro do POR QUE dos PC provaveis. Coluna
-    # PROPRIA, a pedido ("crie uma coluna nova ao lado para incluir esse icone"):
-    # dentro da celula de copiar ele disputava espaco com o botao e sumia.
-    "@porque_pc": "porque_pc",
 }
 
 

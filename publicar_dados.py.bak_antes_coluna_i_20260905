@@ -127,15 +127,6 @@ def enxugar(carga: dict) -> list[dict]:
                     # texto longo (Info Comp da SEFAZ, Criterio do cruzamento):
                     # nao cabe na celula e abre no quadro. So viaja onde existe.
                     **({"texto": r["texto"]} if r.get("texto") else {}),
-                    # 05/09/2026. O POR QUE dos PC provaveis (aba NF x Pedido).
-                    # ⚠ Esta lista e uma WHITELIST: campo novo na linha que nao
-                    # entrar aqui simplesmente nao existe no painel publicado --
-                    # e nada avisa. Foi assim que o icone dos provaveis apareceu no
-                    # dev.html (JSON embutido) e nunca no ar. Contraparte no
-                    # supa.js (`montarLinha`), que remonta a linha campo a campo.
-                    **({"pcprov": r["pcprov"]}
-                       if (r.get("pcprov") or {}).get("itens") or (r.get("pcprov") or {}).get("aviso")
-                       else {}),
                 },
             })
     return titulos

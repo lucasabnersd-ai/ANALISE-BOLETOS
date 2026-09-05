@@ -168,10 +168,6 @@
       alerta: d.alerta || { tipo: "", nf: "" },
       match: d.match || null,
       texto: d.texto || null,
-      // o POR QUE dos PC provaveis (aba NF x Pedido, 05/09/2026). ⚠ Esta funcao
-      // remonta a linha CAMPO A CAMPO: campo que o publicar_dados.py mandar e
-      // nao estiver aqui chega ao navegador e e jogado fora em silencio.
-      pcprov: d.pcprov || null,
       selo: d.selo || "", ocr: !!d.ocr,
       feito: marca.feito != null ? marca.feito : !!d.feito,
       tratativa: marca.tratativa || "",
