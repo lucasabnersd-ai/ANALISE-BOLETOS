@@ -706,16 +706,21 @@ table.conferencia td.acao{position:relative}
    faria transbordar a célula em vez de encolher.
    `pointer-events:auto` é o que o torna alvo do hover; `z-index` porque o botão
    é pintado depois dele. */
-.marca-quadro{position:absolute; top:50%; right:2px; transform:translateY(-50%);
-  z-index:2; font-size:12px; line-height:1; color:var(--azul-2); cursor:help;
-  pointer-events:auto}
-.marca-quadro:hover{color:var(--txt)}
+/* ⚠ BOLINHA SÓLIDA COM "i", e não o glifo ⓘ (05/09/2026). O U+24D8 depende de a
+   fonte da máquina ter o caractere -- e um ⓘ fino de 12px em azul sobre fundo
+   claro é a coisa mais fácil de não ver numa grade de 42 colunas. A bolinha tem
+   fundo, 16px, e não depende de glifo nenhum. */
+.marca-quadro{position:absolute; top:50%; right:3px; transform:translateY(-50%);
+  z-index:2; width:16px; height:16px; display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; line-height:1; color:#fff; background:var(--azul-2);
+  border-radius:50%; cursor:help; pointer-events:auto; font-family:Calibri, "Segoe UI", sans-serif}
+.marca-quadro:hover{filter:brightness(1.15)}
 /* ⚠ CLASSE NO `td`, NUNCA `:has()`. O seletor `td.acao:has(.marca-quadro)`
    funciona no Chrome novo e falha calado no que for anterior ao 105 -- e
    falhar aqui quer dizer botao ocupando 100%, ⓘ por cima da borda dele e
    ninguem vendo icone nenhum, que foi exatamente o relato. Quem sabe se ha
    icone e o `celulaCompacta`, entao ele marca a celula e o CSS so obedece. */
-table.conferencia td.acao.com-marca .botao-copia{width:calc(100% - 16px)}
+table.conferencia td.acao.com-marca .botao-copia{width:calc(100% - 22px)}
 table.conferencia td.acao.lista{max-width:0}
 table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
@@ -1242,7 +1247,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609050106"></script>
+<script src="supa.js?v=202609050216"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2497,7 +2502,7 @@ function celulaCompacta(r, col){
     const p = (r.pcprov || {});
     const temQuadroProv = col.papel === "provaveis" && ((p.itens || []).length || p.aviso);
     const icone = temQuadroProv
-      ? `<span class="marca-quadro" data-prov="${esc(r.uuid)}" title="Por que estes PC">ⓘ</span>`
+      ? `<span class="marca-quadro" data-prov="${esc(r.uuid)}" title="Por que estes PC">i</span>`
       : "";
     return `<td class="acao ${lista}${icone ? "com-marca " : ""}${zona}"><button class="botao-copia" type="button"
       data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button>${icone}</td>`;

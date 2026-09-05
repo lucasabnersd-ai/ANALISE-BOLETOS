@@ -588,7 +588,10 @@ COMPACTA_PEDIDOS = [
     # Alargar aqui NAO espreme as outras -- a largura e em pixel e a tabela e
     # `max-content` (ver project_painel_tabela_nao_espreme): so empurra a
     # rolagem horizontal.
-    ("Numero PC Prováveis", "boleto", "PEDIDO",    13),
+    # 13 -> 18 em 05/09/2026, de novo a pedido ("aumente a largura da coluna e
+    # inclua o icone"): com 13 (163px) o botao ficava com 134px e o texto do
+    # 1o PC ja cortava; 18 = 225px deixa 2 pedidos legiveis + ⧉ + ⓘ.
+    ("Numero PC Prováveis", "boleto", "PEDIDO",    18),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
