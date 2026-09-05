@@ -689,19 +689,6 @@ td.acao{padding:3px 6px}
    -- o botão copia a lista inteira e o Ctrl+F do navegador ainda a encontra. O
    corte é só visual, e o texto completo (com o valor de cada pedido) está no
    quadro do Critério. */
-/* ---------- o marcador ⓘ dos PC prováveis (05/09/2026) ----------
-   ⚠ A célula é `td.acao{padding:3px 6px}` com um `.botao-copia` de `width:100%`:
-   pôr o ícone no fluxo empurraria o botão e a coluna. Por isso ele é ABSOLUTO,
-   ancorado no canto da célula, e a célula ganha `position:relative`.
-   `pointer-events:auto` porque ele é o alvo do hover; `z-index` porque o botão
-   vem depois dele no fluxo de pintura. */
-table.conferencia td.acao{position:relative}
-.marca-quadro{position:absolute; top:50%; right:2px; transform:translateY(-50%);
-  z-index:2; font-size:11px; line-height:1; color:var(--azul-2); cursor:help;
-  background:var(--surface); border-radius:50%; padding:1px}
-.marca-quadro:hover{color:var(--txt); background:var(--sel)}
-/* o ⧉ recua para o ícone não cair em cima dele */
-table.conferencia td.acao:has(.marca-quadro) .botao-copia{padding-right:16px}
 table.conferencia td.acao.lista{max-width:0}
 table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
@@ -2152,20 +2139,10 @@ function celulaCompacta(r, col){
     // a linha tem motivos -- célula vazia não abre quadro nenhum. O gatilho vai
     // no `td` e não no `button`: o botão já tem `title` próprio ("clique para
     // copiar"), e dois avisos no mesmo alvo brigam.
-    /* ⚠ O QUADRO ABRE NO ÍCONE, não na célula inteira (05/09/2026, ele: "inclua
-       um ícone ou marcador que irá mostrar a janela"). Com o gatilho no `td`, o
-       quadro aparecia ao passar por cima de qualquer parte da célula -- inclusive
-       indo copiar --, e nada na tela dizia QUE ali havia janela. Agora o `ⓘ` é o
-       marcador e o alvo, e o resto da célula continua sendo só o botão de copiar.
-       ⚠ Ele fica FORA do `<button>`: dentro, o clique para copiar pegaria o ícone
-       junto, e o `title` do botão brigaria com o quadro. */
-    const p = (r.pcprov || {});
-    const temQuadroProv = col.papel === "provaveis" && ((p.itens || []).length || p.aviso);
-    const icone = temQuadroProv
-      ? `<span class="marca-quadro" data-prov="${esc(r.uuid)}" title="Por que estes PC">ⓘ</span>`
-      : "";
-    return `<td class="acao ${lista}${zona}"><button class="botao-copia" type="button"
-      data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button>${icone}</td>`;
+    const prov = (col.papel === "provaveis" && ((r.pcprov || {}).itens || []).length)
+      ? ` data-prov="${esc(r.uuid)}"` : "";
+    return `<td class="acao ${lista}${zona}"${prov}><button class="botao-copia" type="button"
+      data-copiar="${esc(copia)}" title="${prov ? "Passe o mouse para ver o porquê" : "Clique para copiar " + esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button></td>`;
   }
   if (col.papel === "status"){
     // sem title: quem explica o match agora e o quadro que abre no hover.
@@ -2440,11 +2417,7 @@ function abrirCartaoProvaveis(alvo, uuid){
   const r = A().linhas.find(l => l.uuid === uuid);
   const p = (r || {}).pcprov || {};
   const itens = p.itens || [];
-  // ⚠ O quadro também abre SEM pedido nenhum: é o caso do fornecedor que só tem
-  // PC em OUTRA empresa do grupo. A célula fica sem número (não há PC desta
-  // empresa para mostrar) e o `aviso` é a única coisa a dizer -- antes isso ia
-  // para o Critério e agora vive aqui, com o resto dos prováveis.
-  if (!itens.length && !p.aviso) return;
+  if (!itens.length) return;
   const blocos = itens.map(i => `
     <div class="pc-bloco">
       <div class="pc-cabeca">
@@ -2462,7 +2435,6 @@ function abrirCartaoProvaveis(alvo, uuid){
        <p class="frase">Cruzamento <b>só por fornecedor</b> (CNPJ ou razão social),
          dentro da empresa da nota${p.filial ? ` (filial ${esc(p.filial)})` : ""}.
          Nenhum pedido foi escolhido — é material de conferência.</p>
-       ${p.aviso ? `<p class="revisao">${esc(p.aviso)}</p>` : ""}
        ${blocos}
      </div>
      <div class="rodape-cartao">${esc(`${p.abertos || 0} em aberto · ${p.fechados || 0} encerrado(s) deste fornecedor`)}${

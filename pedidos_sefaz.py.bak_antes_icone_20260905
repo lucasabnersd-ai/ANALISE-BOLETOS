@@ -1066,19 +1066,11 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
                       + chaves_do_fornecedor(linha, encerrados, por_fornecedor_enc,
                                              por_nome_enc))
             if outras and linha.get(FILIAL_NOTA):
-                # ⚠ VAI PARA O QUADRO DA PRÓPRIA COLUNA, e nao para o Criterio
-                # (05/09/2026, ele: "nao quero as informacoes dos provaveis nesse
-                # quadro"). A celula fica sem numero -- nao ha PC desta empresa
-                # para mostrar --, mas o icone aparece e conta o que houve.
                 filiais = sorted({(pedidos.get(c) or encerrados[c]).filial for c in outras})
-                linha[MOTIVOS_PROVAVEIS] = json.dumps(
-                    {"total": 0, "abertos": 0, "fechados": 0,
-                     "filial": linha[FILIAL_NOTA], "itens": [],
-                     "aviso": (f"Este fornecedor NÃO tem pedido nesta empresa "
-                               f"(filial {linha[FILIAL_NOTA]}), mas tem {len(outras)} "
-                               f"em outra(s): {JUNTA_POSSIVEIS.join(filiais)}")},
-                    ensure_ascii=False, separators=(",", ":"))
-                marcadas += 1
+                linha[CRITERIO] = (
+                    f"{linha.get(CRITERIO) or ''}  ⚠ PC PROVÁVEIS: este fornecedor "
+                    f"não tem pedido nesta empresa (filial {linha[FILIAL_NOTA]}), "
+                    f"mas tem {len(outras)} em outra(s): {JUNTA_POSSIVEIS.join(filiais)}")
             continue
 
         # ordem: valor batendo > em aberto > emissão mais próxima > número
@@ -1109,14 +1101,19 @@ def possibilidades(linhas: list[dict], pedidos: dict[str, sc7.Pedido],
             {"total": len(candidatos), "abertos": n_ab, "fechados": n_fe,
              "filial": linha.get(FILIAL_NOTA) or "", "itens": motivos},
             ensure_ascii=False, separators=(",", ":"))
-        marcadas += 1
-        # ⚠ O CRITÉRIO NÃO RECEBE MAIS NADA DOS PROVÁVEIS (05/09/2026). Ele:
-        # "não quero as informações dos prováveis nesse quadro -- deixe os quadros
-        # das primeiras colunas da forma que estava". O texto que estava aqui
-        # empurrava o quadro da `Situação` de 3 linhas para 20, e o veredito --
-        # que é o que aquele quadro existe para explicar -- sumia no meio. Tudo o
-        # que era este parágrafo agora vive no `MOTIVOS_PROVAVEIS`, que abre no
-        # ícone da própria coluna. Ver `abrirCartaoProvaveis`.
+        detalhe = JUNTA_POSSIVEIS.join(
+            f"{p.numero_totvs}{'' if ab else ' (E)'} ({_moeda(p.vlr)}"
+            f"{', ' + p.emissao.strftime('%d/%m/%Y') if p.emissao else ''})"
+            for p, ab in mostrados)
+        linha[CRITERIO] = (
+            f"{linha.get(CRITERIO) or ''}  ⚠ PC PROVÁVEIS: este fornecedor tem "
+            f"{n_ab} pedido(s) em aberto e {n_fe} encerrado(s) nesta empresa "
+            f"(filial {linha.get(FILIAL_NOTA) or '?'}) — cruzamento SÓ por "
+            f"fornecedor, o pedido NÃO foi escolhido. "
+            + (f"Os {len(mostrados)} mais prováveis (valor batendo, depois em aberto, "
+               f"depois emissão mais próxima): " if sobra else "")
+            + detalhe
+            + (f" — e mais {sobra} que não couberam na coluna" if sobra else ""))
         marcadas += 1
     return marcadas
 
