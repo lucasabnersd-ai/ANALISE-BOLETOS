@@ -696,12 +696,20 @@ td.acao{padding:3px 6px}
    `pointer-events:auto` porque ele é o alvo do hover; `z-index` porque o botão
    vem depois dele no fluxo de pintura. */
 table.conferencia td.acao{position:relative}
-.marca-quadro{position:absolute; top:50%; right:2px; transform:translateY(-50%);
-  z-index:2; font-size:11px; line-height:1; color:var(--azul-2); cursor:help;
-  background:var(--surface); border-radius:50%; padding:1px}
-.marca-quadro:hover{color:var(--txt); background:var(--sel)}
-/* o ⧉ recua para o ícone não cair em cima dele */
-table.conferencia td.acao:has(.marca-quadro) .botao-copia{padding-right:16px}
+/* ⚠ O ÍCONE FICA À ESQUERDA, COM ESPAÇO PRÓPRIO. Na 1ª tentativa ele era um
+   `right:2px` de 13px, e caía em cima da borda direita do botão: existia no DOM,
+   media 13x13 e estava "visível" por toda medição -- mas na tela ninguém o via.
+   Agora o botão recua 15px (`margin-left` + `width` descontada, porque ele é
+   `width:100%` e só a margem o faria transbordar) e o ⓘ ocupa essa faixa
+   sozinho, no começo da célula, onde o olho bate primeiro.
+   `pointer-events:auto` é o que o torna alvo do hover; `z-index` porque o botão
+   é pintado depois dele. */
+.marca-quadro{position:absolute; top:50%; left:3px; transform:translateY(-50%);
+  z-index:2; font-size:12px; line-height:1; color:var(--azul-2); cursor:help;
+  pointer-events:auto}
+.marca-quadro:hover{color:var(--txt)}
+table.conferencia td.acao:has(.marca-quadro) .botao-copia{
+  margin-left:15px; width:calc(100% - 15px)}
 table.conferencia td.acao.lista{max-width:0}
 table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
@@ -1228,7 +1236,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609050046"></script>
+<script src="supa.js?v=202609050058"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
