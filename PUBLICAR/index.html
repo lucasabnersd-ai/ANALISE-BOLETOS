@@ -710,7 +710,12 @@ table.conferencia td.acao{position:relative}
   z-index:2; font-size:12px; line-height:1; color:var(--azul-2); cursor:help;
   pointer-events:auto}
 .marca-quadro:hover{color:var(--txt)}
-table.conferencia td.acao:has(.marca-quadro) .botao-copia{width:calc(100% - 16px)}
+/* ⚠ CLASSE NO `td`, NUNCA `:has()`. O seletor `td.acao:has(.marca-quadro)`
+   funciona no Chrome novo e falha calado no que for anterior ao 105 -- e
+   falhar aqui quer dizer botao ocupando 100%, ⓘ por cima da borda dele e
+   ninguem vendo icone nenhum, que foi exatamente o relato. Quem sabe se ha
+   icone e o `celulaCompacta`, entao ele marca a celula e o CSS so obedece. */
+table.conferencia td.acao.com-marca .botao-copia{width:calc(100% - 16px)}
 table.conferencia td.acao.lista{max-width:0}
 table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia .rot{flex:none; font-weight:700; color:var(--azul-2); letter-spacing:.3px}
@@ -1237,7 +1242,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609050059"></script>
+<script src="supa.js?v=202609050106"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2494,7 +2499,7 @@ function celulaCompacta(r, col){
     const icone = temQuadroProv
       ? `<span class="marca-quadro" data-prov="${esc(r.uuid)}" title="Por que estes PC">ⓘ</span>`
       : "";
-    return `<td class="acao ${lista}${zona}"><button class="botao-copia" type="button"
+    return `<td class="acao ${lista}${icone ? "com-marca " : ""}${zona}"><button class="botao-copia" type="button"
       data-copiar="${esc(copia)}" title="Clique para copiar ${esc(valor)}"><code>${esc(valor) || "—"}</code><span class="rot">⧉</span></button>${icone}</td>`;
   }
   if (col.papel === "status"){
