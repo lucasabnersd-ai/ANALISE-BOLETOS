@@ -583,7 +583,12 @@ COMPACTA_PEDIDOS = [
     # que foi escolhido | o que mais poderia ser". E palpite, nao veredito: a
     # Situacao nao a le. Copiavel como a vizinha, e por isso a celula com lista
     # ja nasce cortada com "..." (ver `td.acao.lista` no painel_modelo.html).
-    ("Numero PC Prováveis", "boleto", "PEDIDO",     8),
+    # ⚠ 8 -> 13 em 05/09/2026 ("aumente a largura da coluna"): a célula tem a
+    # lista, o ⧉ e agora o ⓘ, e com 8 (100px) sobrava um pedaço do primeiro PC.
+    # Alargar aqui NAO espreme as outras -- a largura e em pixel e a tabela e
+    # `max-content` (ver project_painel_tabela_nao_espreme): so empurra a
+    # rolagem horizontal.
+    ("Numero PC Prováveis", "boleto", "PEDIDO",    13),
     ("Numero da SC",      "boleto", "PEDIDO",       5.5),
     ("Solicitante",       "boleto", "PEDIDO",       8),
     ("Comprador",         "boleto", "PEDIDO",       8),
