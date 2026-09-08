@@ -1,0 +1,5 @@
+# A Vercel publica ESTA pasta (Root Directory = PUBLICAR no projeto), entao os
+# .py/.cmd la de cima nem entram no deploy -- ao contrario do GitHub Pages, que
+# servia o repositorio inteiro (ANALISE-BOLETOS/gerar_painel.py respondia 200).
+# O que sobra barrar e o backup do supa.js, que mora aqui dentro.
+*.bak*

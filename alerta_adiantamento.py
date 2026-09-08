@@ -49,10 +49,16 @@ def para_quem() -> str:
 
     Uma linha por endereco; linha vazia e linha comecando com # sao ignoradas.
     Devolve "" quando nao ha para quem mandar -- quem chama avisa e segue.
+
+    ⚠ `utf-8-sig`, e nao `utf-8`: o Bloco de Notas e o `Set-Content -Encoding utf8`
+    do PowerShell 5.1 gravam BOM, e o BOM entrava GRUDADO no endereco
+    ("﻿graziela.silva@..."). O Outlook engoliu assim mesmo no teste, o que e
+    o pior dos mundos -- passaria despercebido ate o dia de trocar de cliente.
     """
     if not DESTINATARIOS.exists():
         return ""
-    enderecos = [l.strip() for l in DESTINATARIOS.read_text(encoding="utf-8").splitlines()]
+    texto = DESTINATARIOS.read_text(encoding="utf-8-sig")
+    enderecos = [l.strip().lstrip("﻿") for l in texto.splitlines()]
     return "; ".join(e for e in enderecos if e and not e.startswith("#"))
 
 # O que a classificacao escreve na coluna. Comparacao normalizada (maiuscula e

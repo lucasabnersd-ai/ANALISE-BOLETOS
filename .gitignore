@@ -33,3 +33,12 @@ BACKUPS/
 # 200), entao endereco de pessoa dentro de .py versionado vira e-mail exposto na
 # internet. O arquivo viaja entre as maquinas pelo OneDrive, nao pelo git.
 .alerta_adiantamento_para
+
+# --- Vercel (segundo host do painel, desde 08/09/2026) ---
+# O `*.json` la de cima barraria a configuracao da Vercel, e sem ela o painel
+# subiria SEM os cabecalhos de seguranca (CSP, noindex, HSTS) -- e nada avisaria.
+!PUBLICAR/vercel.json
+# Credenciais e id do projeto que o CLI da Vercel grava na pasta.
+.vercel
+.env
+.env.*
