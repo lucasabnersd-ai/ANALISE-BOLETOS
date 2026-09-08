@@ -26,3 +26,10 @@ BACKUPS/
 
 # Token estreito de upload
 .analise_boletos_token
+
+# Para quem o alerta de AMARRAR ADIANTAMENTO e enviado. Fica FORA do repositorio
+# pelo mesmo motivo do token: o Pages serve este repo publicamente (confira em
+# https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/gerar_painel.py -- responde
+# 200), entao endereco de pessoa dentro de .py versionado vira e-mail exposto na
+# internet. O arquivo viaja entre as maquinas pelo OneDrive, nao pelo git.
+.alerta_adiantamento_para
