@@ -15,17 +15,15 @@ rem RODAR_ASSOCIADOR_BOLETOS.CMD para refazer a base, depois este aqui. Quem
 rem esquecesse o primeiro publicava o painel em cima da base do dia anterior sem
 rem perceber -- o painel nao tem como saber que a planilha ficou para tras.
 rem
-rem   [1/6] gera a base   ...\LUCAS ABNER ARAUJO\TRATAMENTO PYTHON BOLETOS.xlsx
+rem   [1/5] gera a base   ...\LUCAS ABNER ARAUJO\TRATAMENTO PYTHON BOLETOS.xlsx
 rem         (RODAR_ASSOCIADOR_BOLETOS.CMD, que no fim dele tambem sincroniza e
 rem         publica o painel BOLETOS-PENDENTES -- os dois saem da mesma rodada
 rem         de associacao, entao ou os dois andam, ou um fica mentindo)
-rem   [2/6] le a base e monta o painel      (gerar_painel.py)
-rem   [3/6] avisa a Graziela se um titulo de AMARRAR ADIANTAMENTO
-rem         estiver com boleto              (alerta_adiantamento.py)
-rem   [4/6] avisa a Graziela dos titulos em aberto vencendo em sabado,
-rem         domingo ou feriado              (alerta_dia_util.py)
-rem   [5/6] sobe a carteira para o Supabase (publicar_dados.py)
-rem   [6/6] publica no GitHub Pages e na Vercel (deploy.py)
+rem   [2/5] le a base e monta o painel      (gerar_painel.py)
+rem   [3/5] avisa a Graziela por e-mail se um titulo de AMARRAR
+rem         ADIANTAMENTO estiver com boleto  (alerta_adiantamento.py)
+rem   [4/5] sobe a carteira para o Supabase (publicar_dados.py)
+rem   [5/5] publica no GitHub Pages         (deploy.py)
 rem
 rem Para republicar depressa, sem refazer a associacao (a base ja esta boa):
 rem   ATUALIZAR_PAINEL.cmd /sembase
@@ -143,12 +141,12 @@ echo ============================================================
 echo.
 
 if not defined GERAR_BASE (
-  echo [1/6] Base NAO regerada ^(/sembase^): usando a planilha como ela esta.
+  echo [1/5] Base NAO regerada ^(/sembase^): usando a planilha como ela esta.
   echo.
   goto :montar_painel
 )
 
-echo [1/6] Gerando a base TRATAMENTO PYTHON BOLETOS.xlsx...
+echo [1/5] Gerando a base TRATAMENTO PYTHON BOLETOS.xlsx...
 echo       ^(associacao das 6 bases; demora alguns minutos^)
 echo.
 if not exist "%ASSOCIADOR%" (
@@ -193,14 +191,14 @@ if not defined BASE_PROPRIA if not exist "%BASE_PAINEL%" (
 )
 
 echo.
-echo [2/6] Lendo a planilha e montando o painel...
+echo [2/5] Lendo a planilha e montando o painel...
 echo.
 "%PYTHON%" %PYARGS% "%AQUI%gerar_painel.py"%BASES%%EXTRA%
 set "CODIGO=%ERRORLEVEL%"
 if not "%CODIGO%"=="0" goto :erro
 
 echo.
-echo [3/6] Conferindo AMARRAR ADIANTAMENTO com boleto...
+echo [3/5] Conferindo AMARRAR ADIANTAMENTO com boleto...
 echo.
 rem Titulo classificado como "amarrar adiantamento" e quitado contra um
 rem adiantamento JA PAGO -- boleto ligado a ele e sinal de erro: ou a
@@ -215,22 +213,7 @@ rem a publicacao -- mesma regra da cortesia do BOLETOS-PENDENTES no associador.
 "%PYTHON%" %PYARGS% "%AQUI%alerta_adiantamento.py"
 
 echo.
-echo [4/6] Conferindo vencimento em sabado, domingo ou feriado...
-echo.
-rem Banco nao compensa em dia nao util: pagamento agendado para sabado,
-rem domingo ou feriado ou nao sai, ou sai no dia seguinte com juros de um dia
-rem que ninguem provisionou. Le a SE2 direto (quem manda na data e o titulo,
-rem nao o boleto), so o que esta EM ABERTO, de 7 dias atras a 15 a frente, e
-rem manda a data do proximo dia util ja calculada linha a linha.
-rem
-rem Os dois alertas tem TRAVA DIARIA (DADOSlertas_enviados.json): mandam uma
-rem vez por dia, no primeiro que rodar. Sem isso, quem clica no painel tres
-rem vezes mandaria o mesmo e-mail tres vezes -- e alerta demais ninguem le.
-rem Para repetir de proposito: alerta_dia_util.py --forcar
-"%PYTHON%" %PYARGS% "%AQUI%alerta_dia_util.py"
-
-echo.
-echo [5/6] Subindo a carteira para o painel publicado...
+echo [4/5] Subindo a carteira para o painel publicado...
 echo.
 rem Sem esta etapa o painel no ar continuaria com os dados da carga anterior:
 rem o gerar_painel.py so escreve os arquivos aqui na maquina.
@@ -247,7 +230,7 @@ if not "%CODIGO%"=="0" goto :erro
 
 :publicar_git
 echo.
-echo [6/6] Publicando PUBLICAR\ no GitHub Pages (commit e push)...
+echo [5/5] Publicando PUBLICAR\ no GitHub Pages (commit e push)...
 echo.
 rem Sem esta etapa o layout gerado (PUBLICAR\index.html) fica so nesta maquina:
 rem o deploy.py faz git add/commit/push do que o .gitignore deixar passar.

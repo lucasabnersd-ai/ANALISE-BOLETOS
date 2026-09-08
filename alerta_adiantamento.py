@@ -12,54 +12,28 @@ O painel ja mostra isso, mas so para quem entra e procura. Este script vira o
 aviso do avesso: a rodada e que procura, e so manda e-mail quando ACHA.
 
 Uso:
-    python alerta_adiantamento.py                 # manda o e-mail se houver caso
-    python alerta_adiantamento.py --teste         # NAO manda: grava o HTML e mostra
-    python alerta_adiantamento.py --para fulano@x # manda para outro endereco
+    python alerta_adiantamento.py            # manda, no maximo uma vez por dia
+    python alerta_adiantamento.py --teste    # NAO manda: grava o HTML e mostra
+    python alerta_adiantamento.py --forcar   # manda de novo no mesmo dia
 
 Codigo de saida: SEMPRE 0 quando o painel foi lido. Falha de e-mail nao pode
-derrubar a rodada do painel -- mesma regra da publicacao do BOLETOS-PENDENTES
-la no associador. O que da errado sai no texto, nao no errorlevel.
+derrubar a rodada -- mesma regra da publicacao do BOLETOS-PENDENTES la no
+associador. O que da errado sai no texto, nao no errorlevel.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import html
 import json
-import sys
 from pathlib import Path
+
+import alertas_comuns as comuns
 
 PASTA = Path(__file__).resolve().parent
 DADOS = PASTA / "DADOS" / "analise_boletos.json"
 PREVIA = PASTA / "DADOS" / "alerta_adiantamento_previa.html"
-
-# ⚠ O destinatario NAO fica escrito aqui. Este repositorio e servido pelo GitHub
-# Pages, e o Pages entrega o repo inteiro, nao so a pasta PUBLICAR:
-# https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/gerar_painel.py responde 200
-# para qualquer um. Endereco de pessoa dentro de .py versionado seria e-mail de
-# colega publicado na internet. Fica em .alerta_adiantamento_para, que o
-# .gitignore barra (mesma regra do .analise_boletos_token) e que viaja entre as
-# duas maquinas pelo OneDrive.
-DESTINATARIOS = PASTA / ".alerta_adiantamento_para"
-
-
-def para_quem() -> str:
-    """Le o destinatario do arquivo de fora do repositorio.
-
-    Uma linha por endereco; linha vazia e linha comecando com # sao ignoradas.
-    Devolve "" quando nao ha para quem mandar -- quem chama avisa e segue.
-
-    ⚠ `utf-8-sig`, e nao `utf-8`: o Bloco de Notas e o `Set-Content -Encoding utf8`
-    do PowerShell 5.1 gravam BOM, e o BOM entrava GRUDADO no endereco
-    ("﻿graziela.silva@..."). O Outlook engoliu assim mesmo no teste, o que e
-    o pior dos mundos -- passaria despercebido ate o dia de trocar de cliente.
-    """
-    if not DESTINATARIOS.exists():
-        return ""
-    texto = DESTINATARIOS.read_text(encoding="utf-8-sig")
-    enderecos = [l.strip().lstrip("﻿") for l in texto.splitlines()]
-    return "; ".join(e for e in enderecos if e and not e.startswith("#"))
+CHAVE = "adiantamento"
 
 # O que a classificacao escreve na coluna. Comparacao normalizada (maiuscula e
 # sem espaco sobrando) porque isso e digitado na mao la na SF1.
@@ -73,9 +47,8 @@ CAMPOS_DE_BOLETO = (
     "fonte_boleto", "fornecedor_boleto", "cnpj_boleto", "nf_doc_boleto",
 )
 
-# Coluna do e-mail -> campo da linha do painel. A ordem daqui e a ordem da
-# tabela. O UUID vem PRIMEIRO de proposito: e por ele que ela acha o titulo no
-# painel e no TOTVS, e foi o que o Lucas pediu explicitamente.
+# Coluna do e-mail -> campo da linha do painel. O UUID vem PRIMEIRO de
+# proposito: e por ele que ela acha o titulo no painel e no TOTVS.
 COLUNAS = (
     ("Código (UUID)", "campo_uuid"),
     ("Filial", "filial"),
@@ -118,114 +91,51 @@ def achar(carga: dict) -> list[dict]:
     for aba in carga.get("abas", []):
         for linha in aba.get("linhas", []):
             c = linha.get("c", {})
-            tipo = str(c.get("tipo_pgto_sf1") or "").strip().upper()
-            if tipo != TIPO_ALVO:
+            if str(c.get("tipo_pgto_sf1") or "").strip().upper() != TIPO_ALVO:
                 continue
             if not tem_boleto(c):
                 continue
-            achados.append({"aba": aba["nome"], "uuid": linha["uuid"], "c": c})
+            achados.append(dict(c, _aba=aba["nome"]))
     # Mesma ordem toda vez: sem isto, dois e-mails com os mesmos titulos
     # pareceriam diferentes so pela ordem em que o painel montou as abas.
-    achados.sort(key=lambda a: (a["c"].get("filial") or "",
-                                a["c"].get("no_titulo") or "",
-                                a["c"].get("parcela") or ""))
+    achados.sort(key=lambda a: (a.get("filial") or "", a.get("no_titulo") or "",
+                                a.get("parcela") or ""))
     return achados
 
 
 def montar_html(achados: list[dict], carga: dict) -> str:
-    """A previa em tabela, dentro do corpo do e-mail.
-
-    Nada de anexo: a planilha exigiria abrir arquivo de fora da empresa para ver
-    tres linhas. Tudo em HTML inline -- o Outlook ignora <style> em muitos
-    cenarios, entao o estilo vai atributo por atributo em cada celula.
-    """
-    fonte = "font-family:Calibri,Arial,sans-serif;"
-    th = (fonte + "font-size:11pt;background:#1F3864;color:#FFFFFF;"
-          "padding:6px 9px;border:1px solid #1F3864;text-align:left;"
-          "white-space:nowrap;")
-    td = (fonte + "font-size:11pt;padding:5px 9px;border:1px solid #BFBFBF;"
-          "vertical-align:top;")
-    # Coluna de numero alinhada a direita e com digito de largura fixa: e assim
-    # que valor bate com valor na hora de comparar de olho.
-    td_num = td + "text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;"
-    td_cod = td + "white-space:nowrap;"
-
-    cabecalho = "".join(f'<th style="{th}">{html.escape(nome)}</th>'
-                        for nome, _ in COLUNAS)
-
-    linhas = []
-    for i, a in enumerate(achados):
-        # zebra: so para nao perder a linha no meio da tabela larga
-        fundo = "background:#F2F2F2;" if i % 2 else ""
-        celulas = []
-        for nome, campo in COLUNAS:
-            valor = str(a["c"].get(campo) or "").strip() or "—"
-            estilo = td_num if nome.startswith("Vlr") else (
-                td_cod if campo in ("campo_uuid", "linha_digitavel") else td)
-            if campo == "campo_uuid":
-                estilo += "font-weight:bold;"
-            celulas.append(f'<td style="{estilo}{fundo}">{html.escape(valor)}</td>')
-        linhas.append("<tr>" + "".join(celulas) + "</tr>")
-
     quantos = len(achados)
-    titulo = ("1 título classificado como <b>AMARRAR ADIANTAMENTO</b> está com boleto associado"
-              if quantos == 1 else
-              f"{quantos} títulos classificados como <b>AMARRAR ADIANTAMENTO</b> estão com boleto associado")
-
-    return f"""<div style="{fonte}font-size:11pt;color:#000000;">
+    frase = ("1 título classificado como <b>AMARRAR ADIANTAMENTO</b> está com boleto associado"
+             if quantos == 1 else
+             f"{quantos} títulos classificados como <b>AMARRAR ADIANTAMENTO</b> "
+             f"estão com boleto associado")
+    return f"""<div style="{comuns.FONTE}font-size:11pt;color:#000000;">
   <p style="margin:0 0 12px 0;">Bom dia, Graziela,</p>
 
-  <p style="margin:0 0 12px 0;">{titulo}.</p>
+  <p style="margin:0 0 12px 0;">{frase}.</p>
 
   <p style="margin:0 0 14px 0;">Título de <b>amarrar adiantamento</b> é quitado
   contra adiantamento já pago, então não era para haver boleto ligado a ele.
   Vale conferir se a classificação está certa, se o boleto foi associado ao
   título correto, ou se o fornecedor cobrou algo que já foi adiantado.</p>
 
-  <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;{fonte}">
-    <thead><tr>{cabecalho}</tr></thead>
-    <tbody>{''.join(linhas)}</tbody>
-  </table>
+  {comuns.tabela(list(COLUNAS), achados,
+                 direita=("vlr_titulo", "valor_boleto"),
+                 destaque=("campo_uuid",))}
 
-  <p style="margin:14px 0 0 0;font-size:10pt;color:#595959;">
-    Painel de Análise de Boletos —
-    <a href="https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/">abrir o painel</a><br>
-    Aviso automático da rodada de {html.escape(carga.get('atualizado_em', ''))}.
-    Base da carteira salva em {html.escape(carga.get('salva_em', ''))}.
-  </p>
+  {comuns.rodape(
+      f"Rodada de {carga.get('atualizado_em', '')}.",
+      f"Base da carteira salva em {carga.get('salva_em', '')}.")}
 </div>"""
-
-
-def enviar(assunto: str, corpo_html: str, para: str) -> None:
-    """Manda pelo Outlook desta maquina (a mesma conta que ja esta logada).
-
-    ⚠ Com o Outlook FECHADO o COM sobe uma instancia e a mensagem pode ficar
-    parada na Caixa de Saida ate alguem abrir o programa. Por isso o
-    SendAndReceive logo depois do Send: sem ele, o script dizia "enviado" e o
-    e-mail so saia horas depois.
-    """
-    import win32com.client  # so aqui: em maquina sem Outlook o resto ainda roda
-
-    outlook = win32com.client.Dispatch("Outlook.Application")
-    email = outlook.CreateItem(0)  # 0 = olMailItem
-    email.To = para
-    email.Subject = assunto
-    email.HTMLBody = corpo_html
-    email.Send()
-
-    try:
-        namespace = outlook.GetNamespace("MAPI")
-        namespace.SendAndReceive(False)
-    except Exception as erro:  # noqa: BLE001 - avisar e seguir
-        print(f"   AVISO: nao consegui forcar o envio ({erro}).")
-        print("   Se o Outlook estiver fechado, o e-mail sai quando ele abrir.")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--para", default="")
     parser.add_argument("--teste", action="store_true",
-                        help="nao envia: grava a previa em DADOS e mostra o resumo")
+                        help="nao envia: grava a previa e mostra o resumo")
+    parser.add_argument("--forcar", action="store_true",
+                        help="envia mesmo se ja mandou hoje")
     parser.add_argument("--dados", type=Path, default=DADOS)
     args = parser.parse_args()
 
@@ -240,47 +150,46 @@ def main() -> int:
         print("   Nenhum título de AMARRAR ADIANTAMENTO com boleto. Nada a avisar.")
         return 0
 
-    destino = args.para or para_quem()
     quantos = len(achados)
-    hoje = dt.datetime.now().strftime("%d/%m/%Y")
-    assunto = (f"[Painel Boletos] {quantos} título{'s' if quantos > 1 else ''} de "
-               f"AMARRAR ADIANTAMENTO com boleto associado - {hoje}")
-    corpo = montar_html(achados, carga)
-
     print(f"   {quantos} título(s) de AMARRAR ADIANTAMENTO com boleto:")
     for a in achados:
-        c = a["c"]
-        print(f"     {c.get('campo_uuid')} | {c.get('filial')} | "
-              f"tit {c.get('no_titulo')}/{c.get('parcela')} | "
-              f"{(c.get('razao_social') or '')[:34]} | "
-              f"título {c.get('vlr_titulo')} x boleto {c.get('valor_boleto')}")
+        print(f"     {a.get('campo_uuid')} | {a.get('filial')} | "
+              f"tit {a.get('no_titulo')}/{a.get('parcela') or '-'} | "
+              f"{(a.get('razao_social') or '')[:34]} | "
+              f"título {a.get('vlr_titulo')} x boleto {a.get('valor_boleto')}")
+
+    corpo = montar_html(achados, carga)
+    assunto = (f"[Painel Boletos] {quantos} título{'s' if quantos > 1 else ''} de "
+               f"AMARRAR ADIANTAMENTO com boleto associado - "
+               f"{dt.datetime.now():%d/%m/%Y}")
 
     if args.teste:
         PREVIA.parent.mkdir(parents=True, exist_ok=True)
         PREVIA.write_text(corpo, encoding="utf-8")
-        print(f"\n   MODO TESTE: nada foi enviado.")
-        print(f"   Assunto: {assunto}")
-        print(f"   Para:    {destino or '(ninguém -- veja o aviso abaixo)'}")
+        print(f"\n   MODO TESTE: nada foi enviado.\n   Assunto: {assunto}")
         print(f"   Prévia:  {PREVIA}")
+        return 0
 
+    destino = args.para or comuns.destinatarios(CHAVE)
     if not destino:
-        # Sem destinatario o alerta e inutil, mas a rodada segue: o painel ja
-        # esta montado e vai ser publicado do mesmo jeito.
-        print(f"   AVISO: nao achei para quem mandar -- falta {DESTINATARIOS.name}")
+        print(f"   AVISO: nao achei para quem mandar -- falta {comuns.PADRAO_DESTINO}")
         print("   Crie o arquivo com um e-mail por linha (ele fica fora do repositorio).")
         return 0
 
-    if args.teste:
+    if not args.forcar and comuns.ja_enviado_hoje(CHAVE):
+        print(f"   Já enviado hoje ({comuns.quando_enviou(CHAVE)}) -- não mando de novo.")
+        print("   Para mandar assim mesmo: --forcar")
         return 0
 
     try:
-        enviar(assunto, corpo, destino)
+        comuns.enviar(assunto, corpo, destino)
+        comuns.marcar_enviado(CHAVE, quantos)
         print(f"   E-mail enviado para {destino}.")
     except Exception as erro:  # noqa: BLE001
         # Nao derruba a rodada: o painel ja esta montado e vai ser publicado.
         print(f"   AVISO: o e-mail NAO foi enviado ({erro}).")
         print("   O painel segue normalmente. Para mandar na mão:")
-        print(f'       python "{Path(__file__).name}"')
+        print(f'       python "{Path(__file__).name}" --forcar')
     return 0
 
 
