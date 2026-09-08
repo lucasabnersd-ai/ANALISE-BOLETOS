@@ -244,21 +244,7 @@ if not "%CODIGO%"=="0" goto :erro
 
 :fim
 echo.
-echo CONCLUIDO. O painel esta nos DOIS enderecos:
-echo.
-echo    Vercel  https://analise-boletos.vercel.app/
-echo    Pages   https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/
-echo.
-rem 08/09/2026. O mesmo push alimenta os dois: o deploy.py empurra a main, o
-rem Pages publica o repositorio inteiro e a Vercel publica SO a pasta PUBLICAR
-rem (Root Directory do projeto analise-boletos). Por isso os .py e .cmd daqui
-rem respondem 404 na Vercel e 200 no Pages -- e o motivo de a Vercel ser o
-rem endereco preferido para mandar para fora.
-rem
-rem O Pages segue LIGADO de proposito: os dois convivem ate ele mandar
-rem desligar. Quem desligar tem de saber que privar o repositorio APAGA o site
-rem do Pages, e voltar a publico NAO o recria -- foi o que derrubou o painel
-rem em 08/09/2026. O caminho certo e DELETE /repos/.../pages, com ordem dele.
+echo CONCLUIDO. Painel publicado em https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/
 echo.
 if not defined PAINEL_SEM_PAUSA pause
 exit /b 0
