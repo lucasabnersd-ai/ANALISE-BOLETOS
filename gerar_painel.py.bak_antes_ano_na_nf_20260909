@@ -479,11 +479,6 @@ COMPACTA_SEFAZ_SF1 = [
     ("Série",             "boleto", "",           3.5),
     ("Classificado em",   "boleto", "",           5.5),
     ("Títulos",           "",       "",           3.5),
-    # 09/09/2026: os titulos da SF1 que podem ser esta nota mesmo com o numero
-    # da NF nao batendo (fornecedor + valor ou emissao). A lista e copiavel; o
-    # POR QUE de cada um abre no quadro da coluna do lado.
-    ("Títulos Prováveis na SF1",      "boleto", "",   15),
-    ("Por que estes títulos prováveis", "boleto", "",  3),
     # ⚠ O Criterio NAO tem coluna propria aqui: ele ja abre no quadro do selo de
     # Situação (o mesmo desenho do MATCH FORTE das outras abas). Repetir a
     # coluna custava 78 KB de carteira para mostrar duas vezes a mesma frase.
@@ -510,8 +505,6 @@ ROTULOS_PLANILHA_SEFAZ_SF1 = {
     "Vlr Duplicata": "Valor da 1ª Duplicata",
     "Duplicatas": "Quantas duplicatas a nota tem (vazio = uma só)",
     "Títulos": "Quantos títulos da SF1 têm este mesmo nº de NF",
-    "Títulos Prováveis na SF1": "Títulos da SF1 que podem ser esta nota (fornecedor + valor ou emissão)",
-    "Por que estes títulos prováveis": "Por que cada título é provável",
     "Critério": "O que bateu no cruzamento",
     "Classificado em": "Data de Classificação no TOTVS (Dt.Digitacao)",
 }
@@ -546,14 +539,6 @@ COMPACTA_PEDIDOS = [
     # o veredito da OUTRA aba, de proposito: "achei o pedido MAS a nota nunca
     # foi lancada" e justamente o caso que esta aba serve para achar
     ("Lançada na SF1",    "",       "",             6.5),
-    # 09/09/2026, pedido do usuario. COLADAS no veredito de lancamento de
-    # proposito: a pergunta que a lista responde e a daquela coluna ("a nota
-    # esta lancada?"), nao a do pedido. Sao os titulos da SF1 daquele
-    # FORNECEDOR com o mesmo valor ou a mesma emissao -- o numero da NF nao
-    # entra, porque e ele que nao bate. Ver csf1.possibilidades().
-    ("Títulos Prováveis na SF1",      "",       "",   15),
-    # o "ver ▾" que abre o quadro com o por que de cada titulo provavel
-    ("Por que estes títulos prováveis", "",     "",    3),
     ("Origem",            "",       "",             4),
     ("Nº NF",             "titulo", "NF",           4.5),
     # a NF com zeros a frente ate 9 digitos: e o que se cola no TOTVS
@@ -642,8 +627,6 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "@delta_valor": "Diferença de Valor (Pedido - Nota)",
     "Situação": "O pedido de compra desta nota foi encontrado?",
     "Lançada na SF1": "A nota está lançada no TOTVS (SF1)?",
-    "Títulos Prováveis na SF1": "Títulos da SF1 que podem ser esta nota (fornecedor + valor ou emissão)",
-    "Por que estes títulos prováveis": "Por que cada título é provável",
     "Nº NF": "Nº da NF (SEFAZ)",
     "NF no TOTVS": "Nº da NF no padrão TOTVS (9 dígitos)",
     "Manifestação": "Manifestação do destinatário (MESMA PREMISSA.xlsx)",
@@ -924,16 +907,7 @@ ABAS = {
         # Nome de gente/empresa nao vira botao de copiar -- MENOS o destinatario,
         # que o usuario pediu explicitamente copiavel em 1 clique junto do CNPJ.
         "nao_copiar": {"Emitente", "Razão Social", "Nome Fantasia"},
-        "copiar_extra": {"Nº NF": "", "Destinatário": "", "CNPJ Destinatário": "",
-                         "Títulos Prováveis na SF1": ""},
-        # 09/09/2026: o POR QUE dos titulos provaveis e texto de varias linhas --
-        # na celula cabe o "ver ▾" e o conteudo abre no quadro, com o nome da
-        # coluna no titulo. ⚠ FORA DA BUSCA pelo mesmo motivo do JSON dos PC
-        # provaveis: sao as MESMAS palavras em toda linha ("mesmo CNPJ", "valor
-        # exato") e digitar qualquer uma devolveria a aba inteira. O que
-        # interessa buscar -- os numeros dos titulos -- esta na coluna visivel.
-        "texto_longo": {"Por que estes títulos prováveis"},
-        "fora_da_busca": ("Por que estes títulos prováveis",),
+        "copiar_extra": {"Nº NF": "", "Destinatário": "", "CNPJ Destinatário": ""},
         "col_alerta": "Alerta",
         "resumo": {"alerta": "com alerta", "divergentes": "valor difere da SF1"},
         "rotulos_planilha": ROTULOS_PLANILHA_SEFAZ_SF1,
@@ -1003,16 +977,13 @@ ABAS = {
                   pedidos_sefaz.AGRUPADO_PC: "provavel",
                   pedidos_sefaz.FORA: "grave",
                   pedidos_sefaz.SEM: "grave"},
-        # 09/09/2026: o POR QUE dos titulos provaveis da SF1 entra aqui -- a
-        # celula vira "ver ▾" e o texto abre no quadro, como a Info Comp.
-        "texto_longo": {"Informações", "Por que estes títulos prováveis"},
+        "texto_longo": {"Informações"},
         # nome de gente/empresa nao vira botao de copiar; o destinatario e a
         # excecao pedida pelo usuario, e o PC/NF sao o que se cola no TOTVS
         "nao_copiar": {"Emitente", "Nome Fantasia", "Fornecedor do PC",
                        "Solicitante", "Comprador"},
         "copiar_extra": {"Nº NF": "", "NF no TOTVS": "", "Numero PC": "",
                          "Numero PC Prováveis": "",
-                         "Títulos Prováveis na SF1": "",
                          "Numero da SC": "", "Destinatário": "",
                          "CNPJ Destinatário": ""},
         "col_alerta": "Alerta",
@@ -1024,8 +995,7 @@ ABAS = {
         # carrega o JSON -- e que fica fora da busca pelo mesmo motivo.
         "col_provaveis": "Numero PC Prováveis",
         "col_provaveis_motivos": pedidos_sefaz.MOTIVOS_PROVAVEIS,
-        "fora_da_busca": (pedidos_sefaz.MOTIVOS_PROVAVEIS,
-                          pedidos_sefaz.PORQUE_PROVAVEIS_SF1),
+        "fora_da_busca": (pedidos_sefaz.MOTIVOS_PROVAVEIS,),
     },
 }
 
@@ -1042,10 +1012,6 @@ ROTULOS_COMPACTA = {"@delta_valor": "Δ valor", "@delta_dias": "Δ dias",
                     "@tipo_pgto": "Tipo Pgto", "@tipo_real": "Tipo real",
                     "@alerta_tipo": "Confere?",
                     "@porque_pc": "?",
-                    # o cabecalho e uma linha so: o nome inteiro vai no .xlsx
-                    # e no quadro (ROTULOS_PLANILHA_*), aqui fica o curto.
-                    "Títulos Prováveis na SF1": "Títulos prováveis",
-                    "Por que estes títulos prováveis": "Por quê",
                     "CHECK (FEITO)": "OK", "No. Titulo": "Nº título",
                     "NF/Doc Boleto": "NF boleto", "Prefixo": "Pref.",
                     "Parcela": "Parc.", "Razão Social": "Razão social",

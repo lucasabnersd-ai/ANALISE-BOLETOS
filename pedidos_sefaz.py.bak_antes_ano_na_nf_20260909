@@ -71,13 +71,6 @@ CHAVE = "Chave"
 SITUACAO = "Situação"
 ALERTA = "Alerta"
 LANCADA = "Lançada na SF1"
-# 09/09/2026: os titulos da SF1 que PODEM ser esta nota mesmo com o numero da NF
-# nao batendo -- fornecedor + valor ou emissao. ⚠ Os nomes vem do proprio
-# cruzamento (`csf1`) para nao existirem dois rotulos para a mesma coluna: o
-# valor e COPIADO da linha cruzada em `montar()`, nao recalculado aqui.
-# Ver `csf1.possibilidades()`.
-PROVAVEIS_SF1 = csf1.PROVAVEIS
-PORQUE_PROVAVEIS_SF1 = csf1.PORQUE_PROVAVEIS
 ORIGEM = "Origem"
 NUM_NF = "Nº NF"
 NF_TOTVS = "NF no TOTVS"
@@ -145,7 +138,7 @@ INFO = "Informações"
 CHAVE_NFE = "Chave NF-e"
 
 CABECALHO = [
-    CHAVE, SITUACAO, ALERTA, LANCADA, PROVAVEIS_SF1, PORQUE_PROVAVEIS_SF1, ORIGEM,
+    CHAVE, SITUACAO, ALERTA, LANCADA, ORIGEM,
     NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA, MANIFESTACAO,
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
@@ -309,31 +302,15 @@ def _raiz(cnpj) -> str:
     return _digitos(cnpj)[:8]
 
 
-def nf_totvs(valor, ano=None) -> str:
+def nf_totvs(valor) -> str:
     """A NF como se cola no TOTVS: so digitos, com zeros a frente ate 9.
 
     Pedido do usuario (13/08/2026). ⚠ E formato de EXIBICAO/copia, nao de
     cruzamento: quem casa NF com a SF1 continua sendo `sefaz.nf_chave()`, que
     tira os zeros dos dois lados.
-
-    09/09/2026: quando o numero NAO CABE em 9 digitos, o ano grudado sai. A
-    NFS-e da prefeitura vem com 13 (`2026000000009`) e o campo do TOTVS tem 9 --
-    a coluna mostrava os 13 e nao servia para colar em lugar nenhum, que e a
-    unica razao de ela existir. Sem o ano fica `000000009`, que e exatamente o
-    numero com que a nota esta lancada na SF1. O `Nº NF (SEFAZ)` ao lado
-    continua mostrando o numero como a SEFAZ o escreveu.
-    Ver `sefaz.nf_variantes`.
     """
     numero = _digitos(valor).lstrip("0")
-    if not numero:
-        return ""
-    if len(numero) > 9 and ano:
-        cabem = [n for n, como in sefaz.nf_variantes(valor, ano).items()
-                 if como and len(n) <= 9]
-        if cabem:
-            # o maior que cabe: tirar o ano ja e o corte, cortar mais seria perder
-            numero = max(cabem, key=len)
-    return numero.rjust(9, "0")
+    return numero.rjust(9, "0") if numero else ""
 
 
 def citados(texto: str, teto: int) -> list[tuple[str, int]]:
@@ -1181,10 +1158,7 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             ORIGEM: nota.get(csf1.ORIGEM),
             CHAVE_NFE: nota.get(csf1.CHAVE_NFE),
             NUM_NF: nota.get(csf1.NUM_NF),
-            # o ano vem da EMISSAO da nota (e nao um 2026 fixo): e ele que diz
-            # qual prefixo/sufixo de 4 ou 2 digitos e ano, e nao numeracao
-            NF_TOTVS: nf_totvs(nota.get(csf1.NUM_NF),
-                               nota[csf1.EMISSAO].year if nota.get(csf1.EMISSAO) else None),
+            NF_TOTVS: nf_totvs(nota.get(csf1.NUM_NF)),
             EMISSAO: nota.get(csf1.EMISSAO),
             # o status da nota NA SEFAZ, nao um veredito nosso (pedido do
             # usuario, 28/08/2026) -- ver STATUS_NOTA
@@ -1212,11 +1186,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             # o veredito da OUTRA aba, do lado: "achei o pedido mas a nota nunca
             # foi lancada" e exatamente o caso que interessa
             LANCADA: nota.get(csf1.SITUACAO),
-            # ⚠ COPIADAS, nao recalculadas: quem sabe quais titulos podem ser a
-            # nota e o cruzamento com a SF1, que ja rodou. Refazer a conta aqui
-            # daria uma segunda resposta para a mesma pergunta.
-            PROVAVEIS_SF1: nota.get(csf1.PROVAVEIS, ""),
-            PORQUE_PROVAVEIS_SF1: nota.get(csf1.PORQUE_PROVAVEIS, ""),
             # Os MESMOS tres alertas das abas da SEFAZ (pedido do usuario,
             # 13/08/2026): vence em ate 5 dias sem lancamento, sem lancamento ha
             # mais de 3 dias, prazo curto entre emissao e vencimento. A regra
