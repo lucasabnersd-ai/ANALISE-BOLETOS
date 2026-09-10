@@ -44,6 +44,14 @@ Nenhuma delas mora aqui — os programas as procuram sozinhos.
 | `SF1`, `SC7`, `SC1`, `SE2 - POSIÇÃO DIARIA`, `LISTAGEM EMPRESAS BIOFLOR` | `LUCAS ABNER ARAUJO\BASES GENERICOS\` |
 | `SEFAZ.xlsx`, `MESMA PREMISSA*.xlsx` | `AUTOMAÇÕES LUCAS\ANALISES BOLETOS\` |
 
+Da `SEFAZ.xlsx` entram **quatro abas**, todas achadas pelo **cabeçalho** (o nome
+da aba muda de exportação para exportação): a de NF-e (`sefaz.py`), a de NFS-e
+(`sefaz.py`), a **NFS STATUS** (`nfs_status.py` — situação e integração ERP das
+NFS-e, cruzada por CNPJ do prestador + nº da NF sem o ano grudado) e a
+**PREMISSA 2 SEFAZ** (`cte_sefaz.py` — os CT-e de frete, que entram como notas
+com Origem `CT-e`; o nº do CT-e faz o papel do nº da NF no cruzamento com a SF1).
+Linha 100% repetida em qualquer aba é ignorada, com aviso no log.
+
 **Como são achadas:** o `.cmd` e o `caminhos.py` **sobem de pasta em pasta até
 achar a que tem a `BASES GENERICOS` dentro** — essa é a `LUCAS ABNER ARAUJO` —
 e descem de lá. Não existe caminho contado por nível (`..\..\..`) nem

@@ -91,9 +91,6 @@ STATUS_NOTA = "Status da Nota"
 # PREMISSA.xlsx pelo cruzamento. Boleto a pagar de nota marcada
 # `DesconhecimentoOperacao`/`NaoRealizada` e o caso que ela existe para pegar.
 MANIFESTACAO = "Manifestação"
-# 10/09/2026. O relatorio NFS STATUS (aba da SEFAZ.xlsx): Exportada/Disponivel
-# e a situacao na prefeitura quando diverge da SEFAZ. Ver nfs_status.py.
-NFS_STATUS = "NFS STATUS"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 FANTASIA = "Nome Fantasia"
@@ -149,7 +146,7 @@ CHAVE_NFE = "Chave NF-e"
 
 CABECALHO = [
     CHAVE, SITUACAO, ALERTA, LANCADA, PROVAVEIS_SF1, PORQUE_PROVAVEIS_SF1, ORIGEM,
-    NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA, MANIFESTACAO, NFS_STATUS,
+    NUM_NF, NF_TOTVS, EMISSAO, STATUS_NOTA, MANIFESTACAO,
     NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
     TIPO_OP, NAT_OP, SAIDA, CFOP,
     VLR_SEFAZ, VENC_DUP, VLR_DUP, QTD_DUP,
@@ -1193,7 +1190,6 @@ def montar(cruzamento: csf1.Cruzamento, pedidos: dict[str, sc7.Pedido],
             # usuario, 28/08/2026) -- ver STATUS_NOTA
             STATUS_NOTA: nota.get(csf1.STATUS_NOTA),
             MANIFESTACAO: nota.get(csf1.MANIFESTACAO),
-            NFS_STATUS: nota.get(csf1.NFS_STATUS, ""),
             NOME_EMIT: nota.get(csf1.NOME_EMIT),
             CNPJ_EMIT: nota.get(csf1.CNPJ_EMIT),
             FANTASIA: nota.get(csf1.FANTASIA),
@@ -1319,12 +1315,7 @@ def carregar(base_sefaz: Path, base_sf1: Path, base_sc7: Path | None = None,
     # porque "talvez esteja na SF1" ainda nao e "esta".
     total_notas = len(linhas)
     if SO_NAO_LANCADAS:
-        # 10/09/2026: a nota lancada que esta CANCELADA/SUBSTITUIDA na SEFAZ ou
-        # na prefeitura FICA na fila -- e trabalho (estorno), e e o unico caso em
-        # que uma nota ja lancada pede acao. Sem isto o alerta so existiria nas
-        # abas ocultas e ninguem o veria.
-        linhas = [l for l in linhas if l.get(LANCADA) != csf1.ACHADA
-                  or sefaz.PREFIXO_CANCELADA in (l.get(ALERTA) or "")]
+        linhas = [l for l in linhas if l.get(LANCADA) != csf1.ACHADA]
 
     contagem: dict[str, int] = {}
     for l in linhas:

@@ -56,7 +56,6 @@ import hashlib
 import json
 import re
 import shutil
-import sys
 import tempfile
 import unicodedata
 from pathlib import Path
@@ -157,11 +156,6 @@ STATUS_NOTA = "Status da Nota"
 # par que interessa, porque quer dizer boleto a pagar de nota que a propria
 # empresa nao reconhece.
 MANIFESTACAO = "Manifestação"
-# 10/09/2026. O que o relatorio NFS STATUS (aba da propria SEFAZ.xlsx) diz da
-# NFS-e: a Integracao ERP (Exportada = o portal ja mandou para o TOTVS /
-# Disponivel = ainda nao) e, quando diverge da SEFAZ, a situacao na prefeitura.
-# Quem preenche e o nfs_status.anotar(). Nao confundir com os dois acima.
-NFS_STATUS = "NFS STATUS"
 SAIDA = "Saída/Entrada"
 TIPO_OP = "Tipo Operação"
 # ⚠ NAO e o "Tipo Operação" acima: aquele diz entrada/saida, este e a natureza
@@ -184,7 +178,7 @@ NOME_DEST = "Destinatário"
 ALERTA = "Alerta"
 
 CABECALHO = [CHAVE, ORIGEM, ALERTA, NUM_NF, EMISSAO, STATUS_NOTA, MANIFESTACAO,
-             NFS_STATUS, SAIDA, TIPO_OP, NAT_OP, CFOP,
+             SAIDA, TIPO_OP, NAT_OP, CFOP,
              NOME_EMIT, CNPJ_EMIT, FANTASIA, NOME_DEST, CNPJ_DEST,
              VLR_ITEM, VLR_TOTAL, VENC_DUP, VLR_DUP, INFO, CHAVE_NFE]
 
@@ -223,12 +217,6 @@ PREFIXO_REMOVIDA = "REMOVIDA DA BASE SEFAZ"
 # base de manifestacao existe para pegar: nao e nota atrasada, e nota que a
 # propria empresa disse nao reconhecer. Ver manifestacao.py.
 PREFIXO_MANIFESTO = "NOTA NÃO RECONHECIDA PELA EMPRESA"
-# 10/09/2026. A nota esta CANCELADA/SUBSTITUIDA (na SEFAZ ou no relatorio NFS
-# STATUS da prefeitura) e mesmo assim esta LANCADA na SF1 -- pede estorno. E a
-# unica combinacao em que nota cancelada muda o que fazer: cancelada e NAO
-# lancada e o certo, e por isso ela sai de `nao_lancadas` (ver
-# cruzamento_sefaz_sf1.preparar) e nao cobra lancamento nenhum.
-PREFIXO_CANCELADA = "NOTA CANCELADA/SUBSTITUÍDA"
 
 # ⚠ Chave INTERNA da linha (comeca com "_" e nao esta no CABECALHO): marca a nota
 # que voltou do historico porque a base de hoje nao a trouxe. Nao vira coluna.
@@ -237,32 +225,10 @@ REMOVIDA_EM = "_removida_em"
 # propria linha (posto pelo manifestacao.anotar), e nao num parametro a mais nos
 # tres caminhos que chamam o `alertas_por_nota`.
 MANIFESTO_GRAVE = "_manifesto_grave"
-# 10/09/2026. Idem, pelo mesmo motivo: a situacao que o relatorio NFS STATUS da
-# a nota (posta pelo nfs_status.anotar) e o texto do alerta de nota cancelada
-# que esta LANCADA na SF1 (posto pelo cruzamento_sefaz_sf1.preparar).
-SITUACAO_PREFEITURA = "_situacao_prefeitura"
-CANCELADA_LANCADA = "_cancelada_lancada"
-# Selo da Origem dos conhecimentos de transporte (cte_sefaz.py).
-CTE = "CT-e"
 
 
 def _dias(n: int) -> str:
     return "1 dia" if abs(n) == 1 else f"{n} dias"
-
-
-def esta_cancelada(linha: dict) -> bool:
-    """A nota esta cancelada/substituida/denegada -- pela SEFAZ OU pela prefeitura.
-
-    Vocabularios: NF-e `Cancelada`/`Denegada`, NFS-e `Cancelada`/`Substituída`,
-    CT-e `Cancelado`. Nota assim NAO cobra lancamento (ninguem deve lancar nota
-    cancelada) e, se JA estiver lancada na SF1, vira alerta grave -- ver
-    cruzamento_sefaz_sf1.preparar().
-    """
-    for campo in (STATUS_NOTA, SITUACAO_PREFEITURA):
-        valor = _sem_acento(str(linha.get(campo) or "")).strip().lower()
-        if valor.startswith(("cancelad", "substitu", "denegad")):
-            return True
-    return False
 
 
 def vencimentos_por_nota(linhas: list[dict]) -> dict[str, list]:
@@ -276,8 +242,7 @@ def vencimentos_por_nota(linhas: list[dict]) -> dict[str, list]:
 
 def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
                     hoje: dt.date, removida_em: dt.date | None = None,
-                    manifesto_grave: str | None = None,
-                    cancelada_lancada: str | None = None) -> list[str]:
+                    manifesto_grave: str | None = None) -> list[str]:
     """Os avisos desta nota, do mais urgente para o menos.
 
     O vencimento considerado e o PRIMEIRO da nota: e ele que chega antes, tanto
@@ -302,13 +267,6 @@ def alertas_da_nota(emissao, vencimentos: list, nao_lancada: bool,
     if manifesto_grave:
         avisos.append(f"{PREFIXO_MANIFESTO}: {manifesto_grave} — confira antes de "
                       f"pagar o boleto ligado a ela")
-
-    # 10/09/2026. Cancelada/substituida (SEFAZ ou prefeitura) E lancada na SF1:
-    # o lancamento precisa de estorno. Antes dos de prazo pelo mesmo motivo do
-    # manifesto. Nota cancelada e NAO lancada nao chega em `nao_lancadas` (ver
-    # cruzamento_sefaz_sf1.preparar), entao os tres de prazo nao disparam nela.
-    if cancelada_lancada:
-        avisos.append(f"{PREFIXO_CANCELADA}: {cancelada_lancada}")
 
     if venc and nao_lancada:
         faltam = (venc - hoje).days
@@ -349,8 +307,7 @@ def alertas_por_nota(linhas: list[dict], nao_lancadas: set | None,
             # parametro a mais: assim os tres caminhos que chamam esta funcao
             # ganham o alerta sem nenhum deles precisar saber que ele existe
             removida_em=linha.get(REMOVIDA_EM),
-            manifesto_grave=linha.get(MANIFESTO_GRAVE),
-            cancelada_lancada=linha.get(CANCELADA_LANCADA))
+            manifesto_grave=linha.get(MANIFESTO_GRAVE))
     return por_nota
 
 
@@ -364,7 +321,6 @@ def contar_alertas(por_nota: dict[str, list[str]]) -> dict:
         "prazo_curto": tem(PREFIXO_PRAZO),
         "removidas": tem(PREFIXO_REMOVIDA),
         "manifesto_grave": tem(PREFIXO_MANIFESTO),
-        "cancelada_lancada": tem(PREFIXO_CANCELADA),
         "com_alerta": sum(1 for avisos in por_nota.values() if avisos),
     }
 
@@ -715,8 +671,6 @@ def _ler_aba(ws, colunas: list, origem: str, com_item: bool) -> list[dict]:
     item_i = column_index_from_string(ITEM_NFE[0]) - 1 if com_item else None
 
     linhas = []
-    vistas: set[str] = set()
-    repetidas = 0
     for bruta in brutas:
         if all(v in (None, "") for v in bruta):
             continue
@@ -743,17 +697,7 @@ def _ler_aba(ws, colunas: list, origem: str, com_item: bool) -> list[dict]:
         parcela = f"{linha.get(VENC_DUP) or ''}|{linha.get(VLR_DUP) or ''}"
         linha[CHAVE] = PREFIXO + hashlib.sha1(
             f"{origem}|{linha[CHAVE_NFE]}|{item}|{parcela}".encode("utf-8")).hexdigest()[:16]
-        # 10/09/2026: linha de identidade REPETIDA (o usuario cola a exportacao
-        # nova em cima da anterior) nao entra duas vezes -- viraria a mesma
-        # marcacao duas vezes na carga. Conta e avisa; nunca cala.
-        if linha[CHAVE] in vistas:
-            repetidas += 1
-            continue
-        vistas.add(linha[CHAVE])
         linhas.append(linha)
-    if repetidas:
-        print(f"AVISO: {repetidas} linha(s) repetida(s) na aba {ws.title!r} da "
-              f"SEFAZ.xlsx foram ignoradas", file=sys.stderr)
     return linhas
 
 
@@ -1076,8 +1020,6 @@ def carregar(base: Path, nao_lancadas: set | None = None,
         "nfs": len(nfs),
         "notas_nfe": len({l[CHAVE_NFE] for l in nfe}),
         "notas_nfs": len({l[CHAVE_NFE] for l in nfs}),
-        "cte": sum(1 for l in linhas if l[ORIGEM] == CTE),
-        "nfs_status": sum(1 for l in linhas if l[ORIGEM] == "NFS STATUS"),
         "com_duplicata": sum(1 for l in linhas if l.get(VLR_DUP)),
     }
     return list(CABECALHO), montar_linhas(linhas), resumo

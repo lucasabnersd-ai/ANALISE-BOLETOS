@@ -29,8 +29,6 @@ import cruzamento_classificacao
 import cruzamento_sefaz_sf1
 import manifestacao
 import premissa2
-import nfs_status
-import cte_sefaz
 import pedidos_sefaz
 import pendentes_itau
 import planilha_excel_js
@@ -167,10 +165,6 @@ ALERTAS = ((("FATURA",), "FATURA"),
            # a nota esta parada, esta diz que ela sumiu da base. O texto das
            # demais continua inteiro no quadro que abre no selo.
            ((sefaz.PREFIXO_REMOVIDA,), "REMOVIDA DA BASE SEFAZ"),
-           # 10/09/2026. Nota cancelada/substituida (na SEFAZ ou no relatorio NFS
-           # STATUS) que ESTA lancada na SF1 -- pede estorno. Vermelho como a
-           # removida: nao e atraso, e lancamento que nao devia existir.
-           ((sefaz.PREFIXO_CANCELADA,), "CANCELADA E LANÇADA"),
            # 01/09/2026. Depois da removida e antes dos de prazo: os de prazo
            # dizem que a nota esta parada, este diz que talvez ela nao devesse
            # ser paga -- a empresa manifestou desconhecimento ou nao realizada.
@@ -575,10 +569,6 @@ COMPACTA_PEDIDOS = [
     # propria empresa nao reconhece -- e o par que interessa, e ler os dois
     # separados por meia tela esconderia isso. Filtravel, ver `pills`.
     ("Manifestação",      "titulo", "",             6),
-    # 10/09/2026. O relatorio NFS STATUS (aba da SEFAZ.xlsx): Exportada /
-    # Disponível = a integracao da NFS-e com o TOTVS segundo o portal, mais a
-    # situacao na prefeitura quando diverge da SEFAZ. Filtravel (`pills`).
-    ("NFS STATUS",        "titulo", "",             6),
     ("Emitente",          "titulo", "EMITENTE",    11),
     ("CNPJ Emitente",     "titulo", "EMITENTE",     7),
     ("Nome Fantasia",     "titulo", "EMITENTE",     8),
@@ -657,7 +647,6 @@ ROTULOS_PLANILHA_PEDIDOS = {
     "Nº NF": "Nº da NF (SEFAZ)",
     "NF no TOTVS": "Nº da NF no padrão TOTVS (9 dígitos)",
     "Manifestação": "Manifestação do destinatário (MESMA PREMISSA.xlsx)",
-    "NFS STATUS": "Integração ERP e situação na prefeitura (aba NFS STATUS da SEFAZ.xlsx)",
     "Emissão": "Emissão (SEFAZ)",
     "Emitente": "Emitente/Prestador (SEFAZ)",
     "Nome Fantasia": "Nome Fantasia do Emitente",
@@ -893,7 +882,7 @@ ABAS = {
         "pills": ["Origem", "Status da Nota"],
         # Selo por valor exato: sem isto "NF-e" e "NFS-e" sairiam da mesma cor,
         # e o flag nao flagaria nada.
-        "selos": {"NF-e": "nfe", "NFS-e": "nfse", "CT-e": "nfse", "NFS STATUS": "nfse"},
+        "selos": {"NF-e": "nfe", "NFS-e": "nfse"},
         # Colunas de texto longo: a celula vira botao e o texto inteiro abre no
         # quadro flutuante, o mesmo do critério de match.
         "texto_longo": {"Informações"},
@@ -1002,7 +991,7 @@ ABAS = {
         # valores das outras -- na base de hoje sao 6 (os 4 status do TOTVS mais
         # "nao se aplica (NFS-e)" e "fora do periodo do arquivo").
         "pills": ["Origem", "Lançada na SF1", "Controle Ap.", "Status da Nota",
-                  "Manifestação", "NFS STATUS", "Filial do PC"],
+                  "Manifestação", "Filial do PC"],
         "selos": {pedidos_sefaz.CONFIRMADO: "forte",
                   # verde junto do CONFIRMADO: as duas sao "nada a fazer" -- uma
                   # porque o pedido esta amarrado, a outra porque ele ja fechou
@@ -2046,43 +2035,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         except Exception as exc:  # noqa: BLE001 - arquivo fora do ar/renomeado/mudado
             print(f"AVISO: PREMISSA 2 nao entrou no painel:\n       {exc}",
                   file=sys.stderr)
-        # 10/09/2026. NFS STATUS: a aba de situacao das NFS-e dentro da propria
-        # SEFAZ.xlsx. Enriquece as NFS-e (coluna NFS STATUS: Exportada /
-        # Disponivel + situacao na prefeitura) e acrescenta as notas que a aba
-        # de NFS-e nao tem. Mesma posicao da PREMISSA 2, pelos mesmos motivos.
-        st_resumo = None
-        try:
-            novas_st, st_resumo = nfs_status.anotar(linhas_sefaz, empresas_bioflor,
-                                                    caminho_sefaz)
-            linhas_sefaz.extend(novas_st)
-            periodo = (f" | período {st_resumo['de']} a {st_resumo['ate']}"
-                       if st_resumo.get("de") else "")
-            print(f"           NFS STATUS ({st_resumo['aba']}): {st_resumo['linhas']} linhas "
-                  f"({st_resumo['repetidas']} repetidas) | {st_resumo['registros']} notas | "
-                  f"{st_resumo['ja_na_sefaz']} já na SEFAZ | {st_resumo['novas']} NOVAS | "
-                  f"{st_resumo['divergentes']} com situação divergente{periodo}")
-            print("           " + " | ".join(f"{n} {s}" for s, n in st_resumo["anotadas"].items()))
-        except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
-            nfs_status.marcar_sem_base(linhas_sefaz)
-            print(f"AVISO: coluna NFS STATUS não preenchida:\n       {exc}", file=sys.stderr)
-        # 10/09/2026. CT-e (aba PREMISSA 2 SEFAZ): o frete entra como nota, com o
-        # Num CT-e no lugar do numero da NF -- e o que cruza com a SF1.
-        cte_resumo = None
-        try:
-            novas_cte, cte_resumo = cte_sefaz.linhas_novas(linhas_sefaz, empresas_bioflor,
-                                                          caminho_sefaz)
-            linhas_sefaz.extend(novas_cte)
-            print(f"           CT-e ({cte_resumo['aba']}): {cte_resumo['linhas']} linhas | "
-                  f"{cte_resumo['ctes']} CT-e | {cte_resumo['do_grupo']} do grupo "
-                  f"({cte_resumo['fora_do_grupo']} fora) | {cte_resumo['ja_no_painel']} já no "
-                  f"painel | {cte_resumo['novas']} NOVOS entram | status: "
-                  + ", ".join(f"{n} {s}" for s, n in cte_resumo["status"].items()))
-            if cte_resumo.get("sem_tomador"):
-                print(f"AVISO: {cte_resumo['sem_tomador']} CT-e sem coluna de tomador "
-                      f"reconhecida ficaram fora", file=sys.stderr)
-        except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
-            print(f"AVISO: CT-e (PREMISSA 2 SEFAZ) nao entrou no painel:\n       {exc}",
-                  file=sys.stderr)
 
         nao_lancadas = None
         if caminho_sf1.exists():
@@ -2097,10 +2049,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
                 lidas["sefaz_sf1"] = montar_aba(cabecalho, brutas, ABAS["sefaz_sf1"])
             # `pop`: e um set, e o resumo vai para JSON -- set nao serializa.
             nao_lancadas = cruz_sefaz_resumo.pop("nao_lancadas", None)
-            if cruz_sefaz_resumo.get("canceladas"):
-                print(f"           canceladas/substituídas: {cruz_sefaz_resumo['canceladas']} "
-                      f"notas (fora dos alertas de lançamento) | "
-                      f"{cruz_sefaz_resumo['canceladas_lancadas']} delas LANÇADAS na SF1 → alerta")
 
             # Aba dos pedidos de compra: precisa do cruzamento acima (leva o
             # veredito da SF1 e os alertas) MAIS a SC7/SC1. Mesma regra das
@@ -2145,8 +2093,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         cabecalho, brutas, sefaz_resumo = sefaz.carregar(caminho_sefaz, nao_lancadas,
                                                          linhas=linhas_sefaz)
         sefaz_resumo.update({f"hist_{k}": v for k, v in sefaz_hist.items()})
-        sefaz_resumo["nfs_status"] = st_resumo
-        sefaz_resumo["cte"] = cte_resumo
         if brutas:
             lidas["sefaz"] = montar_aba(cabecalho, brutas, ABAS["sefaz"])
         sefaz_resumo["base"] = str(caminho_sefaz)

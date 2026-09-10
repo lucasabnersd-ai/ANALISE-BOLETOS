@@ -1247,7 +1247,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609101009"></script>
+<script src="supa.js?v=202609101552"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
@@ -2532,7 +2532,9 @@ function celulaCompacta(r, col){
     // sumido de uma base que só acumula. Mesma cor do selo no resumo do topo --
     // duas cores para o mesmo alerta fariam parecer que são dois.
     const classe = {PARCELA:"parcela", FATURA:"fatura",
-                    "REMOVIDA DA BASE SEFAZ":"grave"}[r.alerta.tipo] || "outro";
+                    "REMOVIDA DA BASE SEFAZ":"grave",
+                    // 10/09/2026: cancelada/substituída e LANÇADA na SF1 -- estorno
+                    "CANCELADA E LANÇADA":"grave"}[r.alerta.tipo] || "outro";
     const temDrill = r.alerta.tipo === "PARCELA" && (A().parcelas || {})[r.alerta.nf];
     // sem title: quem explica o alerta agora e o quadro que abre no hover
     return `<td class="selo-cel ${zona}"><span
@@ -3404,14 +3406,19 @@ function linhaAlertasSefaz(){
         prazo = notasCom("PRAZO CURTO"),
         // 14/08/2026: a base da SEFAZ é acumulativa, então nota que ESTAVA e
         // deixou de vir é anomalia -- ela continua no painel, com este alerta.
-        removidas = notasCom("REMOVIDA DA BASE SEFAZ");
-  if (!vence && !semLancar && !prazo && !removidas) return "";
+        removidas = notasCom("REMOVIDA DA BASE SEFAZ"),
+        // 10/09/2026: cancelada/substituída (SEFAZ ou relatório NFS STATUS) e
+        // mesmo assim lançada na SF1 -- é estorno, não atraso.
+        canceladas = notasCom("NOTA CANCELADA/SUBSTITUÍDA");
+  if (!vence && !semLancar && !prazo && !removidas && !canceladas) return "";
   const item = (quantas, selo, texto, classe) => quantas
     ? `<li><span class="selo ${classe || "outro"}">${selo}</span> <b>${num(quantas)}</b> ${texto}</li>` : "";
   return `<div class="linha-aviso">⚠ <b>Notas em alerta</b> (o selo da linha abre o texto inteiro):
     <ul class="alertas-sefaz">
       ${item(removidas, "REMOVIDA DA BASE SEFAZ", `estavam no painel e <b>não vieram</b> na última
         exportação da SEFAZ — confira se foram <b>canceladas</b> ou se o arquivo veio incompleto`, "grave")}
+      ${item(canceladas, "CANCELADA E LANÇADA", `estão <b>canceladas ou substituídas</b> na SEFAZ/prefeitura
+        e mesmo assim <b>lançadas</b> na SF1 — confira o estorno no TOTVS`, "grave")}
       ${item(vence, "VENCE ≤ 5D", "vencem em <b>5 dias ou menos</b> e <b>não estão lançadas</b> na SF1")}
       ${item(semLancar, "PENDENTE A MAIS DE 3 DIAS", "emitidas há <b>mais de 3 dias</b> e ainda <b>não lançadas</b> na SF1")}
       ${item(prazo, "PRAZO CURTO", "emitidas com vencimento a <b>menos de 15 dias</b> da emissão")}
@@ -3463,7 +3470,15 @@ function avisoPedidos(){
     <div class="linha-aviso calmo">📌 <b>Status da Nota</b> é o status na <b>SEFAZ</b>
     (<i>Autorizada</i>/<i>Cancelada</i> nas NF-e, <i>Normal</i>/<i>Cancelada</i>/<i>Substituída</i>
     nas NFS-e), e não um veredito do painel — nota <b>Cancelada</b> pode ter pedido confirmado.
-    Os botões <b>Status da Nota</b>, lá em cima, filtram a aba por ele.</div>`;
+    Os botões <b>Status da Nota</b>, lá em cima, filtram a aba por ele.</div>
+    <div class="linha-aviso calmo">📌 <b>NFS STATUS</b> é o relatório de situação das NFS-e (aba
+    <i>NFS STATUS</i> da SEFAZ.xlsx): <b>Exportada</b> = o portal já mandou a nota para o TOTVS,
+    <b>Disponível</b> = ainda não; quando a situação na prefeitura diverge da SEFAZ, a coluna
+    diz. O cruzamento é por <b>CNPJ do prestador + nº da NF</b>, desconsiderando o ano grudado
+    (26/2026). Origem <b>CT-e</b> são os fretes da aba <i>PREMISSA 2 SEFAZ</i>: o <b>nº do
+    CT-e</b> faz o papel do nº da NF no cruzamento com a SF1, e o prestador o do fornecedor.
+    Nota <b>cancelada ou substituída</b> não cobra lançamento; se já estiver lançada na SF1,
+    sai o alerta <b>CANCELADA E LANÇADA</b>.</div>`;
 }
 
 /* ---------- legenda dos selos ----------
@@ -3663,6 +3678,11 @@ const LEGENDAS = {
     itens: [
       ["nfe", "NF-e", `Nota fiscal <b>de produto</b>.`],
       ["nfse", "NFS-e", `Nota fiscal <b>de serviço</b>.`],
+      ["nfe", "PREMISSA 2", `Nota do arquivo <b>MESMA PREMISSA</b> que a SEFAZ.xlsx não tem.`],
+      ["nfse", "CT-e", `<b>Conhecimento de transporte</b> (frete) da aba <i>PREMISSA 2 SEFAZ</i>
+        da SEFAZ.xlsx — o <b>nº do CT-e</b> faz o papel do nº da NF no cruzamento com a SF1.`],
+      ["nfse", "NFS STATUS", `NFS-e que só existe no relatório de situação (aba <i>NFS STATUS</i>)
+        e ainda não veio na aba de NFS-e da SEFAZ.xlsx.`],
     ],
   },
   pendentes_itau: {

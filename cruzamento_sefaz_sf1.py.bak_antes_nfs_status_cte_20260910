@@ -48,10 +48,6 @@ STATUS_NOTA = "Status da Nota"
 # O que a empresa respondeu sobre a nota (ciencia/confirmacao/desconhecimento/
 # nao realizada). Nao e o `Status da Nota` acima, que e o que a SEFAZ diz.
 MANIFESTACAO = "Manifestação"
-# 10/09/2026. O que o relatorio NFS STATUS diz da NFS-e (Exportada/Disponivel +
-# situacao na prefeitura quando diverge). Viaja na visao por nota para a aba de
-# pedidos; nesta aba (oculta) nao e coluna. Ver nfs_status.py.
-NFS_STATUS = "NFS STATUS"
 NOME_EMIT = "Emitente"
 CNPJ_EMIT = "CNPJ Emitente"
 VLR_SEFAZ = "Vlr SEFAZ"
@@ -169,9 +165,6 @@ def ler_sf1(base: Path) -> list[dict]:
                 EMISSAO_SF1: cc._data(linha[cc.SF1_EMISSAO]),
                 CLASSIFICADO: cc._data(linha[cc.SF1_DIGITACAO]),
                 "status": cc._texto(linha[cc.SF1_STATUS]),
-                # 10/09/2026: a especie do documento (NFS, SPED, CTE...) -- e o que
-                # confirma que o titulo achado para um CT-e e mesmo o frete
-                "especie": cc._texto(linha[cc.SF1_ESPECIE]),
                 "chave_nfe": _digitos(cc._texto(linha[cc.SF1_CHAVE_NFE])),
             })
         return titulos
@@ -199,12 +192,6 @@ DA_PRIMEIRA_LINHA = (
     # de-para dele e por chave NF-e). A primeira linha nao so basta como e a
     # unica resposta possivel. Ver manifestacao.py.
     (MANIFESTACAO, sefaz.MANIFESTACAO),
-    # 10/09/2026. Idem: o nfs_status.anotar grava o mesmo valor em todas as
-    # linhas da nota (o de-para e por CNPJ + numero, que sao da nota). A chave
-    # interna da situacao na prefeitura sobe junto: e ela que `esta_cancelada`
-    # consulta na visao por nota.
-    (NFS_STATUS, sefaz.NFS_STATUS),
-    (sefaz.SITUACAO_PREFEITURA, sefaz.SITUACAO_PREFEITURA),
 )
 
 
@@ -320,15 +307,6 @@ def _nota_do_par(nota: dict, titulo: dict, nf_porque: str = "") -> tuple[int, li
     if _mesmo_emissor(nota.get(NOME_EMIT), titulo.get(RAZAO)):
         pontos += PESO_NOME
         porque.append("Nome do emissor = razão social do fornecedor na SF1")
-
-    # 10/09/2026. Para CT-e (aba PREMISSA 2 SEFAZ) a especie do titulo na SF1
-    # conta a historia: "CTE" confirma que o lancamento e do frete; outra
-    # especie com o mesmo numero e fornecedor merece ser dita. Nao pontua.
-    if nota.get(ORIGEM) == sefaz.CTE:
-        especie = (titulo.get("especie") or "").upper()
-        porque.append("Título lançado como CT-e na SF1 (espécie CTE)" if especie == "CTE"
-                      else f"⚠ espécie do título na SF1: {especie or 'não informada'} "
-                           "(a nota é um CT-e)")
 
     return pontos, porque
 
@@ -789,36 +767,12 @@ def preparar(base_sefaz: Path, base_sf1: Path, hoje=None,
     titulos = ler_sf1(base_sf1)
     cruzadas = cruzar(notas, titulos)
 
-    # 10/09/2026. Nota CANCELADA/SUBSTITUIDA (na SEFAZ ou no relatorio NFS STATUS
-    # da prefeitura) nao cobra lancamento: ninguem deve lancar nota cancelada,
-    # entao ela fica FORA de `nao_lancadas` -- e dos alertas de prazo e dos
-    # e-mails que saem deles. O inverso e que e o problema: nota cancelada que
-    # JA esta na SF1 pede estorno, e vira alerta grave, gravado nas linhas cruas
-    # para o `alertas_por_nota` achar (mesmo caminho do `_manifesto_grave`).
-    canceladas = {l[CHAVE_NFE] for l in cruzadas if sefaz.esta_cancelada(l)}
-    canceladas_lancadas: dict[str, str] = {}
-    for l in cruzadas:
-        if l[CHAVE_NFE] in canceladas and l[SITUACAO] != NAO_ACHADA:
-            status = l.get(sefaz.SITUACAO_PREFEITURA) or l.get(STATUS_NOTA) or "cancelada"
-            canceladas_lancadas[l[CHAVE_NFE]] = (
-                f"{status} na SEFAZ/prefeitura e lançada na SF1 como "
-                f"{l.get(FILIAL, '')}/{l.get(NF_SF1, '')} ({l[SITUACAO]}) — "
-                "confira o estorno no TOTVS antes de pagar")
-    for linha in linhas:
-        aviso = canceladas_lancadas.get(linha[sefaz.CHAVE_NFE])
-        if aviso:
-            linha[sefaz.CANCELADA_LANCADA] = aviso
-
     # Nota que a SF1 nao tem = nota nao lancada. E a base dos alertas 1 e 3.
-    nao_lancadas = {l[CHAVE_NFE] for l in cruzadas
-                    if l[SITUACAO] == NAO_ACHADA and l[CHAVE_NFE] not in canceladas}
+    nao_lancadas = {l[CHAVE_NFE] for l in cruzadas if l[SITUACAO] == NAO_ACHADA}
     alertas = sefaz.alertas_por_nota(linhas, nao_lancadas, hoje)
     for l in cruzadas:
         l[ALERTA] = " · ".join(alertas.get(l[CHAVE_NFE], []))
-    pronto = Cruzamento(linhas, cruzadas, nao_lancadas, alertas, hoje, len(titulos))
-    pronto.canceladas = canceladas
-    pronto.canceladas_lancadas = set(canceladas_lancadas)
-    return pronto
+    return Cruzamento(linhas, cruzadas, nao_lancadas, alertas, hoje, len(titulos))
 
 
 def carregar(base_sefaz: Path, base_sf1: Path, hoje=None,
@@ -849,8 +803,5 @@ def carregar(base_sefaz: Path, base_sf1: Path, hoje=None,
         "nao_achadas": contagem[NAO_ACHADA],
         "nfe": sum(1 for n in cruzadas if n[ORIGEM] == sefaz.NFE),
         "nfs": sum(1 for n in cruzadas if n[ORIGEM] == sefaz.NFSE),
-        "cte": sum(1 for n in cruzadas if n[ORIGEM] == sefaz.CTE),
-        "canceladas": len(getattr(c, "canceladas", ())),
-        "canceladas_lancadas": len(getattr(c, "canceladas_lancadas", ())),
     }
     return list(CABECALHO), montar_linhas(cruzadas), resumo
