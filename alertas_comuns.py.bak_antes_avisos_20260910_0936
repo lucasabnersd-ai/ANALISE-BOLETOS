@@ -22,8 +22,6 @@ from __future__ import annotations
 import datetime as dt
 import html
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 PASTA = Path(__file__).resolve().parent
@@ -189,105 +187,30 @@ def proximo_dia_util(d: dt.date) -> dt.date:
 # e-mail
 # --------------------------------------------------------------------------
 
-class EnvioTravado(RuntimeError):
-    """O Outlook nao aceitou o e-mail no prazo -- a mensagem diz por que."""
-
-
-def _caixa_de_permissao_aberta() -> str:
-    """"" quando o caminho esta livre; senao a frase do que esta segurando.
-
-    O Outlook classico tem um guarda do modelo de objeto: script mandando
-    e-mail faz aparecer a caixa "Programa tentando enviar email em seu nome",
-    com os botoes Permitir e Negar. Enquanto ninguem clica, o .Send() NAO
-    VOLTA. E numa instancia -Embedding (a que o COM abre sozinho, sem janela
-    na barra de tarefas) ninguem ve a caixa para clicar.
-
-    10/09/2026: foi exatamente isso. A rodada do SE2 ficou muda no [5/5] com
-    QUATRO caixas dessas empilhadas -- uma por rodada do dia -- e um
-    OUTLOOK.EXE queimando 12 minutos de CPU. Tentar enviar com uma aberta so
-    empilha a quinta, entao aqui a gente olha ANTES e nem tenta.
-    """
-    try:
-        import win32gui
-    except ImportError:
-        return ""  # sem pywin32 nao ha o que olhar; o prazo do envio protege
-
-    def botoes(janela) -> list[str]:
-        rotulos: list[str] = []
-
-        def filho(h, _):
-            if win32gui.GetClassName(h) == "Button":
-                rotulos.append(win32gui.GetWindowText(h).replace("&", "").strip())
-            return True
-
-        try:
-            win32gui.EnumChildWindows(janela, filho, None)
-        except Exception:  # noqa: BLE001 - janela pode morrer no meio da varredura
-            pass
-        return rotulos
-
-    achadas: list[int] = []
-
-    def topo(h, _):
-        # #32770 e' a classe de CAIXA DE DIALOGO do Windows.
-        if win32gui.GetClassName(h) != "#32770":
-            return True
-        if "Outlook" not in win32gui.GetWindowText(h):
-            return True
-        if "Permitir" in botoes(h):
-            achadas.append(h)
-        return True
-
-    try:
-        win32gui.EnumWindows(topo, None)
-    except Exception:  # noqa: BLE001 - inspecao de janela nunca derruba a rodada
-        return ""
-    if not achadas:
-        return ""
-    return (f"o Outlook esta pedindo autorizacao NA TELA ({len(achadas)} caixa(s) "
-            '"Programa tentando enviar email em seu nome"); clique em Permitir, '
-            "ou encerre o OUTLOOK.EXE -Embedding no Gerenciador de Tarefas")
-
-
-def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45) -> None:
-    """Manda pelo Outlook CLASSICO desta maquina, COM PRAZO.
+def enviar(assunto: str, corpo_html: str, para: str) -> None:
+    """Manda pelo Outlook CLASSICO desta maquina.
 
     `Outlook.Application` e' o COM registrado em Office16\\OUTLOOK.EXE -- o
     Outlook novo (olk.exe, da Microsoft Store) nao expoe esse conector e nao
     participa, mesmo estando aberto.
 
-    10/09/2026 -- POR QUE O ENVIO VAI PARA UM PROCESSO FILHO: o .Send() pode
-    parar para sempre esperando clique na caixa de permissao (ver
-    _caixa_de_permissao_aberta). Thread presa dentro do COM nao morre;
-    processo filho morre. Estourado o prazo o filho e' encerrado, a rodada
-    segue e a trava diaria NAO e' marcada -- assim a proxima rodada tenta de
-    novo em vez de dar o dia por avisado.
+    ⚠ Com o Outlook fechado o COM sobe uma instancia e a mensagem pode ficar
+    parada na Caixa de Saida ate alguem abrir o programa. Por isso o
+    SendAndReceive logo depois do Send.
     """
-    travado = _caixa_de_permissao_aberta()
-    if travado:
-        raise EnvioTravado(travado)
+    import win32com.client  # so aqui: em maquina sem Outlook o resto ainda roda
 
-    pedido = json.dumps({"para": para, "assunto": assunto, "corpo": corpo_html},
-                        ensure_ascii=False)
-    filho = subprocess.Popen(
-        [sys.executable, str(PASTA / "_enviar_outlook.py")],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, encoding="utf-8", errors="replace")
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    email = outlook.CreateItem(0)  # 0 = olMailItem
+    email.To = para
+    email.Subject = assunto
+    email.HTMLBody = corpo_html
+    email.Send()
     try:
-        saida, _ = filho.communicate(pedido, timeout=segundos)
-    except subprocess.TimeoutExpired:
-        filho.kill()
-        filho.communicate()
-        raise EnvioTravado(
-            f"o Outlook nao respondeu em {segundos}s -- quase sempre e' a caixa de "
-            "permissao esperando clique. Abra o Outlook CLASSICO e clique em "
-            "Permitir, ou encerre o OUTLOOK.EXE -Embedding no Gerenciador de Tarefas"
-        ) from None
-    for linha in (saida or "").splitlines():
-        if linha.strip():
-            print("   " + linha.strip())
-    if filho.returncode != 0:
-        raise EnvioTravado(f"o envio falhou (codigo {filho.returncode})")
+        outlook.GetNamespace("MAPI").SendAndReceive(False)
+    except Exception as erro:  # noqa: BLE001 - avisar e seguir
+        print(f"   AVISO: nao consegui forcar o envio ({erro}).")
+        print("   Se o Outlook estiver fechado, o e-mail sai quando ele abrir.")
 
 
 # --------------------------------------------------------------------------

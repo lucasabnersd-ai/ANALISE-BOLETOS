@@ -91,7 +91,6 @@ set "GERAR_BASE="
 shift
 goto :ler_argumentos
 :argumentos_prontos
-set "T0=%TIME:~0,8%"
 
 rem --- As planilhas de origem -------------------------------------------
 rem Os defaults do gerar_painel.py sao caminhos fixos da OUTRA maquina. E base
@@ -167,13 +166,12 @@ echo ============================================================
 echo.
 
 if not defined GERAR_BASE (
-  echo [1/6] %TIME:~0,8% Base NAO regerada ^(/sembase^): usando a planilha como ela esta.
+  echo [1/6] Base NAO regerada ^(/sembase^): usando a planilha como ela esta.
   echo.
   goto :montar_painel
 )
 
-echo [1/6] %TIME:~0,8% Gerando a base TRATAMENTO PYTHON BOLETOS.xlsx...
-echo       ^(passo longo: enquanto sair linha, esta rodando^)
+echo [1/6] Gerando a base TRATAMENTO PYTHON BOLETOS.xlsx...
 echo       ^(associacao das 6 bases; demora alguns minutos^)
 echo.
 if not exist "%ASSOCIADOR%" (
@@ -218,15 +216,14 @@ if not defined BASE_PROPRIA if not exist "%BASE_PAINEL%" (
 )
 
 echo.
-echo [2/6] %TIME:~0,8% Lendo a planilha e montando o painel...
-echo       ^(passo longo: enquanto sair linha, esta rodando^)
+echo [2/6] Lendo a planilha e montando o painel...
 echo.
 "%PYTHON%" %PYARGS% "%AQUI%gerar_painel.py"%BASES%%EXTRA%
 set "CODIGO=%ERRORLEVEL%"
 if not "%CODIGO%"=="0" goto :erro
 
 echo.
-echo [3/6] %TIME:~0,8% Conferindo AMARRAR ADIANTAMENTO com boleto...
+echo [3/6] Conferindo AMARRAR ADIANTAMENTO com boleto...
 echo.
 rem Titulo classificado como "amarrar adiantamento" e quitado contra um
 rem adiantamento JA PAGO -- boleto ligado a ele e sinal de erro: ou a
@@ -241,8 +238,7 @@ rem a publicacao -- mesma regra da cortesia do BOLETOS-PENDENTES no associador.
 "%PYTHON%" %PYARGS% "%AQUI%alerta_adiantamento.py"
 
 echo.
-echo [4/6] %TIME:~0,8% Conferindo vencimento em sabado, domingo ou feriado...
-echo       ^(le a SE2 inteira: cerca de 30s^)
+echo [4/6] Conferindo vencimento em sabado, domingo ou feriado...
 echo.
 rem Banco nao compensa em dia nao util: pagamento agendado para sabado,
 rem domingo ou feriado ou nao sai, ou sai no dia seguinte com juros de um dia
@@ -257,7 +253,7 @@ rem Para repetir de proposito: alerta_dia_util.py --forcar
 "%PYTHON%" %PYARGS% "%AQUI%alerta_dia_util.py"
 
 echo.
-echo [5/6] %TIME:~0,8% Subindo a carteira para o painel publicado...
+echo [5/6] Subindo a carteira para o painel publicado...
 echo.
 rem Sem esta etapa o painel no ar continuaria com os dados da carga anterior:
 rem o gerar_painel.py so escreve os arquivos aqui na maquina.
@@ -274,7 +270,7 @@ if not "%CODIGO%"=="0" goto :erro
 
 :publicar_git
 echo.
-echo [6/6] %TIME:~0,8% Publicando PUBLICAR\ no GitHub Pages (commit e push)...
+echo [6/6] Publicando PUBLICAR\ no GitHub Pages (commit e push)...
 echo.
 rem Sem esta etapa o layout gerado (PUBLICAR\index.html) fica so nesta maquina:
 rem o deploy.py faz git add/commit/push do que o .gitignore deixar passar.
@@ -288,7 +284,7 @@ if not "%CODIGO%"=="0" goto :erro
 
 :fim
 echo.
-echo O painel esta nos DOIS enderecos:
+echo CONCLUIDO. O painel esta nos DOIS enderecos:
 echo.
 echo    Vercel  https://analise-boletos.vercel.app/
 echo    Pages   https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/
@@ -304,25 +300,12 @@ rem desligar. Quem desligar tem de saber que privar o repositorio APAGA o site
 rem do Pages, e voltar a publico NAO o recria -- foi o que derrubou o painel
 rem em 08/09/2026. O caminho certo e DELETE /repos/.../pages, com ordem dele.
 echo.
-rem ESTE BANNER SAI SEMPRE, nos dois caminhos. Antes o unico "CONCLUIDO" ficava
-rem no meio da tela e o :erro nao dizia hora nenhuma: quando um passo emudecia
-rem (o [4/6] travou 10 min na caixa de permissao do Outlook em 10/09/2026) nao
-rem havia como saber se ainda rodava ou se tinha acabado. Agora a ultima linha
-rem da tela responde isso sozinha.
-echo ================================================================
-echo   CONCLUIDO. Nada mais esta rodando.
-echo   Comecou %T0%  terminou %TIME:~0,8%
-echo ================================================================
-echo.
 if not defined PAINEL_SEM_PAUSA pause
 exit /b 0
 
 :erro
 echo.
-echo ================================================================
-echo   TERMINOU COM ERRO ^(codigo %CODIGO%^). Confira a mensagem acima.
-echo   Comecou %T0%  parou %TIME:~0,8%
-echo ================================================================
+echo OCORREU UM ERRO. Confira a mensagem acima.
 echo.
 if not defined PAINEL_SEM_PAUSA pause
 exit /b %CODIGO%
