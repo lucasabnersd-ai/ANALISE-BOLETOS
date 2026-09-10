@@ -61,7 +61,6 @@ import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
-import caminhos
 from openpyxl import load_workbook
 
 # Mesmo criterio do sc7.py e do sefaz.py: este arquivo mora em
@@ -72,11 +71,7 @@ from openpyxl import load_workbook
 # default sem derivacao entre as bases da aba NF x Pedido de Compra, e o mais
 # caro: sem a SF1 o gerar_painel.py pula de uma vez a aba SEFAZ x SF1 E a de
 # pedidos de compra.
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-BASE_PADRAO = caminhos.bases_genericos() / "SF1.xlsx"
+BASE_PADRAO = Path(__file__).resolve().parents[3] / "BASES GENERICOS" / "SF1.xlsx"
 if not BASE_PADRAO.exists():
     BASE_PADRAO = Path(
         r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"

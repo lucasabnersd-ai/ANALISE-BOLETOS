@@ -113,7 +113,6 @@ from pathlib import Path
 
 from openpyxl.utils import column_index_from_string
 
-import caminhos
 import sefaz
 
 # O painel roda em DUAS maquinas: esta pasta e a mesma biblioteca do OneDrive,
@@ -124,11 +123,7 @@ import sefaz
 # comando no gerar_painel.py: o .cmd nao teria como corrigir o caminho, e na
 # outra maquina a aba de pedidos de compra nascia vazia, so com um AVISO.
 # O caminho fixo fica de ultimo recurso, para quem tirar o script da biblioteca.
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-BASE_GENERICOS = caminhos.bases_genericos()
+BASE_GENERICOS = Path(__file__).resolve().parents[3] / "BASES GENERICOS"
 if not BASE_GENERICOS.is_dir():
     BASE_GENERICOS = Path(
         r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"

@@ -63,8 +63,7 @@ if not defined PYTHON (
   goto :erro
 )
 
-rem O ASSOCIADOR e as planilhas sao achados mais abaixo, no bloco "As
-rem planilhas de origem" -- todos saem da mesma raiz procurada.
+set "ASSOCIADOR=%AQUI%..\..\RODAR_ASSOCIADOR_BOLETOS\RODAR_ASSOCIADOR_BOLETOS.CMD"
 
 rem /sembase e nosso, o resto segue para o gerar_painel.py. Sem separar os dois,
 rem o argparse do Python receberia /sembase e derrubaria a rodada inteira.
@@ -97,35 +96,13 @@ rem Os defaults do gerar_painel.py sao caminhos fixos da OUTRA maquina. E base
 rem que nao e achada nao derruba o painel: a aba dela sai vazia com um AVISO no
 rem meio da rodada, que e justamente o que ninguem le. Entao os caminhos sao
 rem derivados daqui e passados na linha de comando -- assim valem nas duas.
-rem
-rem 10/09/2026. ANTES a conta era por NIVEL: %AQUI%.. era a ANALISES BOLETOS e
-rem %AQUI%..\..\.. a LUCAS ABNER ARAUJO. Contar niveis amarra o .cmd a UM lugar
-rem da arvore: ao mover a pasta do painel para ...\LUCAS ABNER ARAUJO\PAINEIS\
-rem ANALISE BOLETOS cada ".." passa a apontar um pai adiante e TODAS as bases
-rem sairiam erradas de uma vez -- sem erro na tela, so abas vazias.
-rem Agora a raiz e PROCURADA: sobe de pasta em pasta ate achar a que tem a
-rem "BASES GENERICOS" dentro, e o resto desce dela. Vale no lugar antigo, no
-rem novo e nas duas maquinas. Mesma ideia do caminhos.py, do lado do Python.
-rem   %RAIZ%       ...\LUCAS ABNER ARAUJO
-rem   %AUTOMACOES% ...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>  (curinga: cedilha)
-rem   %ANALISES%   ...\<AUTOMACOES LUCAS>\ANALISES BOLETOS    (SEFAZ, PREMISSA)
-call :achar_raiz "%AQUI%."
-if not defined RAIZ (
-  echo   AVISO: subindo a partir desta pasta nao achei nenhuma "BASES GENERICOS".
-  echo   Voltando a conta por nivel -- so acerta com o painel no lugar antigo.
-  for %%D in ("%AQUI%..\..\..") do set "RAIZ=%%~fD"
-)
-rem A pasta das automacoes tem cedilha e til de verdade no nome; escreve-lo aqui
-rem deixaria o acerto por conta da pagina de codigo com que o .cmd for lido. Por
-rem isso o curinga -- com a confirmacao de que a ANALISES BOLETOS esta dentro
-rem dela, para nao pegar outra pasta que comece com AUTOMA.
-set "AUTOMACOES="
-for /d %%D in ("%RAIZ%\AUTOMA*") do if exist "%%~fD\ANALISES BOLETOS\" set "AUTOMACOES=%%~fD"
-if not defined AUTOMACOES for %%D in ("%AQUI%..\..") do set "AUTOMACOES=%%~fD"
-set "ANALISES=%AUTOMACOES%\ANALISES BOLETOS"
-rem O log de cada rodada do associador, e o proprio associador.
-set "LOGS=%AUTOMACOES%\logs"
-set "ASSOCIADOR=%AUTOMACOES%\RODAR_ASSOCIADOR_BOLETOS\RODAR_ASSOCIADOR_BOLETOS.CMD"
+rem   %AQUI%  ...\LUCAS ABNER ARAUJO\<AUTOMACOES LUCAS>\ANALISES BOLETOS\PAINEL ANALISE BOLETOS\
+rem   %RAIZ%  ...\LUCAS ABNER ARAUJO
+for %%D in ("%AQUI%..")       do set "ANALISES=%%~fD"
+for %%D in ("%AQUI%..\..\..") do set "RAIZ=%%~fD"
+rem Onde o associador grava o log de cada rodada -- derivado, e nao escrito na
+rem mao, porque o nome da pasta tem cedilha e til de verdade.
+for %%D in ("%AQUI%..\..\logs") do set "LOGS=%%~fD"
 set "GENERICOS=%RAIZ%\BASES GENERICOS"
 set "BASE_PAINEL=%RAIZ%\TRATAMENTO PYTHON BOLETOS.xlsx"
 
@@ -328,25 +305,6 @@ if not errorlevel 1 (
 )
 set "PYTHON="
 goto :eof
-
-:achar_raiz
-rem Sobe de pasta em pasta, a partir de %1, ate achar a que tem a "BASES
-rem GENERICOS" dentro -- essa e a LUCAS ABNER ARAUJO. Procura pela MARCA e nao
-rem pelo nome: o nome da biblioteca muda de maquina para maquina ("OneDrive -
-rem Grupo S&D" aqui, "OneDrive - S & D Florestal" na outra), a pasta com as
-rem bases genericas dentro nao muda. Tudo entre aspas de proposito: o & do nome
-rem de la, solto, seria lido pelo cmd como separador de comando.
-set "_p=%~f1"
-:achar_raiz_sobe
-if exist "%_p%\BASES GENERICOS\" (
-  set "RAIZ=%_p%"
-  goto :eof
-)
-for %%D in ("%_p%\..") do set "_n=%%~fD"
-rem Chegou na raiz do disco (C:\.. e o proprio C:\): para, senao gira sem fim.
-if /i "%_n%"=="%_p%" goto :eof
-set "_p=%_n%"
-goto :achar_raiz_sobe
 
 :usar_base
 rem So passa adiante o caminho que EXISTE. O que faltar segue com o default do

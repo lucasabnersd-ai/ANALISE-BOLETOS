@@ -60,7 +60,6 @@ import tempfile
 import unicodedata
 from pathlib import Path
 
-import caminhos
 from openpyxl import load_workbook
 from openpyxl.utils import column_index_from_string
 
@@ -72,11 +71,7 @@ from openpyxl.utils import column_index_from_string
 # para quem tirar o script da biblioteca.
 _AQUI = Path(__file__).resolve()
 
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-BASE_PADRAO = caminhos.pasta_analises() / "SEFAZ.xlsx"
+BASE_PADRAO = _AQUI.parents[1] / "SEFAZ.xlsx"
 if not BASE_PADRAO.exists():
     BASE_PADRAO = Path(
         r"C:\Users\lucas\OneDrive - Grupo S&D\Arquivos de Gabriella Karla Oliveira Milas - FINANCEIRO COMPARTILHADO"
@@ -92,7 +87,7 @@ if not BASE_PADRAO.exists():
 # falhava e o gerar_painel PULAVA as tres abas da SEFAZ (inclusive a NF x Pedido
 # de Compra), so com um AVISO no meio da rodada: a aba ficava com o dado da
 # rodada anterior e ninguem percebia.
-_GENERICOS = caminhos.bases_genericos()
+_GENERICOS = _AQUI.parents[3] / "BASES GENERICOS"
 BASE_EMPRESAS = _GENERICOS / "LISTAGEM EMPRESAS BIOFLOR.xlsx"
 if not BASE_EMPRESAS.exists():
     BASE_EMPRESAS = Path(

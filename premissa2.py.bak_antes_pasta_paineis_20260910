@@ -73,15 +73,10 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-import caminhos
 import sefaz
 
 _AQUI = Path(__file__).resolve()
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-_ANALISES = caminhos.pasta_analises()
+_ANALISES = _AQUI.parents[1]
 
 # ⚠ O ARQUIVO TEM DOIS NOMES E DUAS FORMAS, e os dois mudam sem aviso.
 # 04/09/2026: o ORGANIZADA.xlsx foi reexportado e VOLTOU A SER o CSV cru (uma

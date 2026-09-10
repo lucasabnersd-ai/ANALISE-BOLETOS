@@ -37,7 +37,6 @@ import tempfile
 from pathlib import Path
 
 import alertas_comuns as comuns
-import caminhos
 
 PASTA = Path(__file__).resolve().parent
 PREVIA = PASTA / "DADOS" / "alerta_dia_util_previa.html"
@@ -46,12 +45,8 @@ CHAVE = "dia_util"
 # A SE2 mora fora desta pasta, na biblioteca compartilhada. Derivado, e nao
 # escrito na mao: o nome da pasta muda de maquina para maquina.
 #   PASTA  ...\LUCAS ABNER ARAUJO\<AUTOMACOES>\ANALISES BOLETOS\PAINEL ANALISE BOLETOS
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-RAIZ = caminhos.raiz_lucas()
-BASES = caminhos.bases_genericos()
+RAIZ = PASTA.parent.parent.parent
+BASES = RAIZ / "BASES GENERICOS"
 
 ABA = "SE2"
 

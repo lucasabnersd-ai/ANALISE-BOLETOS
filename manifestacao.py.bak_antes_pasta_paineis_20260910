@@ -34,7 +34,6 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-import caminhos
 import sefaz
 
 # ⚠ Derivado da pasta DESTE arquivo, e nao do `sefaz.BASE_PADRAO`: aquele tem um
@@ -42,11 +41,7 @@ import sefaz
 # `.parent` dele faria esta base ser procurada num caminho de outro PC. Mesmo
 # molde do sefaz.py: a pasta ANALISES BOLETOS, um nivel acima desta.
 _AQUI = Path(__file__).resolve()
-# 10/09/2026: era contagem de niveis a partir deste arquivo (parents[N]).
-# Contar amarra o script a UM lugar da arvore -- ao mudar a pasta do painel
-# a conta aponta para o pai errado e a aba nasce vazia com um AVISO que
-# ninguem le. Agora a pasta e' PROCURADA por marca. Ver caminhos.py.
-BASE_PADRAO = caminhos.pasta_analises() / "MESMA PREMISSA.xlsx"
+BASE_PADRAO = _AQUI.parents[1] / "MESMA PREMISSA.xlsx"
 
 # ---------------------------------------------------------------- o arquivo
 # ⚠ O ARQUIVO NAO E UMA PLANILHA: e um CSV embrulhado em .xlsx. Uma aba so, com
