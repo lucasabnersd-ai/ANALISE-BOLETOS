@@ -2046,6 +2046,27 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         except Exception as exc:  # noqa: BLE001 - arquivo fora do ar/renomeado/mudado
             print(f"AVISO: PREMISSA 2 nao entrou no painel:\n       {exc}",
                   file=sys.stderr)
+        # 10/09/2026. CT-e (aba PREMISSA 2 SEFAZ): o frete entra como nota, com o
+        # Num CT-e no lugar do numero da NF -- e o que cruza com a SF1. Entra
+        # ANTES do NFS STATUS de proposito: e o anotar de la que marca a coluna
+        # NFS STATUS de toda linha que nao e NFS-e ("nao se aplica") -- CT-e
+        # injetado depois ficava com a celula em branco.
+        cte_resumo = None
+        try:
+            novas_cte, cte_resumo = cte_sefaz.linhas_novas(linhas_sefaz, empresas_bioflor,
+                                                          caminho_sefaz)
+            linhas_sefaz.extend(novas_cte)
+            print(f"           CT-e ({cte_resumo['aba']}): {cte_resumo['linhas']} linhas | "
+                  f"{cte_resumo['ctes']} CT-e | {cte_resumo['do_grupo']} do grupo "
+                  f"({cte_resumo['fora_do_grupo']} fora) | {cte_resumo['ja_no_painel']} já no "
+                  f"painel | {cte_resumo['novas']} NOVOS entram | status: "
+                  + ", ".join(f"{n} {s}" for s, n in cte_resumo["status"].items()))
+            if cte_resumo.get("sem_tomador"):
+                print(f"AVISO: {cte_resumo['sem_tomador']} CT-e sem coluna de tomador "
+                      f"reconhecida ficaram fora", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
+            print(f"AVISO: CT-e (PREMISSA 2 SEFAZ) nao entrou no painel:\n       {exc}",
+                  file=sys.stderr)
         # 10/09/2026. NFS STATUS: a aba de situacao das NFS-e dentro da propria
         # SEFAZ.xlsx. Enriquece as NFS-e (coluna NFS STATUS: Exportada /
         # Disponivel + situacao na prefeitura) e acrescenta as notas que a aba
@@ -2065,24 +2086,6 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
             nfs_status.marcar_sem_base(linhas_sefaz)
             print(f"AVISO: coluna NFS STATUS não preenchida:\n       {exc}", file=sys.stderr)
-        # 10/09/2026. CT-e (aba PREMISSA 2 SEFAZ): o frete entra como nota, com o
-        # Num CT-e no lugar do numero da NF -- e o que cruza com a SF1.
-        cte_resumo = None
-        try:
-            novas_cte, cte_resumo = cte_sefaz.linhas_novas(linhas_sefaz, empresas_bioflor,
-                                                          caminho_sefaz)
-            linhas_sefaz.extend(novas_cte)
-            print(f"           CT-e ({cte_resumo['aba']}): {cte_resumo['linhas']} linhas | "
-                  f"{cte_resumo['ctes']} CT-e | {cte_resumo['do_grupo']} do grupo "
-                  f"({cte_resumo['fora_do_grupo']} fora) | {cte_resumo['ja_no_painel']} já no "
-                  f"painel | {cte_resumo['novas']} NOVOS entram | status: "
-                  + ", ".join(f"{n} {s}" for s, n in cte_resumo["status"].items()))
-            if cte_resumo.get("sem_tomador"):
-                print(f"AVISO: {cte_resumo['sem_tomador']} CT-e sem coluna de tomador "
-                      f"reconhecida ficaram fora", file=sys.stderr)
-        except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
-            print(f"AVISO: CT-e (PREMISSA 2 SEFAZ) nao entrou no painel:\n       {exc}",
-                  file=sys.stderr)
 
         nao_lancadas = None
         if caminho_sf1.exists():
