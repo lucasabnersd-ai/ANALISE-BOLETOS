@@ -3357,11 +3357,14 @@ const LEGENDAS = {
     itens: [
       ["nfe", "NF-e", `Nota fiscal <b>de produto</b>.`],
       ["nfse", "NFS-e", `Nota fiscal <b>de serviço</b>.`],
-      ["nfe", "PREMISSA 2", `Nota do arquivo <b>MESMA PREMISSA</b> que a SEFAZ.xlsx não tem.`],
-      ["nfse", "CT-e", `<b>Conhecimento de transporte</b> (frete) da aba <i>PREMISSA 2 SEFAZ</i>
+      ["nfe", "PRODUTO 2", `Nota de produto que só existe na aba <i>PRODUTO 2</i> (a manifestação
+        do destinatário) e não veio na aba <i>PRODUTO 1</i> da SEFAZ.xlsx — as duas se complementam.
+        Nessa aba a chave de 44 dígitos veio como número, então a nota casa com a PRODUTO 1 por
+        CNPJ do emitente + nº + série, e com a SF1 por fornecedor + nº.`],
+      ["nfse", "CT-e", `<b>Conhecimento de transporte</b> (frete) da aba <i>CTE</i>
         da SEFAZ.xlsx — o <b>nº do CT-e</b> faz o papel do nº da NF no cruzamento com a SF1.`],
-      ["nfse", "NFS STATUS", `NFS-e que só existe no relatório de situação (aba <i>NFS STATUS</i>)
-        e ainda não veio na aba de NFS-e da SEFAZ.xlsx.`],
+      ["nfse", "SERVICO 2", `NFS-e que só existe na aba <i>SERVICO 2</i> (o relatório de situação
+        das NFS-e) e ainda não veio na aba <i>SERVICO</i> da SEFAZ.xlsx — as duas se complementam.`],
     ],
   },
   pendentes_itau: {

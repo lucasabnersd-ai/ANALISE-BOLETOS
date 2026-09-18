@@ -44,12 +44,25 @@ Nenhuma delas mora aqui — os programas as procuram sozinhos.
 | `SF1`, `SC7`, `SC1`, `SE2 - POSIÇÃO DIARIA`, `LISTAGEM EMPRESAS BIOFLOR` | `LUCAS ABNER ARAUJO\BASES GENERICOS\` |
 | `SEFAZ.xlsx`, `MESMA PREMISSA*.xlsx` | `AUTOMAÇÕES LUCAS\ANALISES BOLETOS\` |
 
-Da `SEFAZ.xlsx` entram **quatro abas**, todas achadas pelo **cabeçalho** (o nome
-da aba muda de exportação para exportação): a de NF-e (`sefaz.py`), a de NFS-e
-(`sefaz.py`), a **NFS STATUS** (`nfs_status.py` — situação e integração ERP das
-NFS-e, cruzada por CNPJ do prestador + nº da NF sem o ano grudado) e a
-**PREMISSA 2 SEFAZ** (`cte_sefaz.py` — os CT-e de frete, que entram como notas
-com Origem `CT-e`; o nº do CT-e faz o papel do nº da NF no cruzamento com a SF1).
+Da `SEFAZ.xlsx` entram **cinco abas**, todas achadas pelo **cabeçalho** (o nome
+da aba muda de exportação para exportação; desde 18/09/2026 vêm como
+`PRODUTO 1`, `PRODUTO 2`, `SERVICO`, `SERVICO 2` e `CTE`):
+
+| aba | o que é | quem lê |
+|---|---|---|
+| `PRODUTO 1` | as NF-e, por item × duplicata | `sefaz.py` |
+| `PRODUTO 2` | a manifestação do destinatário (DF-e, 14 colunas). **Complementa a PRODUTO 1**: preenche a coluna Manifestação das notas que estão nas duas e **acrescenta** as que só existem aqui (Origem `PRODUTO 2`) | `manifestacao.py`, `premissa2.py` |
+| `SERVICO` | as NFS-e | `sefaz.py` |
+| `SERVICO 2` | o relatório de situação das NFS-e (Integração ERP, situação na prefeitura). **Complementa a SERVICO**: preenche a coluna NFS STATUS e acrescenta as que só existem aqui (Origem `SERVICO 2`) | `nfs_status.py` |
+| `CTE` | os CT-e de frete, que entram como notas com Origem `CT-e` | `cte_sefaz.py` |
+
+⚠ Na `PRODUTO 2` a chave de 44 dígitos vem **como número** (o Excel guarda 15
+dígitos e perde os outros 29). Por isso a nota casa com a `PRODUTO 1` por **CNPJ
+do emitente + nº + série**, com o número truncado servindo de trava; a chave
+inteira é recuperada dos `MESMA PREMISSA*.xlsx` da pasta quando algum a tem, e
+sem ela a `Chave NF-e` sai como `PRODUTO 2 <cnpj> <nº> <série>`. Na `SERVICO 2`
+o nº da NFS-e e o RPS também vêm como número e são arredondados quando passam de
+15 dígitos — daí o terceiro casamento por prestador + dia + valor.
 Linha 100% repetida em qualquer aba é ignorada, com aviso no log.
 
 **Como são achadas:** o `.cmd` e o `caminhos.py` **sobem de pasta em pasta até

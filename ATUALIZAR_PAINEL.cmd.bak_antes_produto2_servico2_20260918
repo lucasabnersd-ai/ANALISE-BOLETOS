@@ -144,12 +144,7 @@ rem nota: ciencia, confirmacao, desconhecimento, nao realizada). SO PREENCHE a
 rem coluna da aba da SEFAZ -- nao acrescenta nota nenhuma ao painel, e de
 rem proposito: 643 das 1.380 linhas do arquivo sao notas de terceiros para a
 rem BRACELL, em que a S&D so aparece como transportadora. Ver manifestacao.py.
-rem 18/09/2026. A manifestacao passou a morar DENTRO da SEFAZ.xlsx, na aba
-rem PRODUTO 2 ("as abas PRODUTO 1 e PRODUTO 2 se complementam"). NAO passa mais
-rem caminho aqui de proposito: o gerar_painel.py usa a aba PRODUTO 2 da propria
-rem --base-sefaz quando ela existe e so cai no MESMA PREMISSA.xlsx quando nao.
-rem Fixar o arquivo velho aqui faria a coluna sair de uma exportacao de 04/09.
-rem call :usar_base --base-manifestacao "%ANALISES%\MESMA PREMISSA.xlsx"
+call :usar_base --base-manifestacao "%ANALISES%\MESMA PREMISSA.xlsx"
 rem 04/09/2026. PREMISSA 2: ao contrario da de cima, esta ACRESCENTA nota ao
 rem painel -- as do grupo que a SEFAZ.xlsx nao tem entram com Origem
 rem "PREMISSA 2" e passam pela SF1 e pelos pedidos.

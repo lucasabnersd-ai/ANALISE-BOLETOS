@@ -63,20 +63,12 @@ from pathlib import Path
 import sefaz
 
 # O que a coluna `Origem` mostra para as notas que SO existem no relatorio.
-# 18/09/2026: a aba passou a se chamar 'SERVICO 2' ("as abas SERVICO e SERVICO
-# 2 se complementam", disse o usuario) e o selo acompanhou. A semente do uuid
-# NAO acompanhou (`_SEMENTE_UUID`): trocar a semente trocaria o uuid das linhas.
-ORIGEM = sefaz.ORIGEM_SERVICO2
-_SEMENTE_UUID = "NFS STATUS"
+ORIGEM = "NFS STATUS"
 
 # Cabecalho da aba (comparado por `sefaz._rotulo`: sem acento, espacos
-# colapsados, minusculo). Situacao + CNPJ + um dos nomes do numero identificam
-# a aba.
+# colapsados, minusculo). Os tres primeiros identificam a aba.
 COL_SITUACAO = "Situação NFSe"
-# 18/09/2026: a coluna do numero veio rebatizada de "N NF" para "Nota
-# Prefeitura". Os dois nomes valem; o primeiro que existir no cabecalho vence.
-COLS_NNF = ("N NF", "Nota Prefeitura", "Nº NF", "Numero NF")
-COL_NNF = COLS_NNF[0]
+COL_NNF = "N NF"
 COL_CNPJ = "CNPJ/CPF Prestador"
 COL_FILIAL = "Filial"
 COL_SERIE = "Série"
@@ -86,7 +78,7 @@ COL_PRESTADOR = "Prestador"
 COL_MUNICIPIO = "Município"
 COL_INTEGRACAO = "Integração ERP"
 COL_VALOR = "Valor dos Serviços"
-IDENTIDADE = (COL_SITUACAO, COL_CNPJ)   # + um de COLS_NNF, ver _achar_aba
+IDENTIDADE = (COL_SITUACAO, COL_NNF, COL_CNPJ)
 
 # Valores da coluna `NFS STATUS` quando NAO ha registro para a nota. Comecam
 # com travessao como os da manifestacao, para ficarem juntos no filtro.
@@ -123,15 +115,13 @@ def _achar_aba(wb):
     """A aba do relatorio, pelo CABECALHO -- o nome ("NFS  STATUS", com dois
     espacos) e detalhe de digitacao e pode mudar na proxima exportacao."""
     procurados = {sefaz._rotulo(c) for c in IDENTIDADE}
-    numeros = {sefaz._rotulo(c) for c in COLS_NNF}
     for ws in wb.worksheets:
         cabecalho = {sefaz._rotulo(c) for c in sefaz._cabecalho_de(ws) if c}
-        if procurados <= cabecalho and cabecalho & numeros:
+        if procurados <= cabecalho:
             return ws
     raise RuntimeError(
-        "A SEFAZ.xlsx nao tem a aba SERVICO 2 / NFS STATUS (procurei uma aba com as colunas "
-        + " / ".join(repr(c) for c in IDENTIDADE) + " e uma de "
-        + " / ".join(repr(c) for c in COLS_NNF) + " no cabecalho).\n"
+        "A SEFAZ.xlsx nao tem a aba NFS STATUS (procurei uma aba com as colunas "
+        + " / ".join(repr(c) for c in IDENTIDADE) + " no cabecalho).\n"
         "  a planilha tem: " + " / ".join(repr(n) for n in wb.sheetnames))
 
 
@@ -145,13 +135,10 @@ def ler(base: Path | None = None) -> tuple[list[dict], dict]:
         brutas = ws.iter_rows(values_only=True)
         cabecalho = [sefaz._rotulo(c) for c in (next(brutas, ()) or ())]
         pos = {}
-        for nome in (COL_SITUACAO, COL_CNPJ, COL_FILIAL, COL_SERIE, COL_RPS,
+        for nome in (COL_SITUACAO, COL_NNF, COL_CNPJ, COL_FILIAL, COL_SERIE, COL_RPS,
                      COL_EMISSAO, COL_PRESTADOR, COL_MUNICIPIO, COL_INTEGRACAO, COL_VALOR):
             rot = sefaz._rotulo(nome)
             pos[nome] = cabecalho.index(rot) if rot in cabecalho else None
-        # o numero da NF tem mais de um nome (ver COLS_NNF): o primeiro que existir
-        pos[COL_NNF] = next((cabecalho.index(sefaz._rotulo(n)) for n in COLS_NNF
-                             if sefaz._rotulo(n) in cabecalho), None)
 
         def campo(bruta, nome):
             i = pos[nome]
@@ -214,44 +201,20 @@ def _formas(nnf, ano) -> set:
     return set(sefaz.nf_variantes(nnf, ano).keys())
 
 
-def _dia_valor(cnpj: str, emissao, valor):
-    """A chave do terceiro indice: (cnpj, dia da emissao, valor em centavos)."""
-    if not cnpj or not emissao or valor in (None, ""):
-        return None
-    try:
-        return (cnpj, emissao, int(round(float(valor) * 100)))
-    except (TypeError, ValueError):
-        return None
-
-
-def _indice(registros: list[dict]) -> tuple[dict, dict, dict]:
-    """Tres indices: (cnpj, forma do numero), (cnpj, rps) e (cnpj, dia, valor).
-
-    18/09/2026: o terceiro existe porque a aba SERVICO 2 grava numero e RPS
-    como NUMERO, e o Excel arredonda o que passa de 15 digitos: a NFS-e
-    2600000009346 da FROTA162 chega como 2600000000000 e o RPS 260000000009346
-    como 260000000000000 -- nem o numero nem o RPS casam mais com a aba SERVICO.
-    Prestador + dia + valor e o que sobra de identidade; so vale quando o trio
-    e UNICO no relatorio (dois servicos iguais no mesmo dia ficam de fora, de
-    proposito: casar um deles ao acaso seria pior do que nao casar).
-    """
+def _indice(registros: list[dict]) -> tuple[dict, dict]:
+    """Dois indices: (cnpj, forma do numero) e (cnpj, rps)."""
     por_nf: dict[tuple, dict] = {}
     por_rps: dict[tuple, dict] = {}
-    por_dia_valor: dict[tuple, dict | None] = {}
     for r in registros:
         ano = r["emissao"].year if r["emissao"] else None
         for forma in _formas(r["nnf"], ano):
             por_nf.setdefault((r["cnpj"], forma), r)
         if r["rps"]:
             por_rps.setdefault((r["cnpj"], r["rps"]), r)
-        k = _dia_valor(r["cnpj"], r["emissao"], r["valor"])
-        if k is not None:
-            por_dia_valor[k] = None if k in por_dia_valor else r
-    return por_nf, por_rps, por_dia_valor
+    return por_nf, por_rps
 
 
-def _registro_da_linha(linha: dict, por_nf: dict, por_rps: dict,
-                       por_dia_valor: dict | None = None):
+def _registro_da_linha(linha: dict, por_nf: dict, por_rps: dict):
     cnpj = _digitos(linha.get(sefaz.CNPJ_EMIT))
     if len(cnpj) != 14:
         return None
@@ -263,13 +226,7 @@ def _registro_da_linha(linha: dict, por_nf: dict, por_rps: dict,
             return achado
     rps = _digitos(linha.get("_rps")).lstrip("0")
     if rps:
-        achado = por_rps.get((cnpj, rps))
-        if achado is not None:
-            return achado
-    if por_dia_valor:
-        k = _dia_valor(cnpj, emissao, linha.get(sefaz.VLR_TOTAL))
-        if k is not None:
-            return por_dia_valor.get(k)
+        return por_rps.get((cnpj, rps))
     return None
 
 
@@ -296,9 +253,7 @@ def _linha_nova(r: dict, permitidos: dict, filiais_por_codigo: dict) -> dict | N
     if not cnpj_dest or cnpj_dest not in permitidos:
         return None
     numero = _digitos(r["nnf"])
-    # ⚠ Semeado com "NFS STATUS", e nao com o selo novo -- e deste texto que o
-    # cruzamento e a aba de pedidos tiram os digitos do uuid deles.
-    chave = f"{_SEMENTE_UUID} {r['cnpj']} {numero}"
+    chave = f"{ORIGEM} {r['cnpj']} {numero}"
     linha = {
         sefaz.ORIGEM: ORIGEM,
         sefaz.CHAVE_NFE: chave,
@@ -316,8 +271,7 @@ def _linha_nova(r: dict, permitidos: dict, filiais_por_codigo: dict) -> dict | N
         sefaz.VLR_TOTAL: r["valor"],
         sefaz.VENC_DUP: None,
         sefaz.VLR_DUP: None,
-        sefaz.INFO: (f"Nota lida da aba SERVICO 2 (relatório de situação) da SEFAZ.xlsx — "
-                     f"não está na aba SERVICO. "
+        sefaz.INFO: (f"Nota lida da aba NFS STATUS da SEFAZ.xlsx (não está na aba de NFS-e). "
                      f"Filial {r['filial']} · série {r['serie']} · RPS {r['rps']} · "
                      f"município {r['municipio']} · Integração ERP: {r['integracao']}"),
         sefaz.CNPJ_EMIT: r["cnpj"],
@@ -328,7 +282,7 @@ def _linha_nova(r: dict, permitidos: dict, filiais_por_codigo: dict) -> dict | N
         "_rps": r["rps"],
     }
     linha[sefaz.CHAVE] = sefaz.PREFIXO + hashlib.sha1(
-        f"{_SEMENTE_UUID}|{r['cnpj']}|{numero}".encode("utf-8")).hexdigest()[:16]
+        f"{ORIGEM}|{r['cnpj']}|{numero}".encode("utf-8")).hexdigest()[:16]
     return linha
 
 
@@ -342,7 +296,7 @@ def anotar(linhas: list[dict], permitidos: dict, base: Path | None = None,
     Devolve (linhas novas, resumo).
     """
     registros, resumo = ler(base)
-    por_nf, por_rps, por_dia_valor = _indice(registros)
+    por_nf, por_rps = _indice(registros)
     de, ate = resumo["de"], resumo["ate"]
     if filiais is None:
         try:
@@ -359,7 +313,7 @@ def anotar(linhas: list[dict], permitidos: dict, base: Path | None = None,
         if not _e_servico(linha):
             linha[sefaz.NFS_STATUS] = NAO_SE_APLICA
             continue
-        r = _registro_da_linha(linha, por_nf, por_rps, por_dia_valor)
+        r = _registro_da_linha(linha, por_nf, por_rps)
         if r is None:
             emissao = linha.get(sefaz.EMISSAO)
             dentro = bool(de and ate and emissao and de <= emissao <= ate)

@@ -120,21 +120,63 @@ def _achar_aba(wb):
 def _coluna_tomador(tabela: list[tuple], permitidos) -> tuple[int | None, int | None]:
     """(indice do CNPJ do tomador, indice do nome dele) -- por CONTEUDO.
 
-    O tomador e a coluna em que TODO valor preenchido e um CNPJ de 14 digitos
-    da LISTAGEM (a mais a direita, se houver mais de uma: o recebedor pode ser
-    a nossa propria empresa em parte das linhas e outra empresa nas demais, e
-    ai ele nao passa). O nome e a primeira coluna a direita com texto.
+    O tomador e a coluna em que TODO valor preenchido e um CNPJ de 14 digitos e
+    a MAIOR PARTE deles esta na LISTAGEM (empate: a mais a direita). O nome e a
+    primeira coluna a direita com texto.
+
+    ⚠ 18/09/2026: era "TODOS na listagem", e isso derrubou a aba inteira: dos 6
+    CT-e da exportacao, UM tinha tomador fora da listagem (32293283000284) e a
+    coluna certa (HI, 28 de 29 na listagem) foi rejeitada -- zero CT-e no
+    painel, so um AVISO de "sem coluna de tomador". A coluna e escolhida pela
+    PROPORCAO; o CT-e de fora e cortado linha a linha pelo `linhas_novas`, como
+    qualquer nota fora do grupo. O recebedor (HE, 13 de 19) perde por proporcao,
+    que e o que se quer: la a nossa empresa aparece so em parte das linhas.
     """
     if not tabela:
         return None, None
     largura = max(len(l) for l in tabela)
-    escolhida = None
+    escolhida, melhor = None, 0.0
     for i in range(largura):
         valores = [_digitos(l[i]) for l in tabela if i < len(l) and l[i] not in (None, "")]
-        if not valores:
+        if not valores or not all(len(v) == 14 for v in valores):
             continue
-        if all(len(v) == 14 and v in permitidos for v in valores):
+        proporcao = sum(1 for v in valores if v in permitidos) / len(valores)
+        if proporcao > 0 and proporcao >= melhor:
+            escolhida, melhor = i, proporcao
+    if escolhida is None:
+        return None, None
+    nome = None
+    for j in range(escolhida + 1, largura):
+        textos = [str(l[j]) for l in tabela if j < len(l) and l[j] not in (None, "")]
+        if textos and all(re.search(r"[A-Za-z]{3}", t) for t in textos):
+            nome = j
+            break
+    return escolhida, nome
+
+
+def _coluna_prestador(tabela: list[tuple], i_chave: int | None) -> tuple[int | None, int | None]:
+    """(indice do CNPJ do prestador, indice do nome dele) -- por CONTEUDO.
+
+    18/09/2026: os rotulos `CNPJ`/`PRESTADOR` que o usuario tinha escrito a mao
+    nas colunas GO/GQ nao vieram na exportacao nova, e o nome do transportador
+    saia VAZIO. O CNPJ do prestador ja vem da chave (posicoes 7-20); aqui se
+    procura a coluna em que TODA linha repete exatamente esse CNPJ (a GO), e o
+    nome e a primeira coluna a direita dela com texto (a GQ). Sem rotulo, sem
+    contagem de niveis: se a exportacao mudar as colunas de lugar, a busca
+    acompanha.
+    """
+    if not tabela or i_chave is None:
+        return None, None
+    largura = max(len(l) for l in tabela)
+    escolhida = None
+    for i in range(largura):
+        if i == i_chave:
+            continue
+        pares = [(_digitos(l[i]), cnpj_da_chave(l[i_chave]))
+                 for l in tabela if i < len(l) and l[i] not in (None, "")]
+        if pares and all(c and v == c for v, c in pares):
             escolhida = i
+            break
     if escolhida is None:
         return None, None
     nome = None
@@ -179,6 +221,13 @@ def ler(base: Path | None = None, permitidos=None) -> tuple[list[dict], dict]:
         COL_MUN_FIM, COL_UF_FIM, COL_VENC_DUP, COL_VLR_DUP, COL_CNPJ_PREST,
         COL_NOME_PREST)}
     i_tom, i_tom_nome = _coluna_tomador(dados, permitidos)
+    # Sem os rotulos escritos a mao, o prestador e achado pelo conteudo.
+    if pos[COL_CNPJ_PREST] is None or pos[COL_NOME_PREST] is None:
+        i_prest, i_prest_nome = _coluna_prestador(dados, pos[COL_CHAVE])
+        if pos[COL_CNPJ_PREST] is None:
+            pos[COL_CNPJ_PREST] = i_prest
+        if pos[COL_NOME_PREST] is None:
+            pos[COL_NOME_PREST] = i_prest_nome
 
     def campo(b, nome):
         i = pos[nome]
@@ -277,7 +326,7 @@ def _informacoes(cte: dict) -> str:
     partes = [f"CT-e nº {cte[sefaz.NUM_NF]}"
               + (f" série {cte['_serie']}" if cte.get("_serie") else "")
               + f" de {cte[sefaz.NOME_EMIT] or cte[sefaz.CNPJ_EMIT]}"
-              + f" (lido da aba PREMISSA 2 SEFAZ, {cte['_linhas']} linhas de componentes)"]
+              + f" (lido da aba de CT-e da SEFAZ.xlsx, {cte['_linhas']} linhas de componentes)"]
     if cte.get("_trecho"):
         partes.append(f"Trecho: {cte['_trecho']}")
     if cte["_componentes"]:

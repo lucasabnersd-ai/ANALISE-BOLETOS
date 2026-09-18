@@ -893,9 +893,7 @@ ABAS = {
         "pills": ["Origem", "Status da Nota"],
         # Selo por valor exato: sem isto "NF-e" e "NFS-e" sairiam da mesma cor,
         # e o flag nao flagaria nada.
-        "selos": {"NF-e": "nfe", "NFS-e": "nfse", "CT-e": "nfse", "NFS STATUS": "nfse",
-                  # 18/09/2026: as abas complementares da SEFAZ.xlsx
-                  "PRODUTO 2": "nfe", "PREMISSA 2": "nfe", "SERVICO 2": "nfse"},
+        "selos": {"NF-e": "nfe", "NFS-e": "nfse", "CT-e": "nfse", "NFS STATUS": "nfse"},
         # Colunas de texto longo: a celula vira botao e o texto inteiro abre no
         # quadro flutuante, o mesmo do critério de match.
         "texto_longo": {"Informações"},
@@ -2002,28 +2000,16 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # ⚠ Sem a base, a coluna diz que NAO FOI LIDA, e nao fica vazia: vazio
         # seria lido como "esta nota nao tem manifestacao", afirmacao que ninguem
         # fez. O painel inteiro continua saindo -- so esta coluna fica sem dado.
-        # 18/09/2026. A base preferida passou a ser a aba PRODUTO 2 da propria
-        # SEFAZ.xlsx ("as abas PRODUTO 1 e PRODUTO 2 se complementam"); o
-        # MESMA PREMISSA.xlsx ficou de reserva. Ver manifestacao.escolher_base.
-        caminho_manifesto = manifestacao.escolher_base(base_manifestacao, caminho_sefaz)
+        caminho_manifesto = base_manifestacao or manifestacao.BASE_PADRAO
         try:
             manifesto_resumo = manifestacao.anotar(linhas_sefaz, caminho_manifesto)
             faixa = ""
             if manifesto_resumo["de"]:
                 faixa = (f" | período {manifesto_resumo['de'].strftime('%d/%m/%Y')}"
                          f" a {manifesto_resumo['ate'].strftime('%d/%m/%Y')}")
-            print(f"           manifestação ({Path(manifesto_resumo['arquivo']).name}, aba "
-                  f"{manifesto_resumo.get('aba')!r}): {manifesto_resumo['notas']} notas "
-                  f"({manifesto_resumo['linhas']} linhas, "
+            print(f"           manifestação: {manifesto_resumo['notas']} notas no "
+                  f"arquivo ({manifesto_resumo['linhas']} linhas, "
                   f"{manifesto_resumo['repetidas']} repetidas){faixa}")
-            if manifesto_resumo.get("chaves_float"):
-                print(f"           ⚠ chave de 44 dígitos veio como NÚMERO em "
-                      f"{manifesto_resumo['chaves_float']} linhas ("
-                      f"{manifesto_resumo['recuperadas']} recuperadas dos MESMA PREMISSA*.xlsx); "
-                      f"o cruzamento com a PRODUTO 1 vai por CNPJ + nº + série")
-            if manifesto_resumo.get("como_achou"):
-                print("           casadas: " + " | ".join(
-                    f"{n} por {c}" for c, n in manifesto_resumo["como_achou"].items()))
             print("           " + " | ".join(
                 f"{n} {s}" for s, n in manifesto_resumo["anotadas"].items()))
             if manifesto_resumo["graves"]:
@@ -2047,31 +2033,18 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
         # linhas vem do proprio arquivo e o anotar as marcaria "NAO ENCONTRADA"
         # (a MESMA PREMISSA.xlsx, csv, pode nao ter as mesmas notas). Falhar
         # aqui nao derruba o painel: avisa e segue sem elas.
-        # 18/09/2026: a fonte e a aba PRODUTO 2 da propria SEFAZ.xlsx quando ela
-        # existe (Origem "PRODUTO 2"); os MESMA PREMISSA*.xlsx sao reserva e
-        # dicionario de chaves. Ver premissa2.escolher_base.
-        caminho_p2 = premissa2.escolher_base(base_premissa2, caminho_sefaz)
+        caminho_p2 = base_premissa2 or premissa2.BASE_PADRAO
         try:
             novas_p2, p2_resumo = premissa2.linhas_novas(linhas_sefaz, empresas_bioflor,
                                                          caminho_p2)
             linhas_sefaz.extend(novas_p2)
-            print(f"           PRODUTO 2 ({p2_resumo['nome']}, aba {p2_resumo.get('aba')!r}): "
-                  f"{p2_resumo['linhas']} linhas | "
-                  f"{p2_resumo['do_grupo']} notas do grupo ({p2_resumo['terceiros']} linhas de "
-                  f"terceiros fora) | {p2_resumo['ja_na_sefaz']} ja na PRODUTO 1 "
-                  f"({p2_resumo['ja_por_chave']} pela chave, "
-                  f"{p2_resumo['ja_por_identidade']} por CNPJ+nº+série) | "
+            print(f"           PREMISSA 2 ({p2_resumo['nome']}): "
+                  f"{p2_resumo['linhas']} linhas no arquivo | "
+                  f"{p2_resumo['do_grupo']} do grupo ({p2_resumo['terceiros']} de terceiros fora) | "
+                  f"{p2_resumo['ja_na_sefaz']} ja na SEFAZ | "
                   f"{p2_resumo['novas']} NOVAS entram no painel")
-            if p2_resumo.get("chaves_float"):
-                print(f"           ⚠ chave como NÚMERO em {p2_resumo['chaves_float']} linhas: "
-                      f"{p2_resumo['recuperadas']} recuperadas dos MESMA PREMISSA*.xlsx, "
-                      f"{p2_resumo['sinteticas']} sem chave de 44 (identificador PRODUTO 2 "
-                      f"<cnpj> <nº> <série>); das novas, {p2_resumo['novas_recuperadas']} "
-                      f"com chave recuperada e {p2_resumo['novas_sinteticas']} sem"
-                      + (f" | {p2_resumo['incompativeis']} chave(s) lembrada(s) NÃO batem "
-                         f"com o número da aba" if p2_resumo.get("incompativeis") else ""))
         except Exception as exc:  # noqa: BLE001 - arquivo fora do ar/renomeado/mudado
-            print(f"AVISO: PRODUTO 2 (PREMISSA 2) nao entrou no painel:\n       {exc}",
+            print(f"AVISO: PREMISSA 2 nao entrou no painel:\n       {exc}",
                   file=sys.stderr)
         # 10/09/2026. CT-e (aba PREMISSA 2 SEFAZ): o frete entra como nota, com o
         # Num CT-e no lugar do numero da NF -- e o que cruza com a SF1. Entra
@@ -2105,9 +2078,9 @@ def gerar(base: Path, saida: Path, base_pendentes: Path | None = None,
             linhas_sefaz.extend(novas_st)
             periodo = (f" | período {st_resumo['de']} a {st_resumo['ate']}"
                        if st_resumo.get("de") else "")
-            print(f"           SERVICO 2 / NFS STATUS ({st_resumo['aba']}): {st_resumo['linhas']} linhas "
+            print(f"           NFS STATUS ({st_resumo['aba']}): {st_resumo['linhas']} linhas "
                   f"({st_resumo['repetidas']} repetidas) | {st_resumo['registros']} notas | "
-                  f"{st_resumo['ja_na_sefaz']} já na aba SERVICO | {st_resumo['novas']} NOVAS | "
+                  f"{st_resumo['ja_na_sefaz']} já na SEFAZ | {st_resumo['novas']} NOVAS | "
                   f"{st_resumo['divergentes']} com situação divergente{periodo}")
             print("           " + " | ".join(f"{n} {s}" for s, n in st_resumo["anotadas"].items()))
         except Exception as exc:  # noqa: BLE001 - aba ausente/renomeada/mudada
@@ -2371,13 +2344,11 @@ def main() -> int:
                              "na analise da SEFAZ)")
     parser.add_argument("--base-manifestacao", type=Path,
                         default=manifestacao.BASE_PADRAO,
-                        help="base da manifestacao do destinatario (so preenche a coluna, "
-                             "nao acrescenta nota). Sem ela: a aba PRODUTO 2 da SEFAZ.xlsx "
-                             "se existir, senao MESMA PREMISSA.xlsx")
+                        help="MESMA PREMISSA.xlsx (manifestacao do destinatario; "
+                             "so preenche a coluna, nao acrescenta nota)")
     parser.add_argument("--base-premissa2", type=Path, default=premissa2.BASE_PADRAO,
-                        help="base das notas que a aba de NF-e nao tem (entram como Origem "
-                             "PRODUTO 2). Sem ela: a aba PRODUTO 2 da SEFAZ.xlsx se existir, "
-                             "senao MESMA PREMISSA - CONSOLIDADA/ORGANIZADA.xlsx")
+                        help="MESMA PREMISSA - ORGANIZADA.xlsx (notas que a SEFAZ.xlsx "
+                             "nao tem entram no painel como Origem PREMISSA 2)")
     parser.add_argument("--saida", type=Path, default=SAIDA_PADRAO)
     args = parser.parse_args()
 

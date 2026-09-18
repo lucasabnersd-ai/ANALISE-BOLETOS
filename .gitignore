@@ -34,6 +34,12 @@ BACKUPS/
 # internet. O arquivo viaja entre as maquinas pelo OneDrive, nao pelo git.
 .alerta_adiantamento_para
 
+# 18/09/2026 -- padrao GENERICO, e nao mais um nome por alerta: o proximo
+# alerta nasce protegido sem ninguem lembrar de vir aqui. `_copia` e quem
+# entra em CC. Alerta BOLETO S/C: .alerta_boleto_sc_para / _copia.
+.alerta_*_para
+.alerta_*_copia
+
 # --- Vercel (segundo host do painel, desde 08/09/2026) ---
 # O `*.json` la de cima barraria a configuracao da Vercel, e sem ela o painel
 # subiria SEM os cabecalhos de seguranca (CSP, noindex, HSTS) -- e nada avisaria.

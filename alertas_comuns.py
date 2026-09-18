@@ -64,6 +64,27 @@ def destinatarios(nome: str = "") -> str:
     return ""
 
 
+def copias(nome: str = "") -> str:
+    """Quem entra em CC neste alerta. "" quando ninguem.
+
+    Arquivo separado do destinatario de proposito: quem esta em copia nao e'
+    quem tem de agir. Misturar os dois numa lista so apagaria essa diferenca --
+    e e' ela que decide quem responde.
+
+    Nao ha copia PADRAO: sem `.alerta_<nome>_copia` o alerta sai sem CC. Copia
+    herdada por engano e' e-mail de gente que nao pediu para receber.
+    """
+    if not nome:
+        return ""
+    arquivo = PASTA / f".alerta_{nome}_copia"
+    if not arquivo.exists():
+        return ""
+    linhas = arquivo.read_text(encoding="utf-8-sig").splitlines()
+    enderecos = [l.strip().lstrip("﻿") for l in linhas]
+    enderecos = [e for e in enderecos if e and not e.startswith("#")]
+    return "; ".join(enderecos)
+
+
 # --------------------------------------------------------------------------
 # trava diaria
 # --------------------------------------------------------------------------
@@ -249,7 +270,8 @@ def _caixa_de_permissao_aberta() -> str:
             "ou encerre o OUTLOOK.EXE -Embedding no Gerenciador de Tarefas")
 
 
-def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45) -> None:
+def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45,
+           copia: str = "") -> None:
     """Manda pelo Outlook CLASSICO desta maquina, COM PRAZO.
 
     `Outlook.Application` e' o COM registrado em Office16\\OUTLOOK.EXE -- o
@@ -267,8 +289,11 @@ def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45) -> None
     if travado:
         raise EnvioTravado(travado)
 
-    pedido = json.dumps({"para": para, "assunto": assunto, "corpo": corpo_html},
-                        ensure_ascii=False)
+    # ensure_ascii padrao (True) de proposito: o que anda no cano e' ASCII
+    # puro (acento vira \uXXXX), entao nenhum decodificador do outro lado tem
+    # como estragar. Trava junto com o decode explicito do _enviar_outlook.
+    pedido = json.dumps({"para": para, "copia": copia,
+                         "assunto": assunto, "corpo": corpo_html})
     filho = subprocess.Popen(
         [sys.executable, str(PASTA / "_enviar_outlook.py")],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -295,11 +320,24 @@ def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45) -> None
 # --------------------------------------------------------------------------
 
 def tabela(colunas: list[tuple[str, str]], linhas: list[dict],
-           direita: tuple[str, ...] = (), destaque: tuple[str, ...] = ()) -> str:
+           direita: tuple[str, ...] = (), destaque: tuple[str, ...] = (),
+           links: dict | None = None, sublinha=None) -> str:
     """Tabela HTML com estilo em cada celula.
 
     O Outlook ignora <style> em muitos cenarios -- por isso nada de folha de
     estilo: tudo em atributo, celula por celula.
+
+    `links` transforma a celula de um campo em link: {campo: endereco}, onde o
+    endereco e' um texto fixo ou uma funcao que recebe a linha e devolve o
+    endereco daquela linha. O TEXTO da celula continua escapado; so o endereco
+    entra no href -- celula nenhuma recebe HTML cru vindo da base.
+
+    `sublinha` e' uma funcao que recebe a linha e devolve um texto para uma
+    FAIXA logo abaixo dela, ocupando a largura inteira ("" = linha sem faixa).
+    Serve para o dado comprido -- linha digitavel sao 47 digitos numa palavra
+    so -- que como COLUNA empurraria a tabela para fora da tela (foi o que
+    aconteceu no alerta BOLETO S/C em 18/09/2026). Na faixa ele quebra sozinho
+    (`word-break`) e a tabela continua estreita.
     """
     th = (FONTE + "font-size:11pt;background:#1F3864;color:#FFFFFF;"
           "padding:6px 9px;border:1px solid #1F3864;text-align:left;white-space:nowrap;")
@@ -317,8 +355,24 @@ def tabela(colunas: list[tuple[str, str]], linhas: list[dict],
             estilo = td_num if campo in direita else td
             if campo in destaque:
                 estilo += "font-weight:bold;white-space:nowrap;"
-            celulas.append(f'<td style="{estilo}{fundo}">{html.escape(valor)}</td>')
+            conteudo = html.escape(valor)
+            endereco = (links or {}).get(campo)
+            if callable(endereco):
+                endereco = endereco(linha)
+            if endereco and valor != "—":
+                conteudo = (f'<a href="{html.escape(str(endereco), quote=True)}" '
+                            f'style="color:#1F3864;">{conteudo}</a>')
+            celulas.append(f'<td style="{estilo}{fundo}">{conteudo}</td>')
         corpo.append("<tr>" + "".join(celulas) + "</tr>")
+        extra = sublinha(linha) if sublinha else ""
+        if extra:
+            # colspan na largura inteira: a faixa acompanha a linha de cima,
+            # inclusive no zebrado, para nao parecer registro solto
+            td_faixa = (FONTE + "font-size:10pt;color:#404040;padding:4px 9px;"
+                        "border:1px solid #BFBFBF;border-top:none;"
+                        "word-break:break-all;")
+            corpo.append(f'<tr><td colspan="{len(colunas)}" '
+                         f'style="{td_faixa}{fundo}">{html.escape(str(extra))}</td></tr>')
     return (f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;{FONTE}">'
             f"<thead><tr>{cab}</tr></thead><tbody>{''.join(corpo)}</tbody></table>")
 

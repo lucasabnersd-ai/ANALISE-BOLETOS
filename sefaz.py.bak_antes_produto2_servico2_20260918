@@ -127,18 +127,8 @@ PREFIXO = "SEFAZ:"
 # lista da NFS-e, e a de NF-e nao existiria. Quem identifica a aba agora e o
 # cabecalho dela (COLUNAS_NFE / COLUNAS_NFS); estas duas listas ficaram so para
 # desempatar se duas abas tiverem o MESMO layout, e para a mensagem de erro.
-#
-# 18/09/2026: a exportacao passou a vir com CINCO abas, batizadas pelo usuario:
-# 'PRODUTO 1' (as NF-e por item x duplicata, este layout), 'PRODUTO 2' (a
-# manifestacao do DF-e, 14 colunas -- lida pelo premissa2.py/manifestacao.py),
-# 'SERVICO' (as NFS-e, layout COLUNAS_NFS), 'SERVICO 2' (o relatorio de
-# situacao das NFS-e -- nfs_status.py) e 'CTE' (cte_sefaz.py). Ele disse:
-# "as abas PRODUTO 1 e PRODUTO 2 se complementam... faca o mesmo para SERVICO
-# e SERVICO 2". Aqui continuam entrando so a PRODUTO 1 e a SERVICO; o
-# complemento das outras duas e feito pelos modulos citados, DEPOIS do
-# historico. Os nomes novos entram nas listas so para desempate/mensagem.
-ABAS_NFE = ("NFes SEFAZ", "NFe", "NF-e", "NFES", "PRODUTO 1", "PRODUTO")
-ABAS_NFS = ("NFS", "NFS-e", "NFSe", "NFSes SEFAZ", "SERVICO", "SERVIÇO", "SERVICO 1")
+ABAS_NFE = ("NFes SEFAZ", "NFe", "NF-e", "NFES")
+ABAS_NFS = ("NFS", "NFS-e", "NFSe", "NFSes SEFAZ")
 
 # Nomes de saida (o painel casa a coluna por este nome).
 CHAVE = "Chave"
@@ -172,11 +162,6 @@ MANIFESTACAO = "Manifestação"
 # Disponivel = ainda nao) e, quando diverge da SEFAZ, a situacao na prefeitura.
 # Quem preenche e o nfs_status.anotar(). Nao confundir com os dois acima.
 NFS_STATUS = "NFS STATUS"
-# 18/09/2026. Selo da Origem das NFS-e que SO existem na aba 'SERVICO 2' (o
-# relatorio de situacao) e nao na 'SERVICO' -- quem as injeta e o
-# nfs_status.py. Mora aqui, e nao la, porque o `carregar()` conta por ele e
-# este modulo nao pode importar aquele (ele importa este).
-ORIGEM_SERVICO2 = "SERVICO 2"
 SAIDA = "Saída/Entrada"
 TIPO_OP = "Tipo Operação"
 # ⚠ NAO e o "Tipo Operação" acima: aquele diz entrada/saida, este e a natureza
@@ -392,11 +377,6 @@ NFSE = "NFS-e"
 COLUNAS_NFE = [
     ("C",  "Chave NF-e",         CHAVE_NFE),
     ("I",  "Num NF",             NUM_NF),
-    # 18/09/2026. A serie NAO vira coluna (comeca com "_"): e so para a
-    # IDENTIDADE (CNPJ do emitente, numero, serie) com que o premissa2.py e o
-    # manifestacao.py casam a aba PRODUTO 2 com esta -- la a chave de 44 veio
-    # como numero e perdeu 29 digitos, entao a chave sozinha nao casa mais.
-    ("H",  "Série NF",           "_serie"),
     ("J",  "Data Emissão",       EMISSAO),
     ("D",  "Status da Nota",     STATUS_NOTA),
     ("K",  "Data Saída/Entrada", SAIDA),
@@ -1097,8 +1077,7 @@ def carregar(base: Path, nao_lancadas: set | None = None,
         "notas_nfe": len({l[CHAVE_NFE] for l in nfe}),
         "notas_nfs": len({l[CHAVE_NFE] for l in nfs}),
         "cte": sum(1 for l in linhas if l[ORIGEM] == CTE),
-        "nfs_status": sum(1 for l in linhas if l[ORIGEM] in (ORIGEM_SERVICO2, "NFS STATUS")),
-        "produto2": sum(1 for l in linhas if l[ORIGEM] in ("PRODUTO 2", "PREMISSA 2")),
+        "nfs_status": sum(1 for l in linhas if l[ORIGEM] == "NFS STATUS"),
         "com_duplicata": sum(1 for l in linhas if l.get(VLR_DUP)),
     }
     return list(CABECALHO), montar_linhas(linhas), resumo

@@ -17,12 +17,20 @@ import sys
 
 
 def main() -> int:
-    pedido = json.load(sys.stdin)
+    # 18/09/2026 -- o stdin do filho nasce no encoding do Windows (cp1252) e
+    # o pai escreve UTF-8: json.load(sys.stdin) devolvia "tAtulo" no lugar de
+    # "titulo" e o acento chegava torto no e-mail da Graziela. Ler os BYTES e
+    # decodificar na mao nao depende de locale nem de PYTHONIOENCODING.
+    pedido = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     import win32com.client  # so aqui: em maquina sem Outlook o resto ainda roda
 
     outlook = win32com.client.Dispatch("Outlook.Application")
     email = outlook.CreateItem(0)  # 0 = olMailItem
     email.To = pedido["para"]
+    # CC opcional: alerta que e' de um time mas precisa de testemunha manda
+    # copia. Vazio ou ausente = sem copia, como sempre foi.
+    if pedido.get("copia"):
+        email.CC = pedido["copia"]
     email.Subject = pedido["assunto"]
     email.HTMLBody = pedido["corpo"]
     email.Send()
