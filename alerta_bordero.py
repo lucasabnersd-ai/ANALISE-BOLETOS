@@ -28,6 +28,11 @@ sozinhos, continuam INTEIROS para copiar, e a tabela nao mexe.
 Ela sai CRUA, sem mascara de pontos e espacos: o uso e' copiar e colar no banco,
 e separador inventado aqui pode ser recusado do outro lado.
 
+A MESMA lista vai ANEXADA em Excel (uma linha por titulo, valores em coluna),
+com duas colunas a mais que o e-mail: Vlr. Titulo e Cod. Barras. A planilha
+fica em DADOS/ -- que esta no .gitignore, e por isso nao vai para o repositorio
+publico junto com fornecedor e valor.
+
 Vai para o Lucas e a Graziela (`.alerta_bordero_para`, fora do repo).
 
 Uso:
@@ -45,6 +50,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import itertools
 import shutil
 import sys
 import tempfile
@@ -243,6 +249,10 @@ def ler_se2(caminho: Path, hoje: dt.date,
             "linha_dig": linha_dig,
             "cod_barras": texto(campo(linha, "cod_barras")),
             "_data": data_bordero, "_saldo": saldo,
+            # crus para a planilha: no Excel data tem de ser data e valor tem
+            # de ser numero, senao nao soma nem ordena
+            "_valor": como_numero(campo(linha, "valor")),
+            "_venc": vencimento, "_real": real,
         })
     arquivo.close()
     if temporario and temporario.exists():
@@ -252,8 +262,11 @@ def ler_se2(caminho: Path, hoje: dt.date,
             pass
     resumo["base"] = origem
     resumo["salva_em"] = dt.datetime.fromtimestamp(origem.stat().st_mtime)
-    # o bordero mais ANTIGO primeiro: e' o que esta parado ha mais tempo
-    achados.sort(key=lambda a: (a["_data"], -a["_saldo"]))
+    # O bordero mais ANTIGO primeiro: e' o que esta parado ha mais tempo.
+    # Dentro do dia, por NUMERO de bordero -- num mesmo dia saem varios (17/09
+    # teve quatro), e e' por bordero que se confere com o banco. So dentro do
+    # mesmo bordero e' que vale o maior saldo primeiro.
+    achados.sort(key=lambda a: (a["_data"], a["num_bordero"], -a["_saldo"]))
     return achados, resumo
 
 
@@ -263,8 +276,11 @@ def ler_se2(caminho: Path, hoje: dt.date,
 #   . titulo e parcela numa coluna so ("000012576/04"), como se fala do titulo;
 #   . "Tipo pgto" FORA do destaque, porque destaque = negrito + nao quebra, e
 #     "AMARRAR ADIANTAMENTO" sozinho segurava 188px de coluna.
+# 18/09, agrupamento por data (pedido dele): a coluna "Dt. borderô" SAIU -- a
+# data virou o titulo do grupo, e repeti-la em cada linha seria gastar 91px
+# dizendo o que a faixa logo acima ja diz. O NUMERO do bordero ficou: no mesmo
+# dia saem borderos diferentes (em 17/09 sairam 000481, 000482, 000500, 000501).
 COLUNAS_EMAIL = [
-    ("Dt. borderô", "bordero"),
     ("Borderô", "num_bordero"),
     ("Filial", "filial"),
     ("Nº título", "titulo_parcela"),
@@ -293,6 +309,364 @@ def faixa_detalhe(linha: dict) -> str:
     return "     ·     ".join(partes)
 
 
+COLUNAS_EXCEL = [
+    ("Dt. Borderô", "_data", "data"),
+    ("Nº Borderô", "num_bordero", "texto"),
+    ("Dias s/ baixa", "_dias", "inteiro"),
+    ("Filial", "filial", "texto"),
+    ("Prefixo", "prefixo", "texto"),
+    ("Tipo", "tipo", "texto"),
+    ("Nº Título", "titulo", "texto"),
+    ("Parcela", "parcela", "texto"),
+    ("Fornecedor", "fornecedor", "texto"),
+    ("Tipo Pgto", "tipo_pgto", "texto"),
+    ("Vencimento", "_venc", "data"),
+    ("Vencto Real", "_real", "data"),
+    ("Vlr. Título", "_valor", "moeda"),
+    ("Saldo", "_saldo", "moeda"),
+    ("Linha Digitável", "linha_dig", "texto"),
+    ("Cod. Barras", "cod_barras", "texto"),
+    ("Código (UUID)", "uuid", "texto"),
+]
+
+LARGURA = {"Dt. Borderô": 12, "Nº Borderô": 11, "Dias s/ baixa": 13,
+           "Filial": 7, "Prefixo": 9,
+           "Tipo": 7, "Nº Título": 13, "Parcela": 9, "Fornecedor": 38,
+           # 25 e nao 22: "AMARRAR ADIANTAMENTO" em negrito nao cabia em 22 e
+           # saia cortado no papel (conferido no PDF em 21/09/2026)
+           "Tipo Pgto": 25, "Vencimento": 12, "Vencto Real": 12,
+           "Vlr. Título": 14, "Saldo": 14, "Linha Digitável": 50,
+           "Cod. Barras": 48, "Código (UUID)": 38}
+
+CENTRALIZADAS = {"Dt. Borderô", "Nº Borderô", "Dias s/ baixa", "Filial",
+                 "Prefixo", "Tipo", "Parcela", "Vencimento", "Vencto Real"}
+
+# A MESMA paleta do corpo do e-mail, de proposito: quem abre o anexo tem de
+# reconhecer na hora a lista que acabou de ler. Azul do cabecalho, cinza-azulado
+# da faixa de grupo, zebrado e borda sao os mesmos codigos de alertas_comuns.
+AZUL = "1F3864"
+FAIXA_GRUPO = "D6DCE4"
+ZEBRA = "F2F2F2"
+BORDA = "BFBFBF"
+
+# Fundo e letra por tipo de pagamento. A cor nao decora: e' por ela que se ve
+# de longe que um bordero inteiro saiu como TRANSFERENCIA e um unico titulo no
+# meio esta como BOLETO. Casado por PEDACO do nome porque o TOTVS escreve
+# "BOLETO S/C", "TRANSFERENCIA", "TRANSF. ENTRE CONTAS", "AMARRAR ADIANTAMENTO".
+CORES_TIPO_PGTO = (
+    ("BOLETO S/C", "FFF2CC", "7F6000"),
+    ("BOLETO", "E2EFDA", "375623"),
+    ("ADIANT", "FCE4D6", "833C0C"),
+    ("PIX", "E4DFEC", "5F497A"),
+    ("TRANSF", "DDEBF7", "1F4E79"),
+    ("DEBITO", "DDEBF7", "1F4E79"),
+    ("DÉBITO", "DDEBF7", "1F4E79"),
+)
+
+
+def cor_do_tipo(tipo_pgto: str) -> tuple[str, str]:
+    """(fundo, letra) do tipo de pagamento; cinza neutro para o desconhecido."""
+    alvo = (tipo_pgto or "").upper()
+    for pedaco, fundo, letra in CORES_TIPO_PGTO:
+        if pedaco in alvo:
+            return fundo, letra
+    return "EDEDED", "3B3838"
+
+
+def montar_resumo(arquivo, achados: list[dict], hoje: dt.date) -> None:
+    """Uma segunda aba com as duas contas que se faz de cabeca ao abrir a lista:
+    quanto parou em cada DATA de bordero e quanto parou em cada TIPO DE
+    PAGAMENTO. So numero -- nenhuma instrucao, nenhum recado.
+    """
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    pagina = arquivo.create_sheet("RESUMO")
+    fio = Side(style="thin", color=BORDA)
+    grade = Border(left=fio, right=fio, top=fio, bottom=fio)
+    fundo_cab = PatternFill("solid", fgColor=AZUL)
+    letra_cab = Font(name="Calibri", bold=True, color="FFFFFF")
+    fundo_faixa = PatternFill("solid", fgColor=FAIXA_GRUPO)
+    letra_faixa = Font(name="Calibri", bold=True, color=AZUL)
+
+    # a coluna dos numeros de bordero e' larga porque num dia saem varios:
+    # em 18/09 sairam cinco, e cortado no meio o numero nao serve para nada
+    larguras = [18, 30, 10, 16, 16, 12, 12]
+    for coluna, largura in enumerate(larguras, start=1):
+        pagina.column_dimensions[get_column_letter(coluna)].width = largura
+
+    def cabecalho(linha: int, rotulos: list[str]) -> int:
+        for coluna, rotulo in enumerate(rotulos, start=1):
+            celula = pagina.cell(linha, coluna, rotulo)
+            celula.fill, celula.font, celula.border = fundo_cab, letra_cab, grade
+            celula.alignment = Alignment(vertical="center", horizontal="center")
+        pagina.row_dimensions[linha].height = 20
+        return linha + 1
+
+    def numeros(linha: int, valores: list, formatos: list[str],
+                negrito: bool = False, fundo=None) -> int:
+        for coluna, (valor, formato) in enumerate(zip(valores, formatos), start=1):
+            celula = pagina.cell(linha, coluna, valor)
+            celula.font = (letra_faixa if negrito else Font(name="Calibri"))
+            celula.border = grade
+            celula.number_format = formato
+            if fundo is not None:
+                celula.fill = fundo
+            celula.alignment = Alignment(
+                vertical="center",
+                horizontal="center" if formato != '#,##0.00' else "right")
+        return linha + 1
+
+    linha = cabecalho(1, ["Dt. Borderô", "Nº Borderô", "Títulos",
+                          "Vlr. Título", "Saldo", "Com boleto", "Dias parado"])
+    for chave, grupo in itertools.groupby(achados, key=lambda a: a["bordero"]):
+        do_grupo = list(grupo)
+        numeros_bordero = []
+        for l in do_grupo:
+            if l["num_bordero"] and l["num_bordero"] not in numeros_bordero:
+                numeros_bordero.append(l["num_bordero"])
+        linha = numeros(linha, [
+            chave, ", ".join(numeros_bordero) or "—", len(do_grupo),
+            sum(l["_valor"] for l in do_grupo),
+            sum(l["_saldo"] for l in do_grupo),
+            sum(1 for l in do_grupo if l["linha_dig"]),
+            (hoje - do_grupo[0]["_data"]).days,
+        ], ["@", "@", "0", '#,##0.00', '#,##0.00', "0", "0"])
+        pagina.cell(linha - 1, 2).alignment = Alignment(
+            horizontal="center", vertical="center", wrap_text=True)
+    linha = numeros(linha, [
+        "TOTAL", "", len(achados),
+        sum(a["_valor"] for a in achados), sum(a["_saldo"] for a in achados),
+        sum(1 for a in achados if a["linha_dig"]), "",
+    ], ["@", "@", "0", '#,##0.00', '#,##0.00', "0", "@"],
+        negrito=True, fundo=fundo_faixa)
+
+    linha += 2
+    # o nome do tipo ocupa as duas primeiras colunas (A:B), senao "AMARRAR
+    # ADIANTAMENTO" nao cabe e a coluna B fica um buraco azul no cabecalho
+    cabeca_tipo = linha
+    linha = cabecalho(linha, ["Tipo Pgto", "", "Títulos", "Vlr. Título",
+                              "Saldo", "Com boleto", ""])
+    pagina.merge_cells(start_row=cabeca_tipo, start_column=1,
+                       end_row=cabeca_tipo, end_column=2)
+    por_tipo: dict[str, list[dict]] = {}
+    for a in achados:
+        por_tipo.setdefault(a["tipo_pgto"] or "—", []).append(a)
+    for tipo, do_tipo in sorted(por_tipo.items(),
+                                key=lambda par: -sum(l["_saldo"] for l in par[1])):
+        fundo, letra = cor_do_tipo(tipo)
+        linha = numeros(linha, [
+            tipo, "", len(do_tipo),
+            sum(l["_valor"] for l in do_tipo), sum(l["_saldo"] for l in do_tipo),
+            sum(1 for l in do_tipo if l["linha_dig"]), "",
+        ], ["@", "@", "0", '#,##0.00', '#,##0.00', "0", "@"])
+        marca = pagina.cell(linha - 1, 1)
+        marca.fill = PatternFill("solid", fgColor=fundo)
+        marca.font = Font(name="Calibri", bold=True, color=letra)
+        marca.alignment = Alignment(horizontal="left", indent=1)
+        vizinha = pagina.cell(linha - 1, 2)
+        vizinha.fill = PatternFill("solid", fgColor=fundo)
+        vizinha.border = grade
+        pagina.merge_cells(start_row=linha - 1, start_column=1,
+                           end_row=linha - 1, end_column=2)
+
+    pagina.freeze_panes = "A2"
+
+
+def gerar_planilha(achados: list[dict], hoje: dt.date) -> Path | None:
+    """A mesma lista do e-mail, em Excel, para filtrar e somar.
+
+    UMA linha por titulo e os valores em coluna; sem aba de instrucao e sem
+    bloco de texto -- planilha e' dado, nao recado.
+
+    21/09/2026, pedido dele: a planilha passou a SEPARAR os titulos do mesmo
+    jeito que o corpo do e-mail -- uma faixa por DATA de bordero, com o mesmo
+    texto (`rotulo_do_grupo`) e a mesma paleta. Cada grupo e' tambem um grupo
+    de verdade do Excel: dobra e desdobra no +/- da margem. Alem disso: coluna
+    "Dias s/ baixa" com escala de cor, tipo de pagamento colorido, saldo zerado
+    em destaque, TOTAL no pe por formula e uma aba RESUMO com as somas por data
+    e por tipo de pagamento.
+
+    Data vai como DATA e valor como NUMERO (o e-mail manda os dois ja
+    formatados; aqui isso nao serve, porque no Excel texto nao soma). Ja a
+    linha digitavel, o codigo de barras e o numero do bordero vao como TEXTO
+    FORCADO: sao numeros com zero na frente, e o Excel come o zero se puder.
+    """
+    try:
+        import openpyxl
+        from openpyxl.formatting.rule import ColorScaleRule
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        print("   AVISO: sem openpyxl -- o e-mail vai sem a planilha.")
+        return None
+
+    arquivo = openpyxl.Workbook()
+    pagina = arquivo.active
+    pagina.title = "BORDERO SEM BAIXA"
+    quantas_colunas = len(COLUNAS_EXCEL)
+    ultima_letra = get_column_letter(quantas_colunas)
+    rotulos = [rotulo for rotulo, _, _ in COLUNAS_EXCEL]
+
+    fio = Side(style="thin", color=BORDA)
+    grade = Border(left=fio, right=fio, top=fio, bottom=fio)
+    fundo_cab = PatternFill("solid", fgColor=AZUL)
+    letra_cab = Font(name="Calibri", bold=True, color="FFFFFF")
+    fundo_faixa = PatternFill("solid", fgColor=FAIXA_GRUPO)
+    letra_faixa = Font(name="Calibri", bold=True, color=AZUL)
+    fundo_zebra = PatternFill("solid", fgColor=ZEBRA)
+    # saldo zerado e SEM baixa e' a bagunca que este alerta existe para mostrar:
+    # em vez de sumir no meio dos numeros, vem com a cor do alerta
+    fundo_zero = PatternFill("solid", fgColor="FCE4D6")
+    letra_zero = Font(name="Calibri", bold=True, color="833C0C")
+
+    for coluna, rotulo in enumerate(rotulos, start=1):
+        celula = pagina.cell(1, coluna, rotulo)
+        celula.fill, celula.font = fundo_cab, letra_cab
+        celula.border = grade
+        celula.alignment = Alignment(vertical="center", horizontal="center"
+                                     if rotulo in CENTRALIZADAS else "left")
+        pagina.column_dimensions[get_column_letter(coluna)].width = LARGURA.get(rotulo, 14)
+    pagina.row_dimensions[1].height = 22
+
+    linha = 2
+    for chave, grupo in itertools.groupby(achados, key=lambda a: a["bordero"]):
+        do_grupo = list(grupo)
+        # A faixa do grupo e' a MESMA do corpo do e-mail, texto inclusive
+        # (rotulo_do_grupo): numero do bordero, data, quantos titulos e a soma.
+        for coluna in range(1, quantas_colunas + 1):
+            celula = pagina.cell(linha, coluna)
+            celula.fill, celula.border = fundo_faixa, grade
+        banda = pagina.cell(linha, 1, rotulo_do_grupo(chave, do_grupo))
+        banda.font = letra_faixa
+        banda.alignment = Alignment(vertical="center", indent=1)
+        pagina.merge_cells(start_row=linha, start_column=1,
+                           end_row=linha, end_column=quantas_colunas)
+        pagina.row_dimensions[linha].height = 20
+        linha += 1
+
+        for i, achado in enumerate(do_grupo):
+            zebrada = bool(i % 2)
+            for coluna, (rotulo, campo, tipo) in enumerate(COLUNAS_EXCEL, start=1):
+                if campo == "_dias":
+                    valor = (hoje - achado["_data"]).days
+                else:
+                    valor = achado.get(campo)
+                if tipo == "texto":
+                    valor = str(valor or "")
+                celula = pagina.cell(linha, coluna,
+                                     valor if valor not in ("",) else None)
+                celula.font = Font(name="Calibri")
+                celula.border = grade
+                if zebrada:
+                    celula.fill = fundo_zebra
+                if tipo == "data":
+                    celula.number_format = "DD/MM/YYYY"
+                    celula.alignment = Alignment(horizontal="center")
+                elif tipo == "moeda":
+                    celula.number_format = '#,##0.00'
+                elif tipo == "inteiro":
+                    celula.number_format = "0"
+                    celula.alignment = Alignment(horizontal="center")
+                else:
+                    celula.number_format = "@"
+                    if rotulo in CENTRALIZADAS:
+                        celula.alignment = Alignment(horizontal="center")
+
+                if rotulo == "Tipo Pgto":
+                    fundo, letra = cor_do_tipo(achado["tipo_pgto"])
+                    celula.fill = PatternFill("solid", fgColor=fundo)
+                    celula.font = Font(name="Calibri", bold=True, color=letra)
+                elif rotulo == "Vencto Real":
+                    # o mesmo destaque que ele tem no corpo do e-mail
+                    celula.font = Font(name="Calibri", bold=True)
+                elif rotulo == "Saldo":
+                    if achado["_saldo"]:
+                        celula.font = Font(name="Calibri", bold=True)
+                    else:
+                        celula.fill, celula.font = fundo_zero, letra_zero
+                elif rotulo in ("Linha Digitável", "Cod. Barras", "Código (UUID)"):
+                    # dado de copiar, nao de ler: menor e mais apagado, para
+                    # nao competir com o nome e o valor
+                    celula.font = Font(name="Calibri", size=9, color="404040")
+            # cada data de bordero vira um grupo que dobra no +/- do Excel
+            pagina.row_dimensions[linha].outlineLevel = 1
+            linha += 1
+
+    ultima_de_dados = linha - 1
+
+    # TOTAL no pe, na cor do cabecalho: soma por formula, para continuar certo
+    # se ele apagar linha na mao.
+    for coluna in range(1, quantas_colunas + 1):
+        celula = pagina.cell(linha, coluna)
+        celula.fill, celula.font, celula.border = fundo_cab, letra_cab, grade
+    pagina.cell(linha, 1, "TOTAL")
+    pagina.cell(linha, rotulos.index("Fornecedor") + 1,
+                f"{len(achados)} título{'s' if len(achados) > 1 else ''} "
+                f"em {len({a['bordero'] for a in achados})} data(s) de borderô")
+    for rotulo in ("Vlr. Título", "Saldo"):
+        coluna = rotulos.index(rotulo) + 1
+        letra_coluna = get_column_letter(coluna)
+        celula = pagina.cell(linha, coluna,
+                             f"=SUM({letra_coluna}2:{letra_coluna}{ultima_de_dados})")
+        celula.number_format = '#,##0.00'
+        celula.fill, celula.font, celula.border = fundo_cab, letra_cab, grade
+    pagina.row_dimensions[linha].height = 20
+
+    # verde -> amarelo -> vermelho conforme o titulo envelhece parado
+    coluna_dias = get_column_letter(rotulos.index("Dias s/ baixa") + 1)
+    pagina.conditional_formatting.add(
+        f"{coluna_dias}2:{coluna_dias}{ultima_de_dados}",
+        ColorScaleRule(start_type="min", start_color="C6EFCE",
+                       mid_type="percentile", mid_value=50, mid_color="FFEB9C",
+                       end_type="max", end_color="FFC7CE"))
+
+    pagina.sheet_properties.outlinePr.summaryBelow = False
+    pagina.freeze_panes = "A2"
+    pagina.auto_filter.ref = f"A1:{ultima_letra}{ultima_de_dados}"
+
+    montar_resumo(arquivo, achados, hoje)
+
+    destino = PASTA / "DADOS" / f"BORDERO SEM BAIXA {hoje:%d-%m-%Y}.xlsx"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        arquivo.save(destino)
+    except PermissionError:
+        # ele pode estar com a planilha de ontem aberta; nome alternativo
+        # em vez de derrubar o alerta inteiro
+        destino = Path(tempfile.gettempdir()) / destino.name
+        arquivo.save(destino)
+        print(f"   (a planilha estava aberta; gravei em {destino})")
+    return destino
+
+
+def rotulo_do_grupo(chave: str, linhas: list[dict]) -> str:
+    """O texto da faixa que abre cada data de bordero.
+
+    Leva os NUMEROS dos borderos daquele dia (pedido dele em 18/09/2026) e a
+    conta do grupo -- quantos titulos e quanto somam -- porque e' isso que se
+    olha primeiro: "o que saiu no bordero do dia 17 e nao voltou".
+
+    Os numeros vem sem repetir e na ordem, que e' a mesma das linhas embaixo.
+    Se um dia tiver bordero demais para caber, os primeiros aparecem e o resto
+    vira "e mais N": faixa que estoura a largura empurra a tabela.
+    """
+    total = sum(l["_saldo"] for l in linhas)
+    quantos = len(linhas)
+    numeros = []
+    for l in linhas:
+        if l["num_bordero"] and l["num_bordero"] not in numeros:
+            numeros.append(l["num_bordero"])
+    if len(numeros) > 6:
+        lista = ", ".join(numeros[:6]) + f" e mais {len(numeros) - 6}"
+    elif len(numeros) > 1:
+        lista = ", ".join(numeros[:-1]) + " e " + numeros[-1]
+    else:
+        lista = numeros[0] if numeros else "sem número"
+    return (f"Borderô {lista} — {chave} — {quantos} título"
+            f"{'s' if quantos > 1 else ''} · {reais(total)}")
+
+
 def montar_html(achados: list[dict], resumo: dict, hoje: dt.date,
                 desde: dt.date) -> str:
     quantos = len(achados)
@@ -315,17 +689,23 @@ def montar_html(achados: list[dict], resumo: dict, hoje: dt.date,
   o título: ou o pagamento não aconteceu, ou aconteceu e a baixa não foi
   lançada. Enquanto isso {plural} segue figurando em aberto e pode voltar para
   pagamento. Abaixo vão o <i>tipo de pagamento</i>, o <i>vencimento</i> e o
-  <i>vencimento real</i> de cada um; na faixa abaixo de cada linha vai o
+  <i>vencimento real</i> de cada um, <b>agrupados por data de borderô</b> (do
+  mais antigo para o mais recente, com a soma de cada dia); na faixa abaixo de
+  cada linha vai o
   <b>código (UUID)</b> e, quando o título tem boleto, a
   <b>linha digitável</b> vem junto ({com_ld} de {quantos}). O <b>nº do
   título</b> abre o <a href="{PAINEL_SE2}" style="color:#1F3864;">painel da
-  SE2</a>, onde o <b>código (UUID)</b> da faixa serve de busca.</p>
+  SE2</a>, onde o <b>código (UUID)</b> da faixa serve de busca. A mesma lista
+  vai <b>anexada em Excel</b>, com o código de barras e o valor do título, para
+  quem preferir filtrar e somar.</p>
 
   {comuns.tabela(COLUNAS_EMAIL, achados,
                  direita=("saldo",),
-                 destaque=("bordero", "real"),
+                 destaque=("real",),
                  links={"titulo_parcela": PAINEL_SE2},
-                 sublinha=faixa_detalhe)}
+                 sublinha=faixa_detalhe,
+                 grupo=lambda l: l["bordero"],
+                 grupo_rotulo=rotulo_do_grupo)}
 
   {comuns.rodape(
       f"Recorte: Dt. borderô de {desde:%d/%m/%Y} até {hoje:%d/%m/%Y}, sem DT Baixa.",
@@ -387,6 +767,10 @@ def main() -> int:
                f"{'s' if len(achados) > 1 else ''} com borderô emitido e SEM baixa "
                f"na SE2 - {hoje:%d/%m/%Y}")
 
+    planilha = gerar_planilha(achados, hoje)
+    if planilha:
+        print(f"   Planilha: {planilha}")
+
     if args.teste:
         PREVIA.parent.mkdir(parents=True, exist_ok=True)
         PREVIA.write_text(corpo, encoding="utf-8")
@@ -406,10 +790,12 @@ def main() -> int:
         return 0
 
     try:
-        comuns.enviar(assunto, corpo, destino, copia=copia)
+        comuns.enviar(assunto, corpo, destino, copia=copia,
+                      anexos=[planilha] if planilha else None)
         comuns.marcar_enviado(CHAVE, len(achados))
         print(f"   E-mail enviado para {destino}"
-              + (f" (cópia: {copia})" if copia else "") + ".")
+              + (f" (cópia: {copia})" if copia else "")
+              + (f" com a planilha {planilha.name} em anexo." if planilha else "."))
     except Exception as erro:  # noqa: BLE001
         print(f"   AVISO: o e-mail NAO foi enviado ({erro}). O painel segue.")
     return 0

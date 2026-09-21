@@ -271,7 +271,7 @@ def _caixa_de_permissao_aberta() -> str:
 
 
 def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45,
-           copia: str = "") -> None:
+           copia: str = "", anexos: list | None = None) -> None:
     """Manda pelo Outlook CLASSICO desta maquina, COM PRAZO.
 
     `Outlook.Application` e' o COM registrado em Office16\\OUTLOOK.EXE -- o
@@ -293,7 +293,8 @@ def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45,
     # puro (acento vira \uXXXX), entao nenhum decodificador do outro lado tem
     # como estragar. Trava junto com o decode explicito do _enviar_outlook.
     pedido = json.dumps({"para": para, "copia": copia,
-                         "assunto": assunto, "corpo": corpo_html})
+                         "assunto": assunto, "corpo": corpo_html,
+                         "anexos": [str(a) for a in (anexos or [])]})
     filho = subprocess.Popen(
         [sys.executable, str(PASTA / "_enviar_outlook.py")],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -319,9 +320,15 @@ def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45,
 # tabela do corpo do e-mail
 # --------------------------------------------------------------------------
 
+# Sentinela do "ainda nao entrei em grupo nenhum". None nao serve: None e' uma
+# chave de grupo legitima (titulo sem a data que agrupa, por exemplo).
+_SEM_GRUPO = object()
+
+
 def tabela(colunas: list[tuple[str, str]], linhas: list[dict],
            direita: tuple[str, ...] = (), destaque: tuple[str, ...] = (),
-           links: dict | None = None, sublinha=None) -> str:
+           links: dict | None = None, sublinha=None,
+           grupo=None, grupo_rotulo=None) -> str:
     """Tabela HTML com estilo em cada celula.
 
     O Outlook ignora <style> em muitos cenarios -- por isso nada de folha de
@@ -338,6 +345,13 @@ def tabela(colunas: list[tuple[str, str]], linhas: list[dict],
     so -- que como COLUNA empurraria a tabela para fora da tela (foi o que
     aconteceu no alerta BOLETO S/C em 18/09/2026). Na faixa ele quebra sozinho
     (`word-break`) e a tabela continua estreita.
+
+    `grupo` e' uma funcao que recebe a linha e devolve a CHAVE do grupo dela;
+    cada vez que a chave muda entra uma faixa de cabecalho de grupo. As linhas
+    JA TEM DE VIR ORDENADAS pela chave -- aqui nao se reordena nada, para que a
+    ordem de dentro do grupo continue sendo a que o chamador escolheu.
+    `grupo_rotulo(chave, linhas_do_grupo)` escreve o texto dessa faixa; sem ela,
+    a propria chave vira o texto.
     """
     th = (FONTE + "font-size:11pt;background:#1F3864;color:#FFFFFF;"
           "padding:6px 9px;border:1px solid #1F3864;text-align:left;white-space:nowrap;")
@@ -345,9 +359,22 @@ def tabela(colunas: list[tuple[str, str]], linhas: list[dict],
     # digito de largura fixa: e assim que valor bate com valor de olho
     td_num = td + "text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;"
 
+    th_grupo = (FONTE + "font-size:11pt;font-weight:bold;color:#1F3864;"
+                "background:#D6DCE4;padding:6px 9px;border:1px solid #BFBFBF;"
+                "text-align:left;")
+
     cab = "".join(f'<th style="{th}">{html.escape(rotulo)}</th>' for rotulo, _ in colunas)
     corpo = []
+    chave_atual = _SEM_GRUPO
     for i, linha in enumerate(linhas):
+        if grupo:
+            chave = grupo(linha)
+            if chave != chave_atual:
+                chave_atual = chave
+                iguais = [l for l in linhas if grupo(l) == chave]
+                rotulo = grupo_rotulo(chave, iguais) if grupo_rotulo else str(chave)
+                corpo.append(f'<tr><td colspan="{len(colunas)}" '
+                             f'style="{th_grupo}">{html.escape(rotulo)}</td></tr>')
         fundo = "background:#F2F2F2;" if i % 2 else ""
         celulas = []
         for rotulo, campo in colunas:

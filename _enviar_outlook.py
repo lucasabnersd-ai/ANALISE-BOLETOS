@@ -6,7 +6,7 @@ DESISTIR. Uma chamada COM presa na caixa de permissao do Outlook ("Programa
 tentando enviar email em seu nome") nao volta nunca, e thread travada dentro
 do COM nao se mata -- processo, sim.
 
-Le do stdin um JSON {"para","assunto","corpo"}: o endereco da pessoa nao passa
+Le do stdin um JSON {"para","assunto","corpo","anexos"}: o endereco da pessoa nao passa
 pela linha de comando (aparece no Gerenciador de Tarefas) nem por arquivo
 temporario. Este repositorio e' publico -- nada de endereco aqui dentro.
 """
@@ -33,6 +33,14 @@ def main() -> int:
         email.CC = pedido["copia"]
     email.Subject = pedido["assunto"]
     email.HTMLBody = pedido["corpo"]
+    # Anexo (lista de caminhos, opcional). Falta de arquivo NAO derruba o
+    # envio: e-mail sem a planilha ainda avisa; e-mail que nao sai nao avisa
+    # nada. O que faltou sai no stdout e o pai imprime.
+    for caminho in pedido.get("anexos") or []:
+        try:
+            email.Attachments.Add(caminho)
+        except Exception as erro:  # noqa: BLE001
+            print(f"AVISO: nao consegui anexar {caminho} ({erro}).")
     email.Send()
     # Com o Outlook fechado a mensagem fica na Caixa de Saida e o script
     # mentiria "enviado"; o SendAndReceive empurra de verdade.
