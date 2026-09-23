@@ -50,6 +50,9 @@ body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 /* `center` e nao `baseline`: com a busca alta (ver .busca) o alinhamento pela
    linha de base deixava o titulo flutuando acima do campo. */
 .topo{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:10px}
+.marca{display:flex; align-items:center; gap:12px}
+.marca .chip-logo{background:#fff; border-radius:8px; padding:3px; display:flex; box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.marca .chip-logo img{height:36px; width:auto; display:block}
 .topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px}
 .topo h1 span{color:var(--txt-3); font-weight:400}
 /* ---------- card de atualizacao ----------
@@ -807,7 +810,10 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   <div class="topo">
     <!-- generico de proposito: o painel tem varias abas, e o titulo da aba
          ativa ja aparece na barra de abas logo abaixo -->
-    <h1>Análise de Boletos <span>· conferência</span></h1>
+    <div class="marca">
+      <span class="chip-logo"><img src="logo-sd.png" alt="S&amp;D Bioflor"></span>
+      <h1>Análise de Boletos <span>· conferência</span></h1>
+    </div>
     <div class="acoes">
       <label class="busca">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -1247,7 +1253,7 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 })();
 </script>
 
-<script src="supa.js?v=202609231033"></script>
+<script src="supa.js?v=202609231530"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo

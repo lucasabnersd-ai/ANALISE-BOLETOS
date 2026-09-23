@@ -37,27 +37,30 @@
     var pronto = document.getElementById("ab-login");
     if (pronto) return pronto;
 
+    /* MODELO DOS PAINEIS DO GRUPO (23/09/2026, pedido dele com o print do SE2):
+       fundo verde-escuro, caixa central, selo S&D BIOFLOR numa pastilha branca,
+       tudo centralizado, botao limao "Abrir painel". Mesmos valores do SE2. */
     var fundo = el("div", "position:fixed;inset:0;z-index:9999;display:flex;align-items:center;" +
-      "justify-content:center;background:#0c1320;padding:20px;" +
-      "font:14px/1.45 'Segoe UI',Calibri,system-ui,sans-serif");
+      "justify-content:center;background:#1B302F;padding:16px;" +
+      "font:14px/1.45 Calibri,Carlito,'Segoe UI',Arial,sans-serif");
     fundo.id = "ab-login";
 
-    var caixa = el("div", "width:min(380px,100%);background:#111a2b;color:#e8eefb;" +
-      "border:1px solid #22314b;border-radius:12px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.45)");
+    var caixa = el("div", "display:flex;flex-direction:column;gap:12px;width:min(92vw,380px);" +
+      "background:#24403E;color:#F2F5F1;border:1px solid #3A5654;border-radius:14px;padding:28px;" +
+      "box-shadow:0 18px 50px rgba(0,0,0,.45);text-align:center;box-sizing:border-box");
+    var campo = "width:100%;box-sizing:border-box;font:inherit;font-size:15px;padding:11px 13px;" +
+      "background:#1B302F;color:#F2F5F1;border:1px solid #3A5654;border-radius:9px;outline:none;text-align:center";
     caixa.innerHTML =
-      '<h1 style="margin:0 0 4px;font-size:17px;font-weight:700">Análise de Boletos</h1>' +
-      '<p style="margin:0 0 18px;font-size:12.5px;color:#a3b3ca">Entre para ver a carteira.</p>' +
-      '<label style="display:block;font-size:11px;color:#a3b3ca;margin-bottom:4px">E-MAIL</label>' +
-      '<input id="ab-email" type="email" autocomplete="username" style="width:100%;box-sizing:border-box;' +
-      'font:inherit;padding:9px 11px;margin-bottom:12px;background:#0e1626;color:#e8eefb;' +
-      'border:1px solid #22314b;border-radius:7px;outline:none">' +
-      '<label style="display:block;font-size:11px;color:#a3b3ca;margin-bottom:4px">SENHA</label>' +
-      '<input id="ab-senha" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;' +
-      'font:inherit;padding:9px 11px;margin-bottom:16px;background:#0e1626;color:#e8eefb;' +
-      'border:1px solid #22314b;border-radius:7px;outline:none">' +
-      '<button id="ab-entrar" type="button" style="width:100%;font:inherit;font-weight:700;cursor:pointer;' +
-      'padding:10px;background:#2f6ba8;color:#fff;border:0;border-radius:7px">Entrar</button>' +
-      '<p id="ab-msg" style="margin:12px 0 0;font-size:12px;min-height:17px"></p>';
+      '<div style="width:66px;height:66px;margin:0 auto 6px;background:#fff;border-radius:12px;padding:4px;' +
+      'box-sizing:border-box;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.35)">' +
+      '<img src="logo-sd.png" alt="S&amp;D Bioflor" style="width:100%;height:100%;display:block;object-fit:contain"></div>' +
+      '<h1 style="margin:0;font-size:19px;font-weight:700;color:#F2F5F1">Análise de Boletos</h1>' +
+      '<p style="margin:0 0 4px;font-size:13px;color:#A9BDB9">Conteúdo restrito ao Grupo S&amp;D. Informe e-mail e senha para abrir.</p>' +
+      '<input id="ab-email" type="email" placeholder="e-mail" autocomplete="username" style="' + campo + '">' +
+      '<input id="ab-senha" type="password" placeholder="senha" autocomplete="current-password" style="' + campo + '">' +
+      '<button id="ab-entrar" type="button" style="width:100%;font:inherit;font-size:14px;font-weight:700;cursor:pointer;' +
+      'padding:11px;background:linear-gradient(135deg,#D5DF66,#C0D15E);color:#1B302F;border:0;border-radius:9px">Abrir painel</button>' +
+      '<p id="ab-msg" style="margin:0;font-size:12.5px;min-height:16px"></p>';
 
     fundo.appendChild(caixa);
     document.body.appendChild(fundo);
@@ -65,7 +68,7 @@
     var msg = caixa.querySelector("#ab-msg");
     fundo._setMsg = function (t, ok) {
       msg.textContent = t || "";
-      msg.style.color = ok ? "#4ade80" : "#fca5a5";
+      msg.style.color = ok ? "#D5DF66" : "#F4B6B6";
     };
     caixa.querySelector("#ab-entrar").addEventListener("click", entrar);
     caixa.querySelector("#ab-senha").addEventListener("keydown", function (e) {
@@ -77,7 +80,7 @@
   function mostrarLogin(t, ok) {
     var o = overlay();
     o.style.display = "flex";
-    if (t) o._setMsg(t, ok);
+    o._setMsg(t || "", ok);   /* limpa o recado anterior ("Carregando...") */
   }
   function esconderLogin() {
     var o = document.getElementById("ab-login");
