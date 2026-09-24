@@ -1,3 +1,234 @@
+/* >>> LIMITE DE INATIVIDADE (copia de PAINEIS\_COMUM\inatividade.js) >>> */
+/* ==========================================================================
+   LIMITE DE INATIVIDADE dos paineis (23/09/2026 -- pedido: 1 hora)
+   --------------------------------------------------------------------------
+   Conta o tempo SEM MEXER (mouse, teclado, rolagem, toque) com o painel
+   aberto e logado. A tela de senha nao conta. Ao chegar no limite:
+     1. aviso por cima de tudo, com 60 s para continuar;
+     2. passado o prazo, GRAVA o que estiver pendente (gancho do painel);
+     3. so com a gravacao CONFIRMADA encerra a sessao DESTA aba
+        (signOut scope 'local' -- as outras abas e paineis nao caem) e
+        recarrega, voltando a tela de senha.
+   Se a gravacao falhar, NAO sai: cobre a tela, avisa e tenta de novo a cada
+   minuto. Nada digitado se perde por causa do limite.
+   Computador que dormiu alem do prazo: ao acordar ja vai para o passo 2.
+
+   Uso (uma vez, depois de o painel ter o cliente Supabase):
+     LimiteInatividade.iniciar({
+       logado: function () { return true/false },   // painel aberto e logado
+       gravar: async function () { return true },   // true SO se tudo gravado
+       sair:   async function () { ... }            // opcional (padrao: signOut local)
+     });
+   Copia mestre: PAINEIS\_COMUM\inatividade.js -- cada painel leva uma copia.
+   ========================================================================== */
+(function () {
+  'use strict';
+  if (window.LimiteInatividade) return;
+
+  var cfg = null;
+  var ultimo = Date.now();
+  var fase = 'livre';           // livre | aviso | gravando | falhou
+  var caixa = null, tique = null, retentar = null;
+  var FLAG = 'limite_inatividade_saiu';
+  var EVENTOS = ['mousemove', 'mousedown', 'pointerdown', 'keydown', 'wheel', 'touchstart', 'input', 'scroll'];
+  var FONTE = 'Calibri,Carlito,"Segoe UI",Arial,sans-serif';
+  var BT1 = 'background:linear-gradient(135deg,#D5DF66,#C0D15E);color:#1B302F;border:0;border-radius:8px;' +
+            'padding:11px 14px;font:700 15px ' + FONTE + ';cursor:pointer';
+  var BT2 = 'background:transparent;color:#A9BDB9;border:1px solid #3A5654;border-radius:8px;' +
+            'padding:9px 14px;font:600 14px ' + FONTE + ';cursor:pointer';
+
+  function tempoTxt() {
+    var m = cfg.minutos;
+    if (m % 60 === 0) return (m / 60) + (m === 60 ? ' hora' : ' horas');
+    return m + ' minutos';
+  }
+  function logado() {
+    try { return !!(cfg && cfg.logado && cfg.logado()); } catch (e) { return false; }
+  }
+  function limiteMs() { return cfg.minutos * 60000; }
+  function avisoMs() { return cfg.avisoSegundos * 1000; }
+  function espera(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function comPrazo(p, ms) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(function () { rej(new Error('sem resposta em ' + Math.round(ms / 1000) + ' s')); }, ms);
+      Promise.resolve(p).then(function (v) { clearTimeout(t); res(v); },
+                              function (e) { clearTimeout(t); rej(e); });
+    });
+  }
+
+  // ---------- atividade ----------
+  function mexeu(ev) {
+    if (!cfg) return;
+    if (fase === 'livre') { ultimo = Date.now(); return; }
+    // No aviso so clique/tecla contam (mouse esbarrado nao). Dentro da caixa
+    // quem decide sao os botoes.
+    if (fase === 'aviso' && ev && /^(keydown|mousedown|pointerdown|touchstart)$/.test(ev.type)) {
+      if (caixa && ev.target && caixa.contains(ev.target) && ev.target.tagName === 'BUTTON') return;
+      continuar();
+    }
+  }
+
+  // ---------- caixa (modelo da tela de entrada) ----------
+  function fecharCaixa() {
+    clearInterval(tique); tique = null;
+    if (caixa && caixa.parentNode) caixa.parentNode.removeChild(caixa);
+    caixa = null;
+  }
+  // Tudo montado por elemento e estilo por style.cssText: os paineis de porta
+  // tem CSP style-src 'self', que BLOQUEIA atributo de estilo escrito dentro de
+  // HTML (mas deixa passar o estilo posto por JavaScript). partes = lista de
+  // textos, {br:1} ou {texto, css, id}.
+  function el(tag, css, texto) {
+    var e = document.createElement(tag);
+    if (css) e.style.cssText = css;
+    if (texto != null) e.textContent = texto;
+    return e;
+  }
+  function montarCaixa(titulo, partes, botoes) {
+    fecharCaixa();
+    caixa = el('div', 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;' +
+      'background:#1B302F;display:flex;align-items:center;justify-content:center;font-family:' + FONTE);
+    caixa.id = 'limite-inatividade';
+    caixa.setAttribute('role', 'alertdialog');
+    var box = el('div', 'background:#24403E;border:1px solid #3A5654;border-radius:14px;padding:28px;' +
+      'width:min(92vw,400px);box-shadow:0 18px 50px rgba(0,0,0,.45);text-align:center;color:#F2F5F1;' +
+      'display:flex;flex-direction:column;gap:12px;box-sizing:border-box');
+    box.appendChild(el('div', 'font:700 19px ' + FONTE + ';color:#F2F5F1', titulo));
+    var txt = el('div', 'font:14px/1.45 ' + FONTE + ';color:#A9BDB9');
+    (partes || []).forEach(function (p) {
+      if (typeof p === 'string') { txt.appendChild(document.createTextNode(p)); return; }
+      if (p.br) { txt.appendChild(document.createElement('br')); return; }
+      var s = el(p.tag || 'span', p.css || '', p.texto);
+      if (p.id) s.id = p.id;
+      txt.appendChild(s);
+    });
+    box.appendChild(txt);
+    (botoes || []).forEach(function (b) {
+      var bt = document.createElement('button');
+      bt.type = 'button';
+      bt.style.cssText = b.principal ? BT1 : BT2;
+      bt.textContent = b.rotulo;
+      bt.onclick = b.acao;
+      box.appendChild(bt);
+    });
+    caixa.appendChild(box);
+    (document.body || document.documentElement).appendChild(caixa);
+    var p = box.querySelector('button');
+    if (p) try { p.focus(); } catch (e) {}
+  }
+
+  function abrirAviso() {
+    fase = 'aviso';
+    montarCaixa('Você ainda está aí?',
+      ['O painel está há ' + tempoTxt() + ' sem uso. Por segurança ele vai sair em ',
+       { tag: 'b', id: 'limite-inatividade-seg', css: 'color:#D5DF66', texto: String(cfg.avisoSegundos) },
+       ' s.', { br: 1 }, 'O que foi alterado é gravado antes de sair.'],
+      [{ rotulo: 'Continuar no painel', principal: true, acao: continuar },
+       { rotulo: 'Sair agora', acao: function () { void sair(); } }]);
+    tique = setInterval(verificar, 1000);
+  }
+  function continuar() {
+    clearTimeout(retentar);
+    ultimo = Date.now();
+    fase = 'livre';
+    fecharCaixa();
+  }
+  function falhou(motivo) {
+    fase = 'falhou';
+    var partes = ['Não consegui confirmar a gravação das últimas alterações, então o painel continua aberto ' +
+      'para não perder nada. Tento de novo a cada minuto.'];
+    if (motivo) partes.push({ br: 1 }, { css: 'font-size:12px;color:#F4B6B6', texto: String(motivo) });
+    montarCaixa('O painel não saiu', partes,
+      [{ rotulo: 'Voltar ao painel', principal: true, acao: continuar },
+       { rotulo: 'Tentar de novo', acao: function () { void sair(); } }]);
+    clearTimeout(retentar);
+    retentar = setTimeout(function () { if (fase === 'falhou') void sair(); }, cfg.retentarMs);
+  }
+
+  // ---------- relogio ----------
+  function verificar() {
+    if (!cfg) return;
+    if (!logado()) {                      // tela de senha: nao conta
+      ultimo = Date.now();
+      if (fase === 'aviso') { fase = 'livre'; fecharCaixa(); }
+      return;
+    }
+    if (fase !== 'livre' && fase !== 'aviso') return;
+    var parado = Date.now() - ultimo;
+    if (parado >= limiteMs() + avisoMs()) { void sair(); return; }
+    if (parado >= limiteMs()) {
+      if (fase !== 'aviso') abrirAviso();
+      var s = document.getElementById('limite-inatividade-seg');
+      if (s) s.textContent = String(Math.max(0, Math.ceil((limiteMs() + avisoMs() - parado) / 1000)));
+    }
+  }
+
+  // ---------- saida ----------
+  async function sairPadrao() {
+    var sb = (cfg.cliente && cfg.cliente()) || window.__SB_PAINEL__;
+    if (sb && sb.auth && sb.auth.signOut) await sb.auth.signOut({ scope: 'local' });
+  }
+  async function sair() {
+    if (fase === 'gravando') return;
+    clearTimeout(retentar);
+    fase = 'gravando';
+    montarCaixa('Saindo por inatividade', ['Gravando o que estava pendente…'], []);
+    // Campo com texto ainda nao confirmado: o blur dispara o onchange dele.
+    try {
+      var a = document.activeElement;
+      if (a && a !== document.body && typeof a.blur === 'function') a.blur();
+    } catch (e) {}
+    await espera(400);
+    var ok = false, erro = '';
+    try { ok = await comPrazo(cfg.gravar(), cfg.prazoGravarMs); }
+    catch (e) { erro = (e && e.message) || String(e); ok = false; }
+    if (ok !== true) { falhou(erro); return; }
+    try { sessionStorage.setItem(FLAG, String(Date.now())); } catch (e) {}
+    window.__SAINDO_INATIVIDADE__ = true;   // o beforeunload do painel deixa passar
+    try { await comPrazo(cfg.sair ? cfg.sair() : sairPadrao(), 10000); } catch (e) {}
+    location.reload();
+  }
+
+  // ---------- recado depois de sair ----------
+  function recadoDepoisDeSair() {
+    var t = 0;
+    try { t = +sessionStorage.getItem(FLAG) || 0; sessionStorage.removeItem(FLAG); } catch (e) {}
+    if (!t || Date.now() - t > 300000) return;
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
+      'background:#24403E;color:#F2F5F1;border:1px solid #D5DF66;border-radius:10px;padding:10px 16px;' +
+      'font:600 14px ' + FONTE + ';box-shadow:0 8px 24px rgba(0,0,0,.35);max-width:92vw;text-align:center;cursor:pointer';
+    d.textContent = 'O painel saiu depois de ' + tempoTxt() + ' sem uso. Tudo foi gravado. Entre de novo.';
+    d.onclick = function () { d.remove(); };
+    document.body.appendChild(d);
+    setTimeout(function () { if (d.parentNode) d.remove(); }, 12000);
+  }
+
+  function iniciar(o) {
+    if (cfg) return;
+    cfg = { minutos: 60, avisoSegundos: 60, prazoGravarMs: 90000, retentarMs: 60000 };
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) cfg[k] = o[k];
+    ultimo = Date.now();
+    EVENTOS.forEach(function (n) { window.addEventListener(n, mexeu, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', verificar);
+    window.addEventListener('focus', verificar);
+    window.addEventListener('pageshow', verificar);
+    setInterval(verificar, 5000);
+    if (document.body) recadoDepoisDeSair();
+    else document.addEventListener('DOMContentLoaded', recadoDepoisDeSair, { once: true });
+  }
+
+  window.LimiteInatividade = {
+    iniciar: iniciar,
+    estado: function () {
+      return { fase: fase, paradoSeg: Math.round((Date.now() - ultimo) / 1000), logado: logado(),
+               minutos: cfg && cfg.minutos };
+    },
+    // Teste: finge que ficou parado ms a mais (so afeta esta aba).
+    _recuar: function (ms) { ultimo -= ms; verificar(); }
+  };
+})();
+/* <<< LIMITE DE INATIVIDADE */
 /* Camada de login do painel ANALISE BOLETOS.
  *
  * O index.html publicado nasce SEM dados -- o Pages serve o site publicamente
@@ -371,6 +602,38 @@
     if (s.data && s.data.session) return depoisDoLogin();
     mostrarLogin();
   }
+
+  /* 23/09/2026: LIMITE DE INATIVIDADE (1 h sem mexer -> aviso de 60 s e sai).
+     A fila de marcacoes mora no painel (localStorage; pendentes()/drenar()):
+     o limite forca a fila e so sai com ela VAZIA e nada no ar. Fila que nao
+     esvazia = NAO sai (o que foi marcado continua guardado no navegador).
+     Sair = signOut so desta aba + recarga, de volta a tela de senha. */
+  function filaDoPainel() {
+    try { return { n: pendentes(), noAr: !!drenando, drenar: drenar }; }
+    catch (e) { return null; }       /* painel sem a fila: nao arrisca sair */
+  }
+  if (window.LimiteInatividade) window.LimiteInatividade.iniciar({
+    minutos: 60,
+    logado: function () {
+      var o = document.getElementById("ab-login");
+      return entregue && !(o && o.style.display !== "none");
+    },
+    gravar: async function () {
+      var fim = Date.now() + 60000, f;
+      while (Date.now() < fim) {
+        f = filaDoPainel();
+        if (!f) return false;
+        if (!f.n && !f.noAr) return true;
+        if (!f.noAr) await f.drenar();
+        f = filaDoPainel();
+        if (f && !f.n && !f.noAr) return true;
+        await new Promise(function (r) { setTimeout(r, 2000); });
+      }
+      f = filaDoPainel();
+      return !!f && !f.n && !f.noAr;
+    },
+    cliente: function () { return sb; }
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", iniciar);
