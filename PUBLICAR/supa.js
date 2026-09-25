@@ -264,9 +264,31 @@
     return e;
   }
 
+  /* 25/09/2026 (ABERTURA): a tela de login passou a NASCER NO HTML
+     (painel_modelo.html, bloco >>> ABERTURA), com a animacao em volta -- ela
+     aparece no primeiro quadro, antes desta biblioteca chegar. Aqui ela so e'
+     LIGADA (recado, clique, Enter) e o botao, que nasce desligado para
+     ninguem clicar antes de haver quem atenda, e' liberado. O caminho antigo
+     (criar a tela por JS) fica abaixo como reserva, se o bloco sumir. */
+  function ligar(fundo) {
+    var msg = fundo.querySelector("#ab-msg");
+    fundo._setMsg = function (t, ok) {
+      msg.textContent = t || "";
+      msg.style.color = ok ? "#D5DF66" : "#F4B6B6";
+    };
+    var bt = fundo.querySelector("#ab-entrar");
+    bt.addEventListener("click", entrar);
+    bt.disabled = false;
+    fundo.querySelector("#ab-senha").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") entrar();
+    });
+    return fundo;
+  }
+
   function overlay() {
     var pronto = document.getElementById("ab-login");
-    if (pronto) return pronto;
+    if (pronto && pronto._setMsg) return pronto;
+    if (pronto) return ligar(pronto);
 
     /* MODELO DOS PAINEIS DO GRUPO (23/09/2026, pedido dele com o print do SE2):
        fundo verde-escuro, caixa central, selo S&D BIOFLOR numa pastilha branca,
@@ -295,22 +317,18 @@
 
     fundo.appendChild(caixa);
     document.body.appendChild(fundo);
-
-    var msg = caixa.querySelector("#ab-msg");
-    fundo._setMsg = function (t, ok) {
-      msg.textContent = t || "";
-      msg.style.color = ok ? "#D5DF66" : "#F4B6B6";
-    };
-    caixa.querySelector("#ab-entrar").addEventListener("click", entrar);
-    caixa.querySelector("#ab-senha").addEventListener("keydown", function (e) {
-      if (e.key === "Enter") entrar();
-    });
-    return fundo;
+    return ligar(fundo);
   }
+
+  /* o maestro da abertura (painel_modelo.html); ausente = segue sem ela */
+  function A() { return window.__ABERTURA__ || null; }
 
   function mostrarLogin(t, ok) {
     var o = overlay();
     o.style.display = "flex";
+    /* recado de ERRO (ou tela limpa) = volta para o formulario; "Entrando..."
+       (ok) mantem a leitura na tela */
+    if (!ok && A()) A().falhou();
     o._setMsg(t || "", ok);   /* limpa o recado anterior ("Carregando...") */
   }
   function esconderLogin() {
@@ -443,6 +461,7 @@
     var metaRows = await lerTudo("analise_boletos_titulos", "uuid,dados",
       function (q) { return q.eq("ativo", true).like("uuid", "#meta:%"); });
     if (!metaRows.length) throw new Error("a carteira está vazia no servidor");
+    if (A()) { A().passo("carteira", "feito"); A().passo("marcacoes", "agora"); }
 
     var m = { data: await lerTudo("analise_boletos_marcacoes",
       "uuid,feito,tratativa,tratado_em,tratado_por,quem,atualizado_em,tipo_pgto_real") };
@@ -536,14 +555,29 @@
      volta por cima, e o que estava pendente sobe assim que a pessoa entrar. */
   window.__PEDIR_LOGIN__ = function (msg) { mostrarLogin(msg || "", false); };
 
+  /* 25/09/2026: com a leitura animada na tela, um erro de REDE no login (que
+     o signInWithPassword LANCA em vez de devolver) deixaria a abertura girando
+     para sempre -- agora todo erro volta ao formulario com o recado. E o Enter
+     repetido na senha nao dispara dois logins. */
+  var ocupado = false;
   async function entrar() {
+    if (ocupado) return;
     var email = (document.getElementById("ab-email").value || "").trim();
     var senha = document.getElementById("ab-senha").value || "";
     if (!email || !senha) return mostrarLogin("Preencha e-mail e senha.");
-    mostrarLogin("Entrando…", true);
-    var r = await sb.auth.signInWithPassword({ email: email, password: senha });
-    if (r.error) return mostrarLogin(motivo(r.error));
-    await depoisDoLogin();
+    if (!sb) return mostrarLogin("A biblioteca do Supabase não carregou. Recarregue a página.");
+    ocupado = true;
+    try {
+      if (A()) A().entrando();
+      mostrarLogin("Entrando…", true);
+      var r = await sb.auth.signInWithPassword({ email: email, password: senha });
+      if (r.error) return mostrarLogin(motivo(r.error));
+      await depoisDoLogin();
+    } catch (e) {
+      mostrarLogin(motivo(e));
+    } finally {
+      ocupado = false;
+    }
   }
 
   function motivo(e) {
@@ -562,9 +596,12 @@
       await sb.auth.signOut();
       return mostrarLogin("Link de recuperação não serve para entrar. Use sua senha.");
     }
+    if (A()) { A().passo("acesso", "feito"); A().passo("carteira", "agora"); }
     try {
       var dados = await baixarCarteira();
-      esconderLogin();
+      /* com a abertura, quem tira a tela e' ela (portas abrindo) quando a aba
+         inicial chegar -- com prazo duro dentro dela; sem ela, some como antes */
+      if (A()) A().carteiraEntregue(); else esconderLogin();
       // A promessa so resolve uma vez; num segundo login (sessao que expirou no
       // meio do trabalho) e preciso reentregar a carteira na mao, senao a tela
       // fica com os dados velhos e a fila subiria por baixo do pano.
