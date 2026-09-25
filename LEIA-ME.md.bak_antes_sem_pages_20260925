@@ -1,14 +1,11 @@
 # PAINEL DE ANÁLISE DE BOLETOS
 
-**No ar em um endereço só:**
+**No ar em dois endereços, do mesmo push:**
 
 | onde | endereço | o que publica |
 |---|---|---|
 | Vercel *(preferido para mandar para fora)* | https://analise-boletos.vercel.app/ | só a pasta `PUBLICAR\` |
-
-O GitHub Pages (`lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/`) foi
-**desligado em 25/09/2026** por ordem dele. A config para religar está em
-`BACKUPS\pages_config_antes_de_desligar_20260925.json`.
+| GitHub Pages | https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/ | o repositório inteiro |
 
 ## Para atualizar
 
@@ -20,7 +17,7 @@ Duplo clique em **`ATUALIZAR_PAINEL.cmd`**, aqui nesta pasta. São 6 passos:
 3. avisa a Graziela de `AMARRAR ADIANTAMENTO` que está com boleto;
 4. avisa dos títulos em aberto vencendo em sábado, domingo ou feriado;
 5. sobe a carteira para o Supabase;
-6. faz commit e push — é o que troca o endereço da Vercel.
+6. faz commit e push — é o que troca os dois endereços.
 
 **Se a base não for gerada, nada é publicado.** É de propósito: painel novo em
 cima de base velha é impossível de perceber depois.

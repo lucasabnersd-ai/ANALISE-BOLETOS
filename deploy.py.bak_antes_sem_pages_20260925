@@ -41,9 +41,7 @@ REMOTE_URL = "https://github.com/lucasabnersd-ai/ANALISE-BOLETOS.git"
 BRANCH = "main"
 USER_EMAIL = "lucas.abnersd@gmail.com"
 USER_NAME = "lucasabnersd-ai"
-# 25/09/2026: o GitHub Pages foi DESLIGADO por ordem dele; o painel so
-# existe na Vercel (git-linkada a este repo, Root Directory PUBLICAR).
-PAGES_URL = "https://analise-boletos.vercel.app/"
+PAGES_URL = "https://lucasabnersd-ai.github.io/ANALISE-BOLETOS/PUBLICAR/"
 
 # HTML/JS publicados sao so layout + carregador (hoje ~90 KB + ~12 KB). Com a
 # carteira embutida isso passaria disso de sobra -- margem folgada, mas o
@@ -184,7 +182,7 @@ def publicar(mensagem: str | None = None) -> int:
 
     print("\n" + "=" * 60)
     print("  PUBLICADO: " + PAGES_URL)
-    print("  (a Vercel publica sozinha a partir do push, em segundos)")
+    print("  (o GitHub Pages leva ~1 min para refletir)")
     print("=" * 60)
     return 0
 

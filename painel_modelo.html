@@ -920,6 +920,17 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
 #ab-entrar:disabled{cursor:progress;filter:saturate(.7)}
 #ab-msg{margin:0;font-size:12.5px;min-height:16px}
 
+/* 25/09/2026, print dele: com e-mail e senha SALVOS no navegador o Chrome
+   pinta o campo de azul-claro (:-webkit-autofill) e a tela escura quebra. O
+   fundo so' volta por sombra interna -- e' o que o autofill deixa trocar. */
+#ab-login input:-webkit-autofill,#ab-login input:-webkit-autofill:hover{
+  -webkit-text-fill-color:#F2F5F1;caret-color:#F2F5F1;
+  -webkit-box-shadow:0 0 0 1000px #1B302F inset;box-shadow:0 0 0 1000px #1B302F inset;
+  transition:background-color 99999s ease-out 0s}
+#ab-login input:-webkit-autofill:focus{-webkit-text-fill-color:#F2F5F1;
+  -webkit-box-shadow:0 0 0 1000px #1B302F inset,0 0 0 3px rgba(213,223,102,.16);
+  box-shadow:0 0 0 1000px #1B302F inset,0 0 0 3px rgba(213,223,102,.16);border-color:#D5DF66}
+
 /* a leitura: aparece no lugar do formulario depois do clique */
 .abl-carga{display:none;flex-direction:column;gap:11px}
 #ab-login.entrando .abl-form{display:none}
