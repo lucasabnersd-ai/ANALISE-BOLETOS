@@ -2360,11 +2360,20 @@ function linhasDaGrade(itens, cols, ini, fim){
    ⚠ SÓ É SEGURO PORQUE OS EVENTOS SÃO DELEGADOS no próprio `#grade` (check,
    tratativa, copiar, seleção de seleção de selo). Se algum dia um listener
    passar a ser preso linha a linha, ele não existirá nas linhas dos lotes
-   seguintes -- e isso não dá erro nenhum, só para de funcionar da 121ª linha
-   para baixo. A exportação não corre risco: ela sai de `linhas()`, os DADOS,
-   e nunca do DOM. */
-const LOTE_PRIMEIRO = 120;
-const LOTE = 200;
+   seguintes -- e isso não dá erro nenhum, só para de funcionar da 41ª linha
+   (primeiro lote + 1) para baixo. A exportação não corre risco: ela sai de `linhas()`, os DADOS,
+   e nunca do DOM.
+
+   25/09/2026, ele: "a aba esta travando". Os lotes de 120/200 ainda eram
+   grandes demais para a NF x Pedido (46 colunas): cada lote e UMA tarefa, e o
+   trace mostrou 540 ms + 404 ms de tela congelada por troca de aba, ~3 s cada
+   com a CPU 4x lenta (notebook em economia de bateria). Medido com CPU 4x, duas
+   rodadas: 40/40 derruba o maior congelamento da NF x Pedido de 2,7-3,1 s para
+   0,6-0,9 s e o de Titulos Associados de 1,5-2,0 s para 0,4-0,5 s; a aba
+   aparece em 1-5 s em vez de 7-9 s. O resto das linhas demora mais a chegar,
+   mas chega com a tela respondendo. 30/25 nao melhora mais (mede igual). */
+const LOTE_PRIMEIRO = 40;
+const LOTE = 40;
 // quem manda na pintura atual: lote de desenho antigo vê o número mudar e para
 // (filtro, ordenação e troca de aba redesenham por cima)
 let pinturaAtual = 0;
