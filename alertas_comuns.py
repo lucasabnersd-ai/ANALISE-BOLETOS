@@ -45,6 +45,20 @@ FONTE = "font-family:Calibri,Arial,sans-serif;"
 # destinatario
 # --------------------------------------------------------------------------
 
+
+# Nomes aceitos para a aba da SE2. A exportacao do TOTVS ja veio com a aba
+# "SE" em vez de "SE2" (29/09/2026) e os cinco avisos que leem a SE2 pararam.
+ABAS_SE2 = ("SE2", "SE")
+
+
+def aba_se2(arquivo) -> str:
+    """Nome da aba da SE2 nesta planilha (SE2 ou SE). KeyError se nao houver."""
+    for nome in ABAS_SE2:
+        if nome in arquivo.sheetnames:
+            return nome
+    raise KeyError(f'a planilha nao tem a aba "SE2" nem "SE" (tem: {arquivo.sheetnames})')
+
+
 def destinatarios(nome: str = "") -> str:
     """Para quem este alerta vai. "" quando nao ha ninguem configurado."""
     candidatos = []

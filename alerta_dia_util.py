@@ -128,10 +128,12 @@ def ler_se2(caminho: Path, inicio: dt.date, fim: dt.date) -> tuple[list[dict], d
         arquivo = openpyxl.load_workbook(temporario, read_only=True, data_only=True)
         print(f"   (a SE2 estava aberta; li uma cópia)")
 
-    if ABA not in arquivo.sheetnames:
+    try:
+        aba = comuns.aba_se2(arquivo)
+    except KeyError:
         arquivo.close()
-        raise KeyError(f'a planilha nao tem a aba "{ABA}" (tem: {arquivo.sheetnames})')
-    pagina = arquivo[ABA]
+        raise
+    pagina = arquivo[aba]
     linhas = pagina.iter_rows(values_only=True)
     cabecalho = [str(c).strip() if c is not None else "" for c in next(linhas)]
 
