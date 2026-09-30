@@ -44,8 +44,10 @@ Uso manual:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import zipfile
 import os
 import subprocess
 import sys
@@ -115,20 +117,32 @@ def achar_bases() -> dict[str, Path | None]:
     }
 
 
-def avisar_na_tela(titulo: str, texto: str, erro: bool = False) -> None:
-    """Caixa de aviso por cima de tudo, num processo SOLTO: a tarefa nao fica
-    presa esperando alguem clicar em OK."""
-    icone = 0x10 if erro else 0x40  # MB_ICONERROR / MB_ICONINFORMATION
-    flags = icone | 0x40000 | 0x10000  # MB_TOPMOST | MB_SETFOREGROUND
-    codigo = (
-        "import ctypes,sys;"
-        "ctypes.windll.user32.MessageBoxW(0,sys.argv[2],sys.argv[1],int(sys.argv[3]))"
-    )
+def assinatura_dados(p: Path) -> str:
+    """O que MUDA quando muda o DADO, e nao quando o arquivo so e salvo de novo.
+
+    O .xlsx e um zip: o CRC de cada planilha (xl/worksheets/*.xml) e das
+    strings (xl/sharedStrings.xml) ja esta gravado no indice do zip, entao ler
+    e instantaneo mesmo na SE2 de 15 MB. Salvar sem mexer em nada muda a data
+    do arquivo e o docProps (carimbo de quem salvou), mas nao esses CRCs.
+    Pedido dele 30/09/2026: atualizar "quando houver dados novos"."""
+    with zipfile.ZipFile(p) as z:
+        partes = sorted(
+            f"{i.filename}:{i.CRC}:{i.file_size}"
+            for i in z.infolist()
+            if i.filename.startswith(("xl/worksheets/", "xl/sharedStrings"))
+        )
+    return hashlib.sha1("|".join(partes).encode()).hexdigest()[:16]
+
+
+def avisar_na_tela(dados: dict) -> None:
+    """Tela de aviso no padrao S & D BIOFLOR (aviso_bioflor.py), num processo
+    SOLTO: a tarefa nao fica presa esperando alguem fechar."""
     exe = Path(sys.executable)
     pyw = exe.with_name("pythonw.exe")
     try:
         subprocess.Popen(
-            [str(pyw if pyw.is_file() else exe), "-c", codigo, titulo, texto, str(flags)],
+            [str(pyw if pyw.is_file() else exe), str(AQUI / "aviso_bioflor.py"),
+             json.dumps(dados, ensure_ascii=False)],
             creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | NEW_PROCESS_GROUP
             close_fds=True,
         )
@@ -177,11 +191,26 @@ def situacao() -> tuple[bool, str, dict]:
     if recentes:
         return False, f"{', '.join(recentes)} acabou de ser gravada; espero {ESTAVEL_MIN} min parada", info
 
+    # Dado novo de verdade? Salvar as tres sem mudar nada nao e motivo para
+    # rodar 30 min e republicar o mesmo painel.
+    try:
+        dados = {n: assinatura_dados(p) for n, p in bases.items()}
+    except Exception as e:  # zip incompleto = ainda gravando / OneDrive trazendo
+        return False, f"nao consegui ler o conteudo das bases ainda ({type(e).__name__}); espero", info
+    info["dados"] = dados
+    anteriores = estado.get("ultima_ok_dados") or {}
+    info["novas"] = [n for n in dados if dados[n] != anteriores.get(n)]
+    if not info["novas"]:
+        return False, (
+            f"as 3 bases foram salvas de novo mas SEM dado novo desde a rodada de "
+            f"{hhmm(ultima_ok) if ultima_ok else '?'} -- nao atualizo ({resumo})"
+        ), info
+
     falhas = estado.get("falhas", {}).get(hoje.isoformat(), 0)
     if falhas >= TENTATIVAS:
         return False, f"ja deu erro {falhas} vezes hoje; parei de tentar (rode o ATUALIZAR_PAINEL.cmd a mao)", info
 
-    return True, f"as 3 bases de hoje estao prontas ({resumo})", info
+    return True, f"as 3 bases de hoje estao prontas, dado novo em {', '.join(info['novas'])} ({resumo})", info
 
 
 def achar_cmd_itau() -> Path | None:
@@ -294,20 +323,30 @@ def main() -> int:
     estado = ler_estado()
     estado.pop("rodando_desde", None)
     hoje = inicio.date().isoformat()
+    linhas = [
+        [n, f"{hhmm(datetime.fromisoformat(d))} · "
+            + ("dados novos" if n in info.get("novas", []) else "sem alteração")]
+        for n, d in (info.get("bases") or {}).items()
+    ]
     if codigo == 0:
         estado["ultima_ok_inicio"] = inicio.isoformat(timespec="seconds")
         estado["ultima_ok_bases"] = info.get("bases")
+        estado["ultima_ok_dados"] = info.get("dados")
         estado["falhas"] = {}
         estado["ultimo_motivo"] = "concluido"
         gravar_estado(estado)
         registrar(f"CONCLUIDO em {dur_txt}.")
-        avisar_na_tela(
-            "PAINEL ANALISE BOLETOS",
-            f"CONCLUIDO. Nada mais esta rodando.\n\n"
-            f"Atualizado sozinho depois da SC7, SF1 e SE2 de hoje.\n"
-            f"Comecou {inicio:%H:%M}, terminou {agora():%H:%M} ({dur_txt}).\n\n"
-            f"https://analise-boletos.vercel.app/",
-        )
+        avisar_na_tela({
+            "status": "ok",
+            "titulo": "PAINEL ANÁLISE DE BOLETOS ATUALIZADO",
+            "subtitulo": "Atualizado sozinho depois da SC7, SF1 e SE2 de hoje.",
+            "linhas": linhas + [
+                ["ITAÚ RET", "importado antes do painel"],
+                ["RODADA", f"{inicio:%H:%M} → {agora():%H:%M} ({dur_txt})"],
+            ],
+            "rodape": "Nada mais está rodando.",
+            "url": "https://analise-boletos.vercel.app/",
+        })
     else:
         falhas = estado.setdefault("falhas", {})
         falhas[hoje] = falhas.get(hoje, 0) + 1
@@ -320,12 +359,16 @@ def main() -> int:
             else "Parei de tentar hoje. Rode o ATUALIZAR_PAINEL.cmd a mao para ver o erro."
         )
         registrar(f"TERMINOU COM ERRO (codigo {codigo}) em {dur_txt}. {resto}")
-        avisar_na_tela(
-            "PAINEL ANALISE BOLETOS - ERRO",
-            f"TERMINOU COM ERRO (codigo {codigo}).\n"
-            f"Comecou {inicio:%H:%M}, parou {agora():%H:%M} ({dur_txt}).\n\n{resto}",
-            erro=True,
-        )
+        avisar_na_tela({
+            "status": "erro",
+            "titulo": "PAINEL ANÁLISE DE BOLETOS NÃO FOI ATUALIZADO",
+            "subtitulo": f"Terminou com erro (código {codigo}). {resto}",
+            "linhas": linhas + [
+                ["RODADA", f"{inicio:%H:%M} → {agora():%H:%M} ({dur_txt})"],
+                ["LOG", "DADOS\\gatilho_bases.log"],
+            ],
+            "rodape": "Nada mais está rodando.",
+        })
     return 0
 
 
