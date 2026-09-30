@@ -9,9 +9,16 @@
 <title>Análise de Boletos</title>
 <style>
 :root{
-  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f5f7fa; --line:#d8dfe8; --line-forte:#b6c2d1;
-  --txt:#111827; --txt-2:#4b5563; --txt-3:#8b95a5;
-  --azul:#1f4e79; --azul-2:#2f6ba8; --zebra:#ebf3fb; --sel:#dceafc;
+  /* 30/09/2026, pedido dele: "COLOQUE O PAINEL NAS CORES DA SD BIOFLOR". Os
+     nomes --azul/--azul-2 ficaram (sao ~60 usos), mas agora carregam o VERDE da
+     marca -- a mesma paleta do SC7, PONTODP, FLXFATURAMENTO e CHECKLIST:
+     #1b302f noite, #284d4c marca, #3a5654 marca-3, limao #d5df66, fundo #eef1ef.
+     As cores PROPRIAS de cada aba (roxo, laranja, ambar, ciano) continuam: sao
+     elas que dizem em que aba se esta. */
+  --bg:#eef1ef; --surface:#ffffff; --surface-2:#f7f9f8; --line:#dfe6e3; --line-forte:#c3d0cc;
+  --txt:#1f2a29; --txt-2:#526968; --txt-3:#7f918f;
+  --azul:#1b302f; --azul-2:#284d4c; --zebra:#f1f5f3; --sel:#e6eeec;
+  --marca:#284d4c; --marca-2:#1b302f; --marca-3:#3a5654; --limao:#d5df66; --limao-2:#c0d15e;
   --ok:#0f7b52; --alerta:#8a5806; --alerta-bg:#fdf1d6;
   /* selos: fundo forte + letra escura, para ler de longe */
   --verde-bg:#bff0d2; --verde-txt:#04432a; --verde-linha:#2fa36b;
@@ -25,9 +32,11 @@
   --elo:#7c3aed; --elo-suave:#f3eeff; --elo-txt:#4c1d95;
 }
 html[data-tema="escuro"]{
-  --bg:#0c1320; --surface:#111a2b; --surface-2:#0e1626; --line:#22314b; --line-forte:#334764;
-  --txt:#e8eefb; --txt-2:#a3b3ca; --txt-3:#6b7b98;
-  --azul:#17304c; --azul-2:#5b9bd5; --zebra:#141f2e; --sel:#1d3654;
+  /* escuro = as cores da porta de entrada (#1B302F / #24403E / #3A5654), com o
+     limao no lugar do azul claro */
+  --bg:#152827; --surface:#1B302F; --surface-2:#182b2a; --line:#2f4a48; --line-forte:#3A5654;
+  --txt:#F2F5F1; --txt-2:#A9BDB9; --txt-3:#7d948f;
+  --azul:#0f1f1e; --azul-2:#D5DF66; --zebra:#203836; --sel:#24403E;
   --ok:#4ade80; --alerta:#fbbf24; --alerta-bg:#2e2611;
   --verde-bg:#0e5b3b; --verde-txt:#c8f9dd; --verde-linha:#34d399;
   --ambar-bg:#5c4008; --ambar-txt:#ffe3a6; --ambar-linha:#f0b429;
@@ -45,7 +54,7 @@ html[data-tema="escuro"]{
    digitavel continuam saindo exatamente como estao na base.
    Para voltar so a tabela ao normal, troque `body` por `.tabela` aqui. */
 body{margin:0; background:var(--bg); color:var(--txt); text-transform:uppercase;
-  font:14px/1.45 "Segoe UI", Calibri, system-ui, sans-serif; -webkit-font-smoothing:antialiased}
+  font:14px/1.45 Calibri, "Segoe UI", Arial, sans-serif; -webkit-font-smoothing:antialiased}
 .envolucro{max-width:1560px; margin:0 auto; padding:18px 16px 32px}
 body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 
@@ -55,14 +64,26 @@ body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 .marca{display:flex; align-items:center; gap:12px}
 .marca .chip-logo{background:#fff; border-radius:8px; padding:3px; display:flex; box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .marca .chip-logo img{height:36px; width:auto; display:block}
-.topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px}
-.topo h1 span{color:var(--txt-3); font-weight:400}
+/* 30/09/2026: o topo virou a FAIXA S & D BIOFLOR -- verde-noite com filete
+   limao, igual ao cabecalho dos outros paineis da marca. A logo continua na
+   pastilha branca (.chip-logo): ela tem fundo branco opaco e nao se recorta. */
+.topo{background:#1B302F; color:#F2F5F1; border-radius:12px; padding:12px 16px;
+  border-bottom:3px solid #D5DF66; box-shadow:0 2px 10px rgba(27,48,47,.25)}
+.topo h1{margin:0; font-size:20px; font-weight:700; letter-spacing:-.4px; color:#F2F5F1}
+.topo h1 span{color:#A9BDB9; font-weight:400}
+.topo button.leve{background:#24403E; border-color:#3A5654; color:#F2F5F1}
+.topo button.leve:hover{border-color:#D5DF66; color:#D5DF66}
+.topo .busca input{border-color:#D5DF66; background:#24403E; color:#F2F5F1}
+.topo .busca input::placeholder{color:#A9BDB9}
+.topo .busca input:not(:placeholder-shown){background:#2c4a47}
+.topo .busca input:focus{box-shadow:0 0 0 3px rgba(213,223,102,.35)}
+.topo .busca svg{color:#D5DF66}
 /* ---------- card de atualizacao ----------
    Data E hora de cada etapa, para saber na hora se o que esta na tela e o
    dado de hoje ou uma carga velha. */
 .cartao-atualizacao{display:flex; flex-wrap:wrap; gap:0; margin:0 0 10px;
   background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
-  overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,.06)}
+  overflow:hidden; box-shadow:0 1px 3px rgba(27,48,47,.06)}
 .cartao-atualizacao .item{display:flex; flex-direction:column; gap:3px; padding:9px 16px;
   border-right:1px solid var(--line); min-width:150px}
 .cartao-atualizacao .item:last-child{border-right:0}
@@ -91,7 +112,7 @@ body.amplo .envolucro{max-width:none; padding:14px 14px 24px}
 .busca input{width:300px; font:inherit; font-size:14px; font-weight:600; color:var(--txt);
   background:var(--surface); border:2px solid var(--acento, var(--azul-2)); border-radius:9px;
   padding:10px 12px 10px 36px; outline:none;
-  box-shadow:0 1px 3px rgba(15,23,42,.07); transition:width .12s ease}
+  box-shadow:0 1px 3px rgba(27,48,47,.07); transition:width .12s ease}
 .busca input::placeholder{color:var(--txt-3); font-weight:600}
 .busca input:focus{width:400px; box-shadow:0 0 0 3px var(--acento-bg, var(--sel))}
 /* digitou: a lupa e a borda ficam cheias, para nao se esquecer de um filtro ligado */
@@ -118,7 +139,7 @@ button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
   text-transform:uppercase; letter-spacing:.3px;
   background:var(--surface); border:1.5px solid var(--line-forte); border-radius:10px;
   padding:11px 16px; display:inline-flex; align-items:center; gap:9px; white-space:nowrap;
-  box-shadow:0 1px 2px rgba(15,23,42,.05); transition:transform .08s ease}
+  box-shadow:0 1px 2px rgba(27,48,47,.05); transition:transform .08s ease}
 .abas-topo button small{font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:999px;
   background:var(--surface-2); color:var(--txt-3); font-variant-numeric:tabular-nums}
 .abas-topo button:hover{border-color:var(--acento, var(--azul-2)); color:var(--txt)}
@@ -126,16 +147,16 @@ button.leve:hover{border-color:var(--line-forte); color:var(--txt)}
 /* A ativa e a unica pintada: com 8 botoes iguais, saber onde se esta e o que
    mais importa nesta barra. */
 .abas-topo button.ativa{background:var(--acento); border-color:var(--acento); color:#fff;
-  box-shadow:0 2px 8px rgba(15,23,42,.18)}
+  box-shadow:0 2px 8px rgba(27,48,47,.18)}
 .abas-topo button.ativa small{background:rgba(255,255,255,.24); color:#fff}
 /* ⚠ No tema ESCURO o acento de cada aba e uma cor CLARA (#f0b429 âmbar,
    #34d399 verde, #22d3ee ciano, #94a3b8 ardósia): branco em cima de claro nao
    se le. Letra escura, que ja e a regra dos selos de fundo cheio do painel. */
-html[data-tema="escuro"] .abas-topo button.ativa{color:#0b1220}
-html[data-tema="escuro"] .abas-topo button.ativa small{background:rgba(0,0,0,.20); color:#0b1220}
+html[data-tema="escuro"] .abas-topo button.ativa{color:#1b302f}
+html[data-tema="escuro"] .abas-topo button.ativa small{background:rgba(0,0,0,.20); color:#1b302f}
 /* Mesmo problema, mesma cura: os botoes de filtro ja eram pintados com o acento
    e ja saiam ilegiveis no escuro -- so que desde antes desta mudanca. */
-html[data-tema="escuro"] .pills button.ativa{color:#0b1220}
+html[data-tema="escuro"] .pills button.ativa{color:#1b302f}
 
 /* cores por aba */
 body[data-aba="associacoes"]{--acento:var(--azul-2); --acento-bg:var(--sel)}
@@ -204,15 +225,15 @@ body[data-aba="sefaz_sf1"] .subabas button.ativa{background:#0d6d78;
 /* NF x Pedido de Compra: ardosia. As outras seis abas ja gastaram azul, roxo,
    vermelho, ambar, verde e verde-agua -- e duas abas da mesma cor se confundem
    na troca, que e o unico motivo de cada uma ter a sua. */
-body[data-aba="pedidos"]{--acento:#475569; --acento-bg:#e2e8f0}
-html[data-tema="escuro"] body[data-aba="pedidos"]{--acento:#94a3b8; --acento-bg:#1e293b}
-body[data-aba="pedidos"] tr.titulos th{background:#334155}
+body[data-aba="pedidos"]{--acento:#2d8686; --acento-bg:#e0f0f0}
+html[data-tema="escuro"] body[data-aba="pedidos"]{--acento:#5fc2c2; --acento-bg:#133b3b}
+body[data-aba="pedidos"] tr.titulos th{background:#004b45}
 body[data-aba="pedidos"] tr.titulos th:hover,
-body[data-aba="pedidos"] tr.titulos th.ativa{background:#475569}
+body[data-aba="pedidos"] tr.titulos th.ativa{background:#2d8686}
 body[data-aba="pedidos"] tr:hover td,
 body[data-aba="pedidos"] table.conferencia tr:hover td{background:var(--acento-bg) !important}
-body[data-aba="pedidos"] .subabas button.ativa{background:#475569;
-  border-color:#475569; color:#fff}
+body[data-aba="pedidos"] .subabas button.ativa{background:#2d8686;
+  border-color:#2d8686; color:#fff}
 body[data-aba="pedidos"] tr.grupos th.g-pedido{background:var(--acento-bg); color:var(--acento)}
 
 /* ---------- sub-abas: a tratar x tratados ---------- */
@@ -340,7 +361,7 @@ body[data-aba="pedidos"] tr.grupos th.g-pedido{background:var(--acento-bg); colo
 
 /* ---------- planilha ---------- */
 .planilha{background:var(--surface); border:1px solid var(--line-forte); border-radius:10px;
-  overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.05);
+  overflow:auto; max-height:80vh; box-shadow:0 1px 3px rgba(27,48,47,.06), 0 8px 24px rgba(27,48,47,.05);
   /* Avisa o navegador que esta caixa vive rolando, então ela ganha camada
      própria e a rolagem para de repintar tudo do zero. Vale pouco nas abas
      pequenas e muito na de 715 linhas. Ver `contain:paint` na tabela. */
@@ -437,8 +458,8 @@ tr.grupos th.g-parte{background:var(--roxo-bg); color:var(--roxo-txt)}
 tr.grupos th.g-nf{background:var(--verde-bg); color:var(--verde-txt)}
 /* bloco do pedido de compra: e o unico grupo que nao vem da nota, e destacar
    deixa claro onde a nota acaba e o PC comeca */
-tr.grupos th.g-pedido{background:#e2e8f0; color:#334155}
-html[data-tema="escuro"] tr.grupos th.g-pedido{background:#1e293b; color:#94a3b8}
+tr.grupos th.g-pedido{background:#e0f0f0; color:#004b45}
+html[data-tema="escuro"] tr.grupos th.g-pedido{background:#133b3b; color:#5fc2c2}
 html[data-tema="escuro"] tr.grupos th.g-boleto{color:var(--azul-2)}
 table.conferencia tr.titulos th{top:24px}
 
@@ -512,7 +533,7 @@ td.z-delta{white-space:nowrap; overflow:hidden; padding:5px 3px}
 /* ---------- quadro que aparece ao passar o mouse ---------- */
 .cartao{position:fixed; z-index:60; max-width:430px; display:none; pointer-events:none;
   background:var(--surface); color:var(--txt); border:1px solid var(--line-forte);
-  border-radius:9px; box-shadow:0 14px 38px rgba(15,23,42,.28); padding:0; overflow:hidden;
+  border-radius:9px; box-shadow:0 14px 38px rgba(27,48,47,.28); padding:0; overflow:hidden;
   font-size:11.5px; line-height:1.45}
 .cartao.aberto{display:block}
 .cartao .topo-cartao{padding:8px 11px; font-weight:800; font-size:10.5px; letter-spacing:.7px;
@@ -742,7 +763,7 @@ table.conferencia td.acao.lista .botao-copia code{min-width:0}
 .botao-copia.so.vazio{opacity:.4; cursor:not-allowed}
 
 /* ---------- drill das parcelas da NF ---------- */
-.fundo-drill{position:fixed; inset:0; z-index:40; display:none; background:rgba(15,23,42,.55);
+.fundo-drill{position:fixed; inset:0; z-index:40; display:none; background:rgba(27,48,47,.55);
   align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto}
 .fundo-drill.aberto{display:flex}
 .drill{width:min(980px,100%); background:var(--surface); color:var(--txt);
@@ -797,6 +818,13 @@ html[data-tema="escuro"] .drill .parc{color:var(--roxo-txt)}
   color:var(--txt-2)}
 .drill .botoes button:hover{border-color:var(--azul-2); color:var(--txt)}
 .drill .botoes .bt-salvar{background:var(--azul-2); border-color:var(--azul-2); color:#fff}
+/* 30/09/2026: no ESCURO o --azul-2 e o LIMAO da marca -- branco em cima dele nao
+   se le. Letra verde-noite em tudo que usa o --azul-2 (ou o acento) como fundo. */
+html[data-tema="escuro"] tr.titulos th:hover,
+html[data-tema="escuro"] tr.titulos th.ativa,
+html[data-tema="escuro"] #exportar,
+html[data-tema="escuro"] .drill .botoes .bt-salvar,
+html[data-tema="escuro"] .marca-quadro{color:#1b302f}
 .drill .botoes .bt-salvar:hover{filter:brightness(1.08); color:#fff}
 .drill .botoes .bt-apagar{color:var(--sobe-txt); border-color:var(--sobe-linha); background:var(--sobe-bg)}
 .drill .botoes .bt-apagar[hidden]{display:none}
@@ -1716,7 +1744,7 @@ body.abl-voo .topo .marca .chip-logo{visibility:hidden}
 })();
 </script>
 
-<script src="supa.js?v=202609300905"></script>
+<script src="supa.js?v=202609300914"></script>
 <script>
 /* Os dados NAO moram neste arquivo quando ele e publicado -- o index.html do
    GitHub Pages sai vazio e so recebe a carteira depois do login (mesmo modelo
