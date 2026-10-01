@@ -135,19 +135,31 @@ def assinatura_dados(p: Path) -> str:
 
 
 def avisar_na_tela(dados: dict) -> None:
-    """Tela de aviso no padrao S & D BIOFLOR (aviso_bioflor.py), num processo
-    SOLTO: a tarefa nao fica presa esperando alguem fechar."""
+    """Tela de aviso no MODELO DA SE2 E DO SC7 (notificar_painel_atualizado.pyw,
+    copia do SC7 -- pedido dele 30/09/2026), num processo SOLTO: a tarefa nao
+    fica presa esperando alguem fechar. Uma tela nova fecha a anterior."""
     exe = Path(sys.executable)
     pyw = exe.with_name("pythonw.exe")
+    args = [str(pyw if pyw.is_file() else exe), str(AQUI / "notificar_painel_atualizado.pyw"),
+            "--titulo", dados["titulo"]]
+    for rotulo, valor in dados.get("linhas", []):
+        args += ["--linha", f"{rotulo}: {valor}" if rotulo else valor]
+    if dados.get("status") == "erro":
+        args += ["--botao", "detalhes", "--detalhes", str(LOG)]
     try:
         subprocess.Popen(
-            [str(pyw if pyw.is_file() else exe), str(AQUI / "aviso_bioflor.py"),
-             json.dumps(dados, ensure_ascii=False)],
-            creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+            args,
+            cwd=str(AQUI),
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            # sem console + fora do job da tarefa: a tela vive depois que ela acaba
+            creationflags=0x08000000 | 0x01000000,
             close_fds=True,
         )
-    except Exception as e:
-        registrar(f"(nao consegui mostrar o aviso na tela: {e})")
+    except OSError:
+        try:
+            subprocess.Popen(args, cwd=str(AQUI), creationflags=0x08000000, close_fds=True)
+        except Exception as e:
+            registrar(f"(nao consegui mostrar o aviso na tela: {e})")
 
 
 def situacao() -> tuple[bool, str, dict]:
@@ -339,13 +351,9 @@ def main() -> int:
         avisar_na_tela({
             "status": "ok",
             "titulo": "PAINEL ANÁLISE DE BOLETOS ATUALIZADO",
-            "subtitulo": "Atualizado sozinho depois da SC7, SF1 e SE2 de hoje.",
-            "linhas": linhas + [
-                ["ITAÚ RET", "importado antes do painel"],
-                ["RODADA", f"{inicio:%H:%M} → {agora():%H:%M} ({dur_txt})"],
-            ],
-            "rodape": "Nada mais está rodando.",
-            "url": "https://analise-boletos.vercel.app/",
+            "linhas": [
+                ["Atualizado em", f"{agora():%d/%m/%Y às %H:%M} ({dur_txt})"],
+            ] + linhas + [["ITAÚ RET", "importado antes do painel"]],
         })
     else:
         falhas = estado.setdefault("falhas", {})
@@ -362,12 +370,10 @@ def main() -> int:
         avisar_na_tela({
             "status": "erro",
             "titulo": "PAINEL ANÁLISE DE BOLETOS NÃO FOI ATUALIZADO",
-            "subtitulo": f"Terminou com erro (código {codigo}). {resto}",
-            "linhas": linhas + [
-                ["RODADA", f"{inicio:%H:%M} → {agora():%H:%M} ({dur_txt})"],
-                ["LOG", "DADOS\\gatilho_bases.log"],
+            "linhas": [
+                ["Erro", f"código {codigo} às {agora():%H:%M} ({dur_txt})"],
+                ["", resto],
             ],
-            "rodape": "Nada mais está rodando.",
         })
     return 0
 
