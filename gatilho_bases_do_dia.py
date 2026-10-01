@@ -57,7 +57,7 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
-from caminhos import bases_genericos, raiz_lucas  # noqa: E402
+from caminhos import bases_genericos, pasta_analises, raiz_lucas  # noqa: E402
 
 CMD = AQUI / "ATUALIZAR_PAINEL.cmd"
 DEV_HTML = AQUI / "dev.html"
@@ -162,65 +162,101 @@ def avisar_na_tela(dados: dict) -> None:
             registrar(f"(nao consegui mostrar o aviso na tela: {e})")
 
 
+def achar_sefaz() -> Path | None:
+    """A SEFAZ.xlsx (pasta ANALISES BOLETOS), achada pelo caminhos.py."""
+    p = pasta_analises() / "SEFAZ.xlsx"
+    return p if p.is_file() else None
+
+
 def situacao() -> tuple[bool, str, dict]:
-    """(pode_rodar, motivo, info)."""
+    """(pode_rodar, motivo, info).
+
+    Tres jeitos de rodar (o resto espera):
+      A. REGRA DO DIA: SC7, SF1 e SE2 gravadas HOJE, as tres depois da ultima
+         rodada boa, com pelo menos um dado novo (inclui a SEFAZ, se mudou).
+      B. SEFAZ (pedido dele 01/10/2026, "COLOQUE A SEFAZ NO GATILHO TAMBEM"):
+         o painel ja rodou hoje com as 3 bases do dia e a SEFAZ.xlsx trouxe
+         DADO NOVO depois disso -> roda de novo. Ela sozinha nao abre o dia:
+         sem as 3 de hoje continua esperando.
+      C. NOVA TENTATIVA: a ultima rodada deu erro (ate TENTATIVAS por dia) ->
+         repete com as mesmas bases, sem exigir que as 3 sejam salvas de novo.
+         Antes de 01/10/2026 essa exigencia barrava a repeticao: o erro das
+         10:10 daquele dia (janela fechada) teria deixado o painel parado."""
     estado = ler_estado()
     hoje = agora().date()
     bases = achar_bases()
     faltando = [n for n, p in bases.items() if p is None]
     if faltando:
         return False, "nao achei a base: " + ", ".join(faltando), {}
+    sefaz = achar_sefaz()
 
     datas = {n: datetime.fromtimestamp(p.stat().st_mtime) for n, p in bases.items()}
+    data_sefaz = datetime.fromtimestamp(sefaz.stat().st_mtime) if sefaz else None
     info = {"bases": {n: d.isoformat(timespec="seconds") for n, d in datas.items()}}
-    resumo = " | ".join(f"{n} {hhmm(d)}" for n, d in datas.items())
+    if data_sefaz:
+        info["bases"]["SEFAZ"] = data_sefaz.isoformat(timespec="seconds")
+    resumo = " | ".join(f"{n} {hhmm(datetime.fromisoformat(d))}" for n, d in info["bases"].items())
 
     velhas = [n for n, d in datas.items() if d.date() != hoje]
     if velhas:
         return False, f"esperando {', '.join(velhas)} de hoje ({resumo})", info
 
-    ultima_ok = estado.get("ultima_ok_inicio")
-    ultima_ok = datetime.fromisoformat(ultima_ok) if ultima_ok else None
-    if ultima_ok:
-        pendentes = [n for n, d in datas.items() if d <= ultima_ok]
-        if pendentes:
-            if len(pendentes) == 3:
-                return False, f"painel ja atualizado as {hhmm(ultima_ok)} com as 3 bases de hoje", info
-            return False, (
-                f"esperando {', '.join(pendentes)} de novo: as 3 precisam ser atualizadas "
-                f"depois da ultima rodada ({hhmm(ultima_ok)}) -- {resumo}"
-            ), info
+    falhas = estado.get("falhas", {}).get(hoje.isoformat(), 0)
+    if falhas >= TENTATIVAS:
+        return False, f"ja deu erro {falhas} vezes hoje; parei de tentar (rode o ATUALIZAR_PAINEL.cmd a mao)", info
 
-    mais_nova = max(datas.values())
-    if DEV_HTML.is_file():
-        dev = datetime.fromtimestamp(DEV_HTML.stat().st_mtime)
-        falhas_hoje = estado.get("falhas", {}).get(hoje.isoformat(), 0)
-        if dev > mais_nova and not falhas_hoje:
-            info["manual"] = dev.isoformat(timespec="seconds")
-            return False, f"painel ja foi atualizado a mao as {hhmm(dev)}, depois das 3 bases", info
+    envolvidas = dict(bases)
+    if sefaz:
+        envolvidas["SEFAZ"] = sefaz
+    todas_datas = dict(datas)
+    if data_sefaz:
+        todas_datas["SEFAZ"] = data_sefaz
 
-    recentes = [n for n, d in datas.items() if agora() - d < timedelta(minutes=ESTAVEL_MIN)]
+    recentes = [n for n, d in todas_datas.items() if agora() - d < timedelta(minutes=ESTAVEL_MIN)]
     if recentes:
         return False, f"{', '.join(recentes)} acabou de ser gravada; espero {ESTAVEL_MIN} min parada", info
 
-    # Dado novo de verdade? Salvar as tres sem mudar nada nao e motivo para
-    # rodar 30 min e republicar o mesmo painel.
     try:
-        dados = {n: assinatura_dados(p) for n, p in bases.items()}
+        dados = {n: assinatura_dados(p) for n, p in envolvidas.items()}
     except Exception as e:  # zip incompleto = ainda gravando / OneDrive trazendo
         return False, f"nao consegui ler o conteudo das bases ainda ({type(e).__name__}); espero", info
     info["dados"] = dados
     anteriores = estado.get("ultima_ok_dados") or {}
     info["novas"] = [n for n in dados if dados[n] != anteriores.get(n)]
-    if not info["novas"]:
+
+    # C. a ultima rodada deu erro hoje: repete.
+    if falhas and str(estado.get("ultimo_motivo", "")).startswith("erro"):
+        return True, f"NOVA TENTATIVA ({falhas + 1} de {TENTATIVAS}) depois do erro da ultima rodada ({resumo})", info
+
+    ultima_ok = estado.get("ultima_ok_inicio")
+    ultima_ok = datetime.fromisoformat(ultima_ok) if ultima_ok else None
+
+    pendentes = [n for n, d in datas.items() if ultima_ok and d <= ultima_ok]
+    if pendentes:
+        # B. as 3 de hoje ja foram usadas numa rodada de HOJE; so a SEFAZ manda.
+        if (ultima_ok and ultima_ok.date() == hoje and data_sefaz
+                and data_sefaz > ultima_ok and "SEFAZ" in info["novas"]):
+            return True, f"SEFAZ com dado novo depois da rodada de {hhmm(ultima_ok)} ({resumo})", info
+        if len(pendentes) == 3:
+            return False, f"painel ja atualizado as {hhmm(ultima_ok)} com as 3 bases de hoje ({resumo})", info
         return False, (
-            f"as 3 bases foram salvas de novo mas SEM dado novo desde a rodada de "
-            f"{hhmm(ultima_ok) if ultima_ok else '?'} -- nao atualizo ({resumo})"
+            f"esperando {', '.join(pendentes)} de novo: as 3 precisam ser atualizadas "
+            f"depois da ultima rodada ({hhmm(ultima_ok)}) -- ou a SEFAZ com dado novo -- {resumo}"
         ), info
 
-    falhas = estado.get("falhas", {}).get(hoje.isoformat(), 0)
-    if falhas >= TENTATIVAS:
-        return False, f"ja deu erro {falhas} vezes hoje; parei de tentar (rode o ATUALIZAR_PAINEL.cmd a mao)", info
+    # A. as 3 sao de hoje e mais novas que a ultima rodada boa.
+    mais_nova = max(todas_datas.values())
+    if DEV_HTML.is_file():
+        dev = datetime.fromtimestamp(DEV_HTML.stat().st_mtime)
+        if dev > mais_nova and not falhas:
+            info["manual"] = dev.isoformat(timespec="seconds")
+            return False, f"painel ja foi atualizado a mao as {hhmm(dev)}, depois das bases", info
+
+    if not info["novas"]:
+        return False, (
+            f"as bases foram salvas de novo mas SEM dado novo desde a rodada de "
+            f"{hhmm(ultima_ok) if ultima_ok else '?'} -- nao atualizo ({resumo})"
+        ), info
 
     return True, f"as 3 bases de hoje estao prontas, dado novo em {', '.join(info['novas'])} ({resumo})", info
 
@@ -235,10 +271,14 @@ def achar_cmd_itau() -> Path | None:
     return None
 
 
-def rodar_cmd(cmd: Path, sem_pausa_por_nul: bool = False) -> int:
+def rodar_cmd(cmd: Path, sem_pausa_por_nul: bool = False, titulo: str = "RODANDO") -> int:
     env = dict(os.environ)
     env["PAINEL_SEM_PAUSA"] = "1"  # sem "pressione qualquer tecla": a tarefa nao pode travar
-    args = ["cmd.exe", "/d", "/c", "call", str(cmd)]
+    # O titulo da janela pede para nao fechar: em 01/10/2026 a rodada morreu as
+    # 10:10 com 0xC000013A (janela fechada) no meio dos alertas, antes de
+    # publicar. O `&` fica FORA das aspas de proposito (separa os dois comandos);
+    # o caminho vai entre aspas, entao o & de "Grupo S&D" nao quebra nada.
+    args = ["cmd.exe", "/d", "/c", "title", f"{titulo} - NAO FECHE ESTA JANELA", "&", "call", str(cmd)]
     if sem_pausa_por_nul:
         # O .CMD do Itau termina num `pause` sem chave para desligar; com a
         # entrada vindo do NUL ele passa direto. O caminho vai entre aspas
@@ -267,7 +307,7 @@ def rodar_itau() -> int:
         return 1
     registrar("[ITAU] importando RET/DDA do Itau antes do painel...")
     inicio = time.time()
-    codigo = rodar_cmd(cmd, sem_pausa_por_nul=True)
+    codigo = rodar_cmd(cmd, sem_pausa_por_nul=True, titulo="ITAU RET (antes do painel ANALISE BOLETOS)")
     # O .CMD do Itau nao termina com `exit /b`: o codigo que chega aqui e o do
     # ultimo comando, nao o do Python. Quem diz a verdade e a linha
     # "Codigo de saida: N" que ele escreve no log desta rodada.
@@ -294,7 +334,7 @@ def rodar_painel() -> int:
         # perceber: para aqui e tenta a rodada inteira de novo em 10 min.
         return codigo
     registrar("[PAINEL] rodando ATUALIZAR_PAINEL.cmd...")
-    return rodar_cmd(CMD)
+    return rodar_cmd(CMD, titulo="PAINEL ANALISE BOLETOS ATUALIZANDO")
 
 
 def main() -> int:
@@ -366,6 +406,9 @@ def main() -> int:
             if n < TENTATIVAS
             else "Parei de tentar hoje. Rode o ATUALIZAR_PAINEL.cmd a mao para ver o erro."
         )
+        # 0xC000013A = STATUS_CONTROL_C_EXIT: alguem fechou a janela (ou Ctrl+C)
+        if codigo in (3221225786, -1073741510):
+            resto = "A janela foi FECHADA antes de terminar. " + resto
         registrar(f"TERMINOU COM ERRO (codigo {codigo}) em {dur_txt}. {resto}")
         avisar_na_tela({
             "status": "erro",
