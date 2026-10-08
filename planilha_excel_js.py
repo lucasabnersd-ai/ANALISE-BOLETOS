@@ -312,6 +312,12 @@ NUCLEO_JS = r"""
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
         '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+        /* 08/10/2026: SEM o <bookViews> o Excel abre o arquivo, mas COPIAR dele
+           para OUTRO arquivo falha com "Esta acao nao funcionara em varias
+           selecoes" (colar dentro da propria planilha funcionava, por isso
+           passou despercebido). Reproduzido no Excel e provado: so este bloco
+           resolve -- <selection> no painel congelado nao muda nada. */
+        '<bookViews><workbookView xWindow="0" yWindow="0" windowWidth="28800" windowHeight="15000" activeTab="0"/></bookViews>' +
         '<sheets>' + folhas.join('') + '</sheets></workbook>' },
       { nome: 'xl/_rels/workbook.xml.rels', dados:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
