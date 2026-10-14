@@ -795,7 +795,7 @@ def main() -> int:
         comuns.enviar(assunto, corpo, destino, copia=copia,
                       anexos=[planilha] if planilha else None)
         comuns.marcar_enviado(CHAVE, len(achados))
-        print(f"   E-mail enviado para {destino}"
+        print(f"   E-mail na fila de aprovacao (porteiro) para {destino}"
               + (f" (cópia: {copia})" if copia else "")
               + (f" com a planilha {planilha.name} em anexo." if planilha else "."))
     except Exception as erro:  # noqa: BLE001

@@ -284,9 +284,43 @@ def _caixa_de_permissao_aberta() -> str:
             "ou encerre o OUTLOOK.EXE -Embedding no Gerenciador de Tarefas")
 
 
+# 13/10/2026 -- PORTEIRO DE E-MAIL. Pedido dele: "envio de mensagens unicas a
+# partir de agora tem que passar por mim, com uma notificacao igual de quando
+# atualiza a SE2". O enviar() NAO MANDA MAIS: poe o e-mail na fila do porteiro
+# e a tela "E-MAIL AGUARDANDO SUA APROVACAO" (padrao S & D BIOFLOR) abre no
+# canto da tela; so o ENVIAR dela manda. A fila fica nesta maquina, fora do
+# OneDrive e do repo (leva endereco). Maquina sem o porteiro = NAO envia.
+PORTEIRO = Path(r"C:\Users\lucas\PORTEIRO_EMAIL")
+
+
 def enviar(assunto: str, corpo_html: str, para: str, segundos: int = 45,
            copia: str = "", anexos: list | None = None) -> None:
-    """Manda pelo Outlook CLASSICO desta maquina, COM PRAZO.
+    """Entrega o e-mail ao PORTEIRO (fila + tela de aprovacao). Nada sai daqui.
+
+    A trava diaria continua sendo marcada por quem chamou: o aviso entra na
+    fila UMA vez por dia e o pedido novo do mesmo aviso substitui o velho que
+    ainda estiver esperando (chave = nome do script do aviso)."""
+    if not (PORTEIRO / "porteiro_email.py").is_file():
+        raise EnvioTravado(f"porteiro de e-mail nao instalado nesta maquina ({PORTEIRO}) "
+                           "-- por regra, nenhum e-mail sai sem a aprovacao do Lucas")
+    if str(PORTEIRO) not in sys.path:
+        sys.path.insert(0, str(PORTEIRO))
+    try:
+        import porteiro_email
+        script = Path(sys.argv[0]).stem or "alerta"
+        ident = porteiro_email.pedir_aprovacao(
+            para=para, copia=copia, assunto=assunto, corpo=corpo_html,
+            anexos=[str(a) for a in (anexos or [])],
+            origem=f"AVISOS DO PAINEL DE BOLETOS ({script})", chave=f"boletos:{script}")
+    except Exception as erro:  # noqa: BLE001 - sem fila = sem trava marcada, tenta na proxima
+        raise EnvioTravado(f"nao consegui por na fila do porteiro ({erro})") from None
+    print(f"   NA FILA DE APROVACAO ({ident}): so sai quando voce clicar ENVIAR na tela.")
+
+
+def enviar_direto(assunto: str, corpo_html: str, para: str, segundos: int = 45,
+                  copia: str = "", anexos: list | None = None) -> None:
+    """[ANTIGO, ninguem chama desde 13/10/2026] Mandava pelo Outlook CLASSICO
+    desta maquina, COM PRAZO, sem passar pelo porteiro.
 
     `Outlook.Application` e' o COM registrado em Office16\\OUTLOOK.EXE -- o
     Outlook novo (olk.exe, da Microsoft Store) nao expoe esse conector e nao

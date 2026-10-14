@@ -1195,7 +1195,7 @@ def main() -> int:
     comuns.marcar_enviado(trava, len(novos))
     if regras["caderno"]:
         gravar_vistos(ja_vistos, [chave_do_titulo(a) for a in novos], hoje)
-    print(f"   E-mail enviado para {destino}"
+    print(f"   E-mail na fila de aprovacao (porteiro) para {destino}"
           + (f" (cópia: {copia})" if copia else "")
           + (f" com a planilha {planilha.name} em anexo." if planilha else "."))
     if regras["caderno"]:

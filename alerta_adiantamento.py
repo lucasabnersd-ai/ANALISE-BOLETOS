@@ -184,7 +184,7 @@ def main() -> int:
     try:
         comuns.enviar(assunto, corpo, destino)
         comuns.marcar_enviado(CHAVE, quantos)
-        print(f"   E-mail enviado para {destino}.")
+        print(f"   E-mail na fila de aprovacao (porteiro) para {destino}.")
     except Exception as erro:  # noqa: BLE001
         # Nao derruba a rodada: o painel ja esta montado e vai ser publicado.
         print(f"   AVISO: o e-mail NAO foi enviado ({erro}).")
