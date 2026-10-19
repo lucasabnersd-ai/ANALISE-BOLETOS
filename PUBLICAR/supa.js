@@ -617,6 +617,27 @@
     }
   }
 
+  /* ENTRADA PELO HUB (19/10/2026, "ABRIR OS PAINEIS DIRETO PELO HUB"): o card do HUB (SISTEMA INTEGRADO BIOFLOR)
+     traz um passe assinado no fragmento (#hub=...). O passe sai do endereco na hora e vai para a funcao hub-sso
+     deste projeto (confere a assinatura, 60 s, uma vez so, so as contas do HUB); ela devolve um codigo que vira a
+     sessao normal da conta -- a mesma que a senha abriria, com as mesmas permissoes. Sem passe, ou passe
+     recusado: nada muda, fica a tela de senha. */
+  async function hubEntrar(cliente) {
+    var m = /(?:^#|&)hub=([^&]+)/.exec(location.hash || "");
+    if (!m) return false;
+    try { history.replaceState(null, document.title, location.pathname + location.search); } catch (e) {}
+    try {
+      var r = await fetch(SUPABASE_URL + "/functions/v1/hub-sso", { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY }, body: JSON.stringify({ passe: decodeURIComponent(m[1]) }) });
+      var j = r.ok ? await r.json() : null;
+      if (!j || !j.codigo) return false;
+      var t = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", { method: "POST", headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY }, body: JSON.stringify({ refresh_token: j.codigo }) });
+      var k = t.ok ? await t.json() : null;
+      if (!k || !k.access_token || !k.refresh_token) return false;
+      var s = await cliente.auth.setSession({ access_token: k.access_token, refresh_token: k.refresh_token });
+      return !!(s && s.data && s.data.session);
+    } catch (e) { return false; }
+  }
+
   async function iniciar() {
     try {
       await carregarLib();
@@ -635,6 +656,7 @@
       });
     } catch (e) {}
 
+    await hubEntrar(sb);   // ENTRADA PELO HUB (acima): passe valido = a sessao abaixo ja existe e o painel abre
     var s = await sb.auth.getSession();
     if (s.data && s.data.session) return depoisDoLogin();
     mostrarLogin();
