@@ -163,6 +163,15 @@ COLUNAS_SC7 = [
 COLUNAS_SC1 = [
     # ⚠ A filial faz parte da CHAVE do pedido (ver a docstring): sem ela o
     # solicitante do 001522 da Logistica vazava para o 001522 da Capivara.
+    # Layout NOVO da exportacao (22/10/2026, 119 colunas).
+    ("A", "Filial",       "filial"),
+    ("D", "Num. Pedido",  "pc"),
+    ("C", "Solicitante",  "solicitante"),
+    ("B", "Numero da SC", "sc"),
+    ("DI", "Usuário",     "usuario"),
+]
+# Layout ANTIGO (ate 21/10/2026) -- reserva, se a exportacao voltar a ele.
+COLUNAS_SC1_ANTIGO = [
     ("A", "Filial",       "filial"),
     ("Z", "Num. Pedido",  "pc"),
     ("Y", "Solicitante",  "solicitante"),
@@ -603,7 +612,15 @@ def ler_solicitantes(caminho: Path | None = None) -> dict[str, list[str]]:
     parecia preenchida (5.710 pedidos "com solicitante" em vez de 3.679): errado
     com cara de completo, que e o pior jeito de errar.
     """
-    linhas = _ler(caminho or BASE_SC1, COLUNAS_SC1)
+    # 22/10/2026: a exportacao da SC1 mudou de layout (119 colunas; Num. Pedido
+    # de Z para D, Solicitante de Y para C) e a aba NF x Pedido inteira saiu da
+    # carga -- "Z deveria ser 'Num. Pedido' e esta 'loja do forn'". Tenta o
+    # layout NOVO e, se nao bater, o ANTIGO: os dois sao conferidos por nome
+    # coluna a coluna, entao nenhum dos dois le coluna errada calado.
+    try:
+        linhas = _ler(caminho or BASE_SC1, COLUNAS_SC1)
+    except RuntimeError:
+        linhas = _ler(caminho or BASE_SC1, COLUNAS_SC1_ANTIGO)
     por_pc: dict[str, list[str]] = {}
     for linha in linhas:
         numero = normalizar_pc(linha.get("pc"))

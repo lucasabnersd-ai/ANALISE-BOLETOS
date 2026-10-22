@@ -31,6 +31,10 @@ FUNCAO = "https://pyrniqluywejmgzqkari.supabase.co/functions/v1/analise-boletos-
 # UUID hexadecimal ou "BOL:<digitos>".
 META = "#meta:"
 
+# As abas que aparecem no painel e nunca ficam vazias num dia normal. Se uma
+# delas faltar ou vier sem linha, a carga NAO sobe (ver main()).
+OBRIGATORIAS = ("associacoes", "correspondencias", "futuros", "pendentes_itau", "pedidos")
+
 
 def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
     """O cabecalho da aba (colunas, parcelas, contagens) numa LINHA PROPRIA.
@@ -150,6 +154,30 @@ def main() -> int:
         return 1
 
     carga = json.loads(DADOS.read_text(encoding="utf-8"))
+
+    # TRAVA (22/10/2026). Naquele dia a SC1 mudou de layout, o gerar_painel.py so
+    # AVISOU ("aba de pedidos de compra nao atualizada") e montou a carga SEM a
+    # aba NF x Pedido. A Edge Function arquiva o que nao vem na carga -- as ~400
+    # notas da aba teriam sumido do ar. Aba visivel (nao `oculta`) faltando ou
+    # vazia = nao publica: o .cmd termina com ERRO e o gatilho tenta de novo,
+    # e o painel no ar continua o anterior, inteiro.
+    visiveis = {}
+    for aba in carga["abas"]:
+        meta = aba.get("_meta") or aba
+        if not meta.get("oculta"):
+            visiveis[meta.get("id")] = len(aba.get("linhas") or [])
+    faltam = [a for a in OBRIGATORIAS if a not in visiveis]
+    vazias = [a for a, n in visiveis.items() if a in OBRIGATORIAS and n == 0]
+    if faltam or vazias:
+        print("ERRO: carga NAO publicada -- o painel no ar continua o anterior.", file=sys.stderr)
+        if faltam:
+            print(f"  aba(s) FALTANDO na carga: {', '.join(faltam)}", file=sys.stderr)
+        if vazias:
+            print(f"  aba(s) VAZIA(S) na carga: {', '.join(vazias)}", file=sys.stderr)
+        print("  Veja os AVISOS do gerar_painel.py acima (base com layout novo, "
+              "planilha aberta, arquivo faltando).", file=sys.stderr)
+        return 1
+
     titulos = enxugar(carga)
     corpo = json.dumps({"titulos": titulos}, ensure_ascii=False).encode("utf-8")
 

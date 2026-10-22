@@ -144,8 +144,8 @@ def avisar_na_tela(dados: dict) -> None:
             "--titulo", dados["titulo"]]
     for rotulo, valor in dados.get("linhas", []):
         args += ["--linha", f"{rotulo}: {valor}" if rotulo else valor]
-    if dados.get("status") == "erro":
-        args += ["--botao", "detalhes", "--detalhes", str(LOG)]
+    if dados.get("detalhes") or dados.get("status") == "erro":
+        args += ["--botao", "detalhes", "--detalhes", str(dados.get("detalhes") or LOG)]
     try:
         subprocess.Popen(
             args,
@@ -271,30 +271,46 @@ def achar_cmd_itau() -> Path | None:
     return None
 
 
+LOG_RODADAS = DADOS / "rodadas"
+
+
 def rodar_cmd(cmd: Path, sem_pausa_por_nul: bool = False, titulo: str = "RODANDO") -> int:
+    """Roda o .cmd SEM JANELA, com toda a saida gravada em DADOS/rodadas/.
+
+    22/10/2026: tres rodadas morreram no mesmo dia com 0xC000013A (11:48, 12:05,
+    12:23) em passos diferentes -- associacao, montagem, alertas. Esse codigo e
+    a JANELA DO CONSOLE sendo fechada (no Windows 11 ela abre como aba do
+    Terminal; fechar o Terminal mata todas as abas), nao erro do script. Ate
+    01/10 a defesa era o titulo "NAO FECHE ESTA JANELA", e nao bastou. Agora
+    nao existe janela para fechar: o aviso de que esta rodando e a tela S & D
+    BIOFLOR do comeco (com VER DETALHES abrindo este log ao vivo), e o de fim
+    e a tela de CONCLUIDO/ERRO -- [[feedback_script_avisa_fim_ou_rodando]].
+    A rodada sem janela foi provada inteira em 22/10 12:24 (mesmo modo)."""
     env = dict(os.environ)
-    env["PAINEL_SEM_PAUSA"] = "1"  # sem "pressione qualquer tecla": a tarefa nao pode travar
-    # O titulo da janela pede para nao fechar: em 01/10/2026 a rodada morreu as
-    # 10:10 com 0xC000013A (janela fechada) no meio dos alertas, antes de
-    # publicar. O `&` fica FORA das aspas de proposito (separa os dois comandos);
-    # o caminho vai entre aspas, entao o & de "Grupo S&D" nao quebra nada.
-    args = ["cmd.exe", "/d", "/c", "title", f"{titulo} - NAO FECHE ESTA JANELA", "&", "call", str(cmd)]
-    if sem_pausa_por_nul:
-        # O .CMD do Itau termina num `pause` sem chave para desligar; com a
-        # entrada vindo do NUL ele passa direto. O caminho vai entre aspas
-        # (list2cmdline), entao o & de "Grupo S&D" nao quebra o comando.
-        args += ["<", "nul"]
-    proc = subprocess.Popen(
-        args,
-        cwd=str(cmd.parent),
-        env=env,
-        creationflags=subprocess.CREATE_NEW_CONSOLE,  # janela visivel: ele ve rodando
-    )
-    try:
-        return proc.wait(timeout=PRAZO_RODADA_S)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        return 124
+    env["PAINEL_SEM_PAUSA"] = "1"        # sem "pressione qualquer tecla"
+    env["ASSOCIADOR_SEM_PAUSA"] = "1"
+    LOG_RODADAS.mkdir(parents=True, exist_ok=True)
+    nome = f"{agora():%Y%m%d_%H%M%S}_{cmd.stem}.log"
+    log = LOG_RODADAS / nome
+    registrar(f"   saida desta etapa: {log}")
+    with open(log, "wb") as saida:
+        # stdin = NUL: os `pause` do .cmd (o do Itau nao tem chave) passam direto.
+        proc = subprocess.Popen(
+            ["cmd.exe", "/d", "/c", "call", str(cmd)],
+            cwd=str(cmd.parent),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=saida,
+            stderr=subprocess.STDOUT,
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
+        )
+        try:
+            codigo = proc.wait(timeout=PRAZO_RODADA_S)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            codigo = 124
+    rodar_cmd.ultimo_log = log
+    return codigo
 
 
 def rodar_itau() -> int:
@@ -337,6 +353,31 @@ def rodar_painel() -> int:
     return rodar_cmd(CMD, titulo="PAINEL ANALISE BOLETOS ATUALIZANDO")
 
 
+def rodada_em_andamento() -> str:
+    """Descreve a rodada do painel que estiver viva agora ('' se nenhuma).
+
+    Olha a linha de comando dos processos (CIM), e nao um arquivo de trava:
+    trava em arquivo fica orfa quando a janela e fechada ou a maquina cai, e
+    aqui o que importa e se existe processo de verdade rodando."""
+    alvo = "ATUALIZAR_PAINEL.cmd|RODAR_ASSOCIADOR_BOLETOS|gerar_painel.py|associador_boletos_totvs.py|publicar_dados.py"
+    ps = (
+        "Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne " + str(os.getpid())
+        + " -and $_.Name -ne 'powershell.exe' -and $_.CommandLine -match '" + alvo.replace(".", "\\.") + "' } | "
+        "ForEach-Object { '{0} desde {1:HH:mm}' -f $_.Name, $_.CreationDate }"
+    )
+    try:
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+            capture_output=True, text=True, timeout=60,
+            creationflags=0x08000000,  # sem janela
+        )
+        vivos = [l.strip() for l in r.stdout.splitlines() if l.strip()]
+        return ", ".join(vivos[:3])
+    except Exception as e:  # sem como olhar: segue, como era antes da trava
+        registrar(f"(nao consegui conferir se ha rodada viva: {e})")
+        return ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--status", action="store_true", help="so diz o que faria")
@@ -361,11 +402,34 @@ def main() -> int:
             registrar("aguardando: " + motivo)
         return 0
 
+    # TRAVA (22/10/2026): em 22/10 uma rodada pedida a mao (11:48) ainda corria
+    # quando a SC7 do dia chegou e o Agendador disparou a sua (12:00) por cima --
+    # duas ATUALIZAR_PAINEL.cmd ao mesmo tempo, e uma morreu no meio. Antes de
+    # comecar, procura qualquer rodada viva (cmd do painel, associador ou
+    # gerador) e, se houver, so registra e espera a proxima passada.
+    viva = rodada_em_andamento()
+    if viva:
+        msg = f"outra rodada ja esta em andamento ({viva}); espero ela terminar"
+        if estado.get("ultimo_motivo") != msg:
+            estado["ultimo_motivo"] = msg
+            gravar_estado(estado)
+            registrar("aguardando: " + msg)
+        return 0
+
     inicio = agora()
     estado["ultimo_motivo"] = "rodando"
     estado["rodando_desde"] = inicio.isoformat(timespec="seconds")
     gravar_estado(estado)
     registrar("DISPARANDO ATUALIZAR_PAINEL.cmd -- " + motivo)
+    LOG_RODADAS.mkdir(parents=True, exist_ok=True)
+    avisar_na_tela({
+        "status": "rodando",
+        "titulo": "PAINEL ANÁLISE DE BOLETOS ATUALIZANDO...",
+        "linhas": [["Começou", f"{inicio:%d/%m/%Y às %H:%M}"],
+                   ["", "Roda sem janela (Itaú, associação, painel, alertas e publicação)."],
+                   ["", "Ao terminar aparece CONCLUÍDO ou ERRO aqui."]],
+        "detalhes": str(LOG),
+    })
 
     t0 = time.monotonic()
     codigo = rodar_painel()
@@ -412,6 +476,7 @@ def main() -> int:
         registrar(f"TERMINOU COM ERRO (codigo {codigo}) em {dur_txt}. {resto}")
         avisar_na_tela({
             "status": "erro",
+            "detalhes": str(getattr(rodar_cmd, "ultimo_log", LOG)),
             "titulo": "PAINEL ANÁLISE DE BOLETOS NÃO FOI ATUALIZADO",
             "linhas": [
                 ["Erro", f"código {codigo} às {agora():%H:%M} ({dur_txt})"],
