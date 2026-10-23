@@ -206,7 +206,7 @@ ORDEM_SITUACAO = {SEM: 0, FORA: 1, CONFERIR: 2, AGRUPADO_NF: 3, AGRUPADO_PC: 4,
 # agrupada e as possibilidades são calculados sobre as 781, como antes -- só a
 # saída encolhe. Quantas saíram vai no resumo (`lancadas_fora`), nunca calado.
 # Para voltar a ver tudo: False.
-SO_NAO_LANCADAS = True
+SO_NAO_LANCADAS = False  # 23/10/2026: lancadas voltam, com filtro "Lancada na SF1" (pedido dele)
 
 # ------------------------------------------------------------------- extracao
 # Rotulo FORTE: e a nossa ordem de compra, escrita por extenso ou abreviada.
