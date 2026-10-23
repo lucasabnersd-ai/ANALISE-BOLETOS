@@ -168,15 +168,30 @@ def achar_sefaz() -> Path | None:
     return p if p.is_file() else None
 
 
+def achar_sc1() -> Path | None:
+    """A SC1.xlsx (BASES GENERICOS), gravada pelo VIGIA BASES GENERICOS desde
+    23/10/2026. O painel le ela no --base-sc1 (quem solicitou o pedido)."""
+    p = bases_genericos() / "SC1.xlsx"
+    return p if p.is_file() else None
+
+
+def achar_avulsas() -> dict[str, Path]:
+    """Bases que NAO abrem o dia, mas com dado novo depois da rodada de hoje
+    fazem o painel rodar de novo (regra B): SEFAZ e SC1."""
+    achadas = {"SEFAZ": achar_sefaz(), "SC1": achar_sc1()}
+    return {n: p for n, p in achadas.items() if p}
+
+
 def situacao() -> tuple[bool, str, dict]:
     """(pode_rodar, motivo, info).
 
     Tres jeitos de rodar (o resto espera):
       A. REGRA DO DIA: SC7, SF1 e SE2 gravadas HOJE, as tres depois da ultima
          rodada boa, com pelo menos um dado novo (inclui a SEFAZ, se mudou).
-      B. SEFAZ (pedido dele 01/10/2026, "COLOQUE A SEFAZ NO GATILHO TAMBEM"):
-         o painel ja rodou hoje com as 3 bases do dia e a SEFAZ.xlsx trouxe
-         DADO NOVO depois disso -> roda de novo. Ela sozinha nao abre o dia:
+      B. SEFAZ (pedido dele 01/10/2026, "COLOQUE A SEFAZ NO GATILHO TAMBEM")
+         e SC1 (23/10/2026, "ajuste ela pra conversar com os gatilhos"):
+         o painel ja rodou hoje com as 3 bases do dia e uma delas trouxe
+         DADO NOVO depois disso -> roda de novo. Sozinhas nao abrem o dia:
          sem as 3 de hoje continua esperando.
       C. NOVA TENTATIVA: a ultima rodada deu erro (ate TENTATIVAS por dia) ->
          repete com as mesmas bases, sem exigir que as 3 sejam salvas de novo.
@@ -188,13 +203,11 @@ def situacao() -> tuple[bool, str, dict]:
     faltando = [n for n, p in bases.items() if p is None]
     if faltando:
         return False, "nao achei a base: " + ", ".join(faltando), {}
-    sefaz = achar_sefaz()
+    avulsas = achar_avulsas()
 
     datas = {n: datetime.fromtimestamp(p.stat().st_mtime) for n, p in bases.items()}
-    data_sefaz = datetime.fromtimestamp(sefaz.stat().st_mtime) if sefaz else None
-    info = {"bases": {n: d.isoformat(timespec="seconds") for n, d in datas.items()}}
-    if data_sefaz:
-        info["bases"]["SEFAZ"] = data_sefaz.isoformat(timespec="seconds")
+    datas_avulsas = {n: datetime.fromtimestamp(p.stat().st_mtime) for n, p in avulsas.items()}
+    info = {"bases": {n: d.isoformat(timespec="seconds") for n, d in {**datas, **datas_avulsas}.items()}}
     resumo = " | ".join(f"{n} {hhmm(datetime.fromisoformat(d))}" for n, d in info["bases"].items())
 
     velhas = [n for n, d in datas.items() if d.date() != hoje]
@@ -205,12 +218,8 @@ def situacao() -> tuple[bool, str, dict]:
     if falhas >= TENTATIVAS:
         return False, f"ja deu erro {falhas} vezes hoje; parei de tentar (rode o ATUALIZAR_PAINEL.cmd a mao)", info
 
-    envolvidas = dict(bases)
-    if sefaz:
-        envolvidas["SEFAZ"] = sefaz
-    todas_datas = dict(datas)
-    if data_sefaz:
-        todas_datas["SEFAZ"] = data_sefaz
+    envolvidas = {**bases, **avulsas}
+    todas_datas = {**datas, **datas_avulsas}
 
     recentes = [n for n, d in todas_datas.items() if agora() - d < timedelta(minutes=ESTAVEL_MIN)]
     if recentes:
@@ -233,15 +242,16 @@ def situacao() -> tuple[bool, str, dict]:
 
     pendentes = [n for n, d in datas.items() if ultima_ok and d <= ultima_ok]
     if pendentes:
-        # B. as 3 de hoje ja foram usadas numa rodada de HOJE; so a SEFAZ manda.
-        if (ultima_ok and ultima_ok.date() == hoje and data_sefaz
-                and data_sefaz > ultima_ok and "SEFAZ" in info["novas"]):
-            return True, f"SEFAZ com dado novo depois da rodada de {hhmm(ultima_ok)} ({resumo})", info
+        # B. as 3 de hoje ja foram usadas numa rodada de HOJE; so SEFAZ/SC1 mandam.
+        mandam = [n for n, d in datas_avulsas.items()
+                  if ultima_ok and ultima_ok.date() == hoje and d > ultima_ok and n in info["novas"]]
+        if mandam:
+            return True, f"{', '.join(mandam)} com dado novo depois da rodada de {hhmm(ultima_ok)} ({resumo})", info
         if len(pendentes) == 3:
             return False, f"painel ja atualizado as {hhmm(ultima_ok)} com as 3 bases de hoje ({resumo})", info
         return False, (
             f"esperando {', '.join(pendentes)} de novo: as 3 precisam ser atualizadas "
-            f"depois da ultima rodada ({hhmm(ultima_ok)}) -- ou a SEFAZ com dado novo -- {resumo}"
+            f"depois da ultima rodada ({hhmm(ultima_ok)}) -- ou a SEFAZ/SC1 com dado novo -- {resumo}"
         ), info
 
     # A. as 3 sao de hoje e mais novas que a ultima rodada boa.
@@ -378,17 +388,79 @@ def rodada_em_andamento() -> str:
         return ""
 
 
+# UMA PASSADA POR VEZ (23/10/2026): alem da tarefa de 10 min, o VIGIA PAINEIS chama este arquivo assim que uma base e
+# gravada. Duas passadas no mesmo minuto passariam as duas pela rodada_em_andamento() (o Itau vem antes do cmd do
+# painel e nao aparece nela) e o painel rodaria dobrado. A 2a passada sai calada; a trava de processo morto e ignorada.
+VEZ = DADOS / "gatilho_passada.lock"
+
+
+def pid_vivo(pid: int) -> bool:
+    import ctypes
+    h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    codigo = ctypes.c_ulong()
+    ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(codigo))
+    ctypes.windll.kernel32.CloseHandle(h)
+    return codigo.value == 259                                         # STILL_ACTIVE
+
+
+def pegar_vez() -> bool:
+    DADOS.mkdir(parents=True, exist_ok=True)
+    for _ in range(2):
+        try:
+            fd = os.open(str(VEZ), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                pid = int(VEZ.read_text(encoding="utf-8").split()[0])
+            except (OSError, ValueError, IndexError):
+                pid = 0
+            try:
+                idade = time.time() - VEZ.stat().st_mtime
+            except OSError:
+                continue
+            if (pid and pid_vivo(pid)) or (not pid and idade < 30):
+                return False
+            try:
+                VEZ.unlink()                                # de passada que morreu
+            except OSError:
+                return False
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(f"{os.getpid()} {agora():%d/%m/%Y %H:%M:%S}")
+        return True
+    return False
+
+
+def soltar_vez() -> None:
+    try:
+        if VEZ.read_text(encoding="utf-8").split()[0] == str(os.getpid()):
+            VEZ.unlink()
+    except (OSError, IndexError):
+        pass
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--status", action="store_true", help="so diz o que faria")
     args = ap.parse_args()
 
-    pode, motivo, info = situacao()
-    estado = ler_estado()
-
     if args.status:
+        pode, motivo, info = situacao()
         print(("VAI RODAR: " if pode else "NAO RODA: ") + motivo)
         return 0
+
+    if not pegar_vez():
+        return 0
+    try:
+        return passada()
+    finally:
+        soltar_vez()
+
+
+def passada() -> int:
+    pode, motivo, info = situacao()
+    estado = ler_estado()
 
     if not pode:
         # Rodada manual: marca como feita para nao voltar a perguntar o dia todo.
