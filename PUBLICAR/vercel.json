@@ -1,4 +1,6 @@
 {
+  "buildCommand": "node -e \"require('fs').writeFileSync('./publicado.json', JSON.stringify({ publicado_em: new Date().toISOString() }))\"",
+  "outputDirectory": ".",
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
     {
