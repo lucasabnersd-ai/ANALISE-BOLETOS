@@ -314,17 +314,47 @@
       ? 'Aperte F5 no painel antes de continuar: o que for feito na versão anterior NÃO será salvo.'
       : 'Aperte F5 no painel para ver a versão nova.');
   }
-  function mostrarRecado(t) {
+  // fixo = recado que ensina o que fazer: fica ate clicar nele (no maximo 40 s)
+  function mostrarRecado(t, fixo) {
     if (!recado || !recado.isConnected) {
-      recado = el('div', 'position:fixed;left:54px;bottom:14px;z-index:' + Z + ';max-width:min(420px,calc(100% - 70px));' +
-                         'background:#1f2d2c;color:#ffffff;border-radius:8px;padding:8px 12px;font:13px/1.35 ' + FONTE +
-                         ';box-shadow:0 6px 18px rgba(0,0,0,.25)');
+      recado = el('div', 'position:fixed;left:54px;bottom:14px;z-index:' + Z + ';max-width:min(440px,calc(100% - 70px));' +
+                         'background:#1f2d2c;color:#ffffff;border-radius:8px;padding:9px 12px;font:13px/1.4 ' + FONTE +
+                         ';box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer');
+      recado.setAttribute('role', 'status');
+      recado.title = 'Clique para fechar';
+      recado.addEventListener('click', function () { if (recado) recado.remove(); });
       document.body.appendChild(recado);
       if (sino) recado.style.bottom = (parseInt(sino.style.bottom, 10) + 2 || 14) + 'px';
     }
     recado.textContent = t;
     clearTimeout(recadoT);
-    recadoT = setTimeout(function () { if (recado) recado.remove(); }, 7000);
+    recadoT = setTimeout(function () { if (recado) recado.remove(); }, fixo ? 40000 : 7000);
+  }
+  // 23/10/2026 ("ESSE BOTAO NAO FUNCIONA"): o clique no sino SEMPRE responde. Sem permissao (a pergunta do navegador nao apareceu,
+  // foi fechada ou esta bloqueada) ele ensina o caminho; ao ligar manda um aviso de TESTE e, se o Windows nao mostrar em 5 s,
+  // diz onde ligar as notificacoes do navegador no Windows.
+  function ensinarPermissao() {
+    mostrarRecado('O navegador não liberou os avisos deste painel. Clique no cadeado ao lado do endereço > Permissões do site > ' +
+                  'Notificações > Permitir. Depois clique no sino de novo.', true);
+  }
+  function windowsNaoMostrou() {
+    mostrarRecado('Aviso LIGADO, mas o Windows não mostrou o aviso de teste. Confira em Configurações do Windows > Sistema > ' +
+                  'Notificações: o navegador (Microsoft Edge ou Google Chrome) tem de estar ligado e o "Não perturbe" desligado.', true);
+  }
+  function testarAviso() {
+    var mostrou = false;
+    try {
+      var n = new Notification('Pronto: aviso de ' + nome() + ' ligado', {
+        body: 'Teste. Quando este painel for atualizado, o Windows avisa assim.', tag: 'teste-' + CFG.painel, icon: icone()
+      });
+      n.onshow = function () {
+        mostrou = true;
+        mostrarRecado('Aviso no Windows LIGADO para ' + nome() + ': o aviso de teste apareceu no canto da tela.');
+      };
+      n.onerror = function () { if (!mostrou) windowsNaoMostrou(); };
+      n.onclick = function () { try { window.focus(); } catch (e) { /* ja na frente */ } n.close(); };
+      setTimeout(function () { if (!mostrou) windowsNaoMostrou(); }, 5000);
+    } catch (e) { windowsNaoMostrou(); }
   }
   function desenharSino() {
     if (!sino) return;
@@ -346,8 +376,11 @@
       return;
     }
     if (Notification.permission === 'denied') {
-      mostrarRecado('O navegador está bloqueando os avisos deste painel. Libere no cadeado ao lado do endereço: Notificações > Permitir. Depois clique no sino de novo.');
+      ensinarPermissao();
       return;
+    }
+    if (Notification.permission === 'default') {
+      mostrarRecado('Confirme no navegador: "Permitir" notificações deste painel (a pergunta aparece perto do endereço).', true);
     }
     var feito = false;
     function depois(p) {
@@ -356,9 +389,9 @@
       if (p === 'granted') {
         guardar(CH_SINO, '1');
         mostrarRecado('Aviso no Windows LIGADO: quando ' + nome() + ' for atualizado, o Windows avisa (com o painel aberto).');
-        notificar('Pronto: aviso de ' + nome() + ' ligado', 'Quando este painel for atualizado, o Windows avisa aqui.');
+        testarAviso();
       } else {
-        mostrarRecado('Sem permissão do navegador: o aviso no Windows continua desligado.');
+        ensinarPermissao();
       }
       desenharSino();
     }
