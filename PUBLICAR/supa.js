@@ -645,7 +645,7 @@
       return mostrarLogin(e.message);
     }
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },
+      auth: { persistSession: true, storage: window.sessionStorage /* 27/10/2026: sessao so desta aba -- o F5 nao derruba o login do HUB; fechar a aba encerra */, autoRefreshToken: true, detectSessionInUrl: false },
     });
     window.__SB_PAINEL__ = sb;
 
