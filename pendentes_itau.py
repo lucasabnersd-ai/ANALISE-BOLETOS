@@ -201,14 +201,25 @@ def ler_planilha(base: Path) -> list[dict]:
     Duplicata dentro do MESMO arquivo (a pessoa colou o bloco duas vezes) segue
     a regra do resto do painel: vale a PRIMEIRA aparicao.
     """
-    wb, temporaria = _abrir(base)
-    try:
-        ws = wb[wb.sheetnames[0]]
-        brutas = list(ws.iter_rows(values_only=True))
-    finally:
-        wb.close()
-        if temporaria:
-            shutil.rmtree(temporaria, ignore_errors=True)
+    # 27/10/2026: os Excel exportados do DDA (pasta BOLETOS VENCIDOS A VENCER)
+    # substituem o copiar e colar quando sao mais novos que ele -- o copiar e
+    # colar estava parado desde 27/08. Ver dda_exportado.py.
+    import dda_exportado
+    if dda_exportado.arquivos_do_dia() and (
+            not base.exists() or dda_exportado.mais_nova() > base.stat().st_mtime):
+        brutas = dda_exportado.linhas_brutas()
+        print(f"           DDA: lendo a exportacao do banco "
+              f"({len(dda_exportado.arquivos_do_dia())} arquivo(s) em "
+              f"{dda_exportado.PASTA.name}) no lugar de {base.name}")
+    else:
+        wb, temporaria = _abrir(base)
+        try:
+            ws = wb[wb.sheetnames[0]]
+            brutas = list(ws.iter_rows(values_only=True))
+        finally:
+            wb.close()
+            if temporaria:
+                shutil.rmtree(temporaria, ignore_errors=True)
 
     if not brutas:
         return []

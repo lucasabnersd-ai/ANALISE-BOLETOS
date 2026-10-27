@@ -179,6 +179,13 @@ echo   PAINEL ANALISE DE BOLETOS
 echo ============================================================
 echo.
 
+rem 27/10/2026: os Excel exportados do DDA (pasta BOLETOS VENCIDOS A VENCER) viram
+rem a base que o associador le como fonte DDA_EXPORTADO, e a aba Boletos em Aberto
+rem DDA passa a le-los direto (pendentes_itau.py). Sem arquivo, segue como antes.
+echo [0/10] %TIME:~0,8% Lendo os Excel exportados do DDA (BOLETOS VENCIDOS A VENCER)...
+"%PYTHON%" %PYARGS% "%AQUI%dda_exportado.py"
+echo.
+
 if not defined GERAR_BASE (
   echo [1/10] %TIME:~0,8% Base NAO regerada ^(/sembase^): usando a planilha como ela esta.
   echo.
