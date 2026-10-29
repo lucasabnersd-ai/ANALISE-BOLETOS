@@ -531,6 +531,14 @@ def _posicoes(cabecalho: list, colunas: list, onde: str) -> list[tuple]:
         if i < len(rotulos) and rotulos[i] == esperado:
             achadas.append((i, i, apelido))
             continue
+        # 29/10/2026: a SC7 veio com o titulo da coluna A em BRANCO (" ") e os
+        # dados de filial (003001...) no lugar de sempre -- a aba NF x Pedido
+        # inteira caiu. Titulo vazio NA POSICAO DECLARADA da Filial e aceito.
+        if apelido == "filial" and i < len(rotulos) and not rotulos[i].strip():
+            print(f"AVISO: {onde}: coluna {i + 1} sem titulo -- lida como 'Filial' "
+                  f"(posicao de sempre).", file=sys.stderr)
+            achadas.append((i, i, apelido))
+            continue
         janela = [j for j in range(max(0, i - DESLOCAMENTO_MAXIMO),
                                    min(len(rotulos), i + DESLOCAMENTO_MAXIMO + 1))
                   if rotulos[j] == esperado]
