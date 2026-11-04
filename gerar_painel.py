@@ -322,7 +322,7 @@ COMPACTA_FUTUROS = [
     ("Vencimento",          "boleto", "",           7),
     ("Empresa/Origem",      "boleto", "",          12),
     ("Fonte Boleto",        "boleto", "",           7),
-    ("Arquivo/Observação",  "boleto", "",          12),
+    # 04/11/2026: coluna Arquivo/Observação removida (pedido dele).
     ("@tratativa",          "",       "",           4.5),
     ("Linha Digitável",     "",       "",           4.5),
 ]
@@ -348,6 +348,8 @@ COMPACTA_PENDENTES = [
     ("A Pagar",          "boleto", "VALOR",      7),
     ("@delta_valor",     "delta",  "VALOR",      7),
     ("Tipo de Boleto",   "boleto", "",           9),
+    # 04/11/2026: codigo de barras dos Excel do DDA; clicar no valor copia.
+    ("Código de Barras", "boleto", "",          14),
     ("Alerta Fatura",    "",       "",           7),
     ("@tratativa",       "",       "",           4.5),
 ]
@@ -821,7 +823,7 @@ ABAS = {
         # motivo pelo qual "Fornecedor" nao e copiavel na aba de nao associadas).
         "nao_copiar": {"Beneficiário"},
         # O que se cola no TOTVS para procurar o titulo deste boleto.
-        "copiar_extra": {"Nº Doc.": "", "CPF/CNPJ": ""},
+        "copiar_extra": {"Nº Doc.": "", "CPF/CNPJ": "", "Código de Barras": ""},
         # Os rotulos do resumo mudam: aqui nao ha titulo, entao "boleto diferente
         # do titulo" nao quer dizer nada. `None` esconde o item.
         "resumo": {"alerta": "com aviso do banco",
@@ -1225,7 +1227,10 @@ def montar_colunas(cabecalho: list[str], usadas: set[str]) -> list[dict]:
             "largura": 58 if rotulo == COLUNA_CHECK else LARGURAS.get(rotulo, LARGURA_PADRAO),
         }
         for rotulo in cabecalho
-        if rotulo and rotulo not in IGNORAR and (rotulo in usadas or rotulo == COLUNA_CHECK)
+        # 04/11/2026: IGNORAR so barra coluna que a aba NAO pediu. A aba Boletos em
+        # Aberto DDA declara 'Codigo de Barras' no COMPACTA_PENDENTES (pedido dele);
+        # nas outras abas a regra antiga (so linha digitavel) continua.
+        if rotulo and (rotulo in usadas or rotulo == COLUNA_CHECK)
     ]
 
 

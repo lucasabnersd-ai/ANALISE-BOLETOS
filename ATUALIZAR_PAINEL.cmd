@@ -1,6 +1,10 @@
 @echo off
 setlocal
 chcp 65001 >nul
+rem 04/11/2026: sem janela (gatilho) a saida vai para arquivo e o Python cai na
+rem pagina 1252 -- um "⚠" num print derrubou a montagem. UTF-8 sempre.
+set "PYTHONIOENCODING=utf-8"
+set "PYTHONUTF8=1"
 
 rem ATENCAO: `shift`, mais abaixo, desloca TAMBEM o %0 -- depois de ler os
 rem argumentos o %~dp0 vira a pasta do argumento, e nao a deste .cmd. Por isso a

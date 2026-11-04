@@ -62,6 +62,9 @@ CNPJ = "CPF/CNPJ"
 ATE_VENC = "Até Venc."
 A_PAGAR = "A Pagar"
 TIPO = "Tipo de Boleto"
+# 04/11/2026: so existe nos Excel exportados do DDA (dda_exportado.py); o copiar
+# e colar antigo nao tinha. Copiavel no painel, clicando no proprio valor.
+BARRAS = "Código de Barras"
 # A observacao da planilha vira o ALERTA do painel: e sempre um aviso do banco
 # ("este boleto sofreu alteracao/instrucao por parte do beneficiario"), o mesmo
 # papel que a coluna de alerta cumpre nas outras abas.
@@ -72,7 +75,7 @@ VISTO = "Visto em"
 CHAVE = "Chave"
 
 CABECALHO = [CHAVE, SITUACAO, ENTROU, VISTO, PAGADOR, BENEFICIARIO, CNPJ,
-             DOCUMENTO, VENCIMENTO, ATE_VENC, A_PAGAR, TIPO, ALERTA]
+             DOCUMENTO, VENCIMENTO, ATE_VENC, A_PAGAR, TIPO, ALERTA, BARRAS]
 
 # Colunas da planilha de origem, por nome normalizado. A planilha e colada a
 # mao: aceitar variacoes de acento/maiuscula evita quebrar por um detalhe de
@@ -89,6 +92,7 @@ ORIGEM = [
     (A_PAGAR,      ("a pagar", "valor a pagar", "total a pagar")),
     (TIPO,         ("tipo de boleto", "tipo boleto", "tipo")),
     (ALERTA,       ("observacoes", "observacao", "obs", "obs.")),
+    (BARRAS,       ("codigo de barras", "cod. barras", "codigo barras")),
 ]
 
 # Textos curtos de proposito: eles viram SELO na tabela, e a celula corta o que
@@ -181,6 +185,10 @@ def _mapear_colunas(cabecalho: list) -> dict:
     posicoes = {}
     for indice, (destino, aliases) in enumerate(ORIGEM):
         achado = next((rotulos[a] for a in aliases if a in rotulos), None)
+        # sem coluna de codigo de barras (copiar e colar antigo): fica vazio, e
+        # nao cai na posicao padrao -- la mora a Observacao.
+        if achado is None and destino == BARRAS:
+            achado = 10 ** 6
         posicoes[destino] = achado if achado is not None else indice
     return posicoes
 
@@ -381,6 +389,7 @@ def montar_linhas(historico: dict) -> list[tuple]:
             A_PAGAR: linha.get(A_PAGAR, ""),
             TIPO: linha.get(TIPO, ""),
             ALERTA: linha.get(ALERTA, ""),
+            BARRAS: linha.get(BARRAS, ""),
         })
 
     # vencimento mais antigo primeiro (todos aqui estao pendentes)

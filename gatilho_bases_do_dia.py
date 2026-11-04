@@ -299,6 +299,8 @@ def rodar_cmd(cmd: Path, sem_pausa_por_nul: bool = False, titulo: str = "RODANDO
     env = dict(os.environ)
     env["PAINEL_SEM_PAUSA"] = "1"        # sem "pressione qualquer tecla"
     env["ASSOCIADOR_SEM_PAUSA"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"   # sem janela: saida em arquivo, sempre UTF-8 (04/11)
+    env["PYTHONUTF8"] = "1"
     LOG_RODADAS.mkdir(parents=True, exist_ok=True)
     nome = f"{agora():%Y%m%d_%H%M%S}_{cmd.stem}.log"
     log = LOG_RODADAS / nome

@@ -147,9 +147,16 @@ def linhas_brutas() -> list[tuple]:
     """Cabecalho + linhas no layout do DDA que o pendentes_itau.py ja le.
     Valores em texto "R$ 1.440,00", igual ao copiar e colar: a CHAVE do boleto
     usa os digitos do valor, e numero cru (1440.0) mudaria a chave de todos."""
-    cab = CAMPOS[:10]
+    cab = CAMPOS[:11]
     saida = [tuple(cab)]
+    # 04/11/2026, pedido dele: "deixe somente os boletos VENCIDOS da minha base"
+    # nesta aba (Boletos em Aberto DDA). Os A VENCER seguem so para o associador
+    # (gerar_base_associador), que alimenta "Boletos Nao Associados a Vencer".
+    hoje = dt.date.today()
     for reg in boletos():
+        venc = _data(reg["Venc."])
+        if venc is None or venc >= hoje:
+            continue
         linha = []
         for c in cab:
             v = reg[c]
