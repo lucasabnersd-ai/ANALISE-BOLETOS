@@ -468,6 +468,15 @@
     marcasPorUuid = {};
     (m.data || []).forEach(function (r) { marcasPorUuid[r.uuid] = r; });
 
+    // VALIDADAS_ACOMP (05/11/2026, "ESSAS NFS VALIDADAS IRAO GERAR UM MARCADOR VERDE EM TODOS OS TITULOS DA CLASSIFICACAO
+    // ... VA PELO UUID"): as NFs VALIDADAS no painel ACOMPANHAMENTO CLASSIFICACAO, pela funcao do banco com a MESMA trava das
+    // tabelas daqui -> {CAMPO UUID: {p: quem, e: quando, t: texto}}. Falhou = o painel segue igual, so sem o marcador.
+    var validacoes = {};
+    try {
+      var rv = await sb.rpc("analise_boletos_validacoes");
+      if (!rv.error && rv.data && typeof rv.data === "object") validacoes = rv.data;
+    } catch (e) { /* sem o marcador */ }
+
     var metas = {}, porAba = {};
     metaRows.forEach(function (row) {
       var d = row.dados || {};
@@ -517,6 +526,7 @@
       // as marcacoes inteiras: e delas que o painel monta quem esta tratado,
       // inclusive das abas que ainda nao foram abertas
       marcacoes: m.data || [],
+      validacoes: validacoes,
     };
   }
 

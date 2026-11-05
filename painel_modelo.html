@@ -508,6 +508,9 @@ table.conferencia tr.elo-fim td{border-bottom:2px solid var(--elo)}
   font-variant-numeric:tabular-nums; flex:none}
 .elo-chip.fora{border-style:dashed; opacity:.8}
 .elo-chip.abrir{cursor:pointer}
+/* VALIDADAS_ACOMP (05/11/2026): NF validada no ACOMPANHAMENTO CLASSIFICACAO -- verde da marca, letra branca (6,6:1) */
+.selo-validada{display:inline-flex; align-items:center; flex:0 0 auto; font-size:9px; font-weight:800; letter-spacing:.03em;
+  padding:1px 6px; margin-right:4px; border-radius:999px; background:#2f6b4f; color:#fff; white-space:nowrap; cursor:help}
 .elo-chip.abrir:hover{opacity:1; background:var(--elo); color:#fff}
 /* A célula da Origem passa a ter dois filhos. O flex vai num <span> DENTRO da
    célula, nunca no próprio `td`: `display:flex` num `td` o tira do modelo de
@@ -2015,6 +2018,20 @@ function chaveNota(r){
    renomeia (ja renomeou uma vez, em 14/08/2026). O prefixo "SF1:" e o que
    amarra a marcacao no banco -- esse nao muda. */
 const daClassificacao = r => String(r.uuid || "").startsWith("SF1:");
+/* VALIDADAS_ACOMP (05/11/2026, "ESSAS NFS VALIDADAS IRAO GERAR UM MARCADOR VERDE EM TODOS OS TITULOS DA CLASSIFICACAO SINALIZANDO QUE
+   A LARISSA VALIDOU ESSA NF, VA PELO UUID"): a NF marcada como VALIDADA no painel ACOMPANHAMENTO CLASSIFICACAO (tratativa VALIDADO,
+   chave = Campo UUID da SF1). A linha da CLASSIFICACAO aqui tem uuid "SF1:<Campo UUID>" -- casa por ele. Vem do supa.js
+   (dados.validacoes); sem login (dev.html) fica vazio e nada muda. */
+let VALIDADAS = {};
+function validadaDe(r){ return daClassificacao(r) ? (VALIDADAS[String(r.uuid).slice(4).toUpperCase()] || null) : null; }
+function seloValidada(r){
+  const v = validadaDe(r);
+  if (!v) return "";
+  const d = v.e ? new Date(v.e) : null;
+  const quando = d && !isNaN(d) ? d.toLocaleString("pt-BR", {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
+  return `<span class="selo-validada" title="${esc("NF VALIDADA POR " + (v.p || "—") + (quando ? " EM " + quando : "")
+    + (v.t ? "\n" + v.t : "") + "\n(painel ACOMPANHAMENTO CLASSIFICAÇÃO)")}">✔ VALIDADA</span>`;
+}
 
 const SEM_GEMEA = [];
 /* Os uuids da mesma NF do OUTRO lado da aba. Vazio nas abas que nao sao
@@ -2647,6 +2664,11 @@ function celulaCompacta(r, col){
 
   const valor = r.c[col.chave] ?? "";
 
+  /* VALIDADAS_ACOMP: o marcador verde na ORIGEM da linha da CLASSIFICACAO cuja NF foi validada (sem elo; com elo, entra abaixo) */
+  if (col.chave === "origem" && !r._elo && validadaDe(r)){
+    return `<td class="${zona}"><span class="cel-elo">${seloValidada(r)}<span class="txt" title="${esc(valor)}">${esc(valor)}</span></span></td>`;
+  }
+
   /* O selo do elo mora na coluna ORIGEM -- que é, afinal, a coluna que existe
      para dizer de qual lado a linha veio. Não vai na do nº do título (a célula
      inteira lá é o botão de copiar, e qualquer coisa ao lado disputaria o
@@ -2660,7 +2682,7 @@ function celulaCompacta(r, col){
     return `<td class="${zona}"><span class="cel-elo"><span class="elo-chip${
       fora ? " fora" : ""}${abrir ? " abrir" : ""}" ${abrir ? 'data-elo-abrir="1"' : ""}
       title="${esc(textoDoElo(r) + (abrir ? "\nClique para mostrar as duas — apaga o filtro de Origem." : ""))
-      }">🔗${fora ? "" : r._eloQtd}</span><span class="txt"
+      }">🔗${fora ? "" : r._eloQtd}</span>${seloValidada(r)}<span class="txt"
       title="${esc(valor)}">${esc(valor)}</span></span></td>`;
   }
 
@@ -4237,6 +4259,7 @@ function desenharTudoDaAba(){
 
 function iniciar(dados){
   DADOS = dados;
+  VALIDADAS = (dados && dados.validacoes) || {};   /* VALIDADAS_ACOMP */
   // Com login o banco e a fonte unica: zerar antes evita que um espelho velho
   // deste navegador ressuscite o que outra pessoa desmarcou. O que ainda nao
   // chegou la volta logo abaixo, pela fila.
