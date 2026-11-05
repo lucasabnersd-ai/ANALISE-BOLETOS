@@ -734,6 +734,10 @@ ABAS = {
     "correspondencias": {
         "planilha": ABA_CORRESPONDENCIAS,
         "nome": "Títulos Não Associados",
+        # ⚠ DESLIGADA em 05/11/2026 ("EXCLUA A ABA TITULOS NAO ASSOCIADOS"): continua montada e ENVIADA, so que oculta -- a lista de
+        # abas do painel sai das linhas `#meta:` do Postgres; e este `oculta` que a tira da tela (mesmo desenho da "cruzamento").
+        # Para voltar: apagar esta linha.
+        "oculta": True,
         "cor": "roxo",
         "compacta": COMPACTA_CORRESP,
         "confrontos": {"Valor Boleto (R$)": ("Valor Título (R$)", "moeda"),

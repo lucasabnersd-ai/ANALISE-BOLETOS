@@ -508,9 +508,13 @@ table.conferencia tr.elo-fim td{border-bottom:2px solid var(--elo)}
   font-variant-numeric:tabular-nums; flex:none}
 .elo-chip.fora{border-style:dashed; opacity:.8}
 .elo-chip.abrir{cursor:pointer}
-/* VALIDADAS_ACOMP (05/11/2026): NF validada no ACOMPANHAMENTO CLASSIFICACAO -- verde da marca, letra branca (6,6:1) */
-.selo-validada{display:inline-flex; align-items:center; flex:0 0 auto; font-size:9px; font-weight:800; letter-spacing:.03em;
-  padding:1px 6px; margin-right:4px; border-radius:999px; background:#2f6b4f; color:#fff; white-space:nowrap; cursor:help}
+/* VALIDADAS_ACOMP2 (05/11/2026): indicador da validacao ao lado do UUID -- verde VALIDADO, vermelho RETORNAR, ambar PENDENTE */
+.uuid-ind{display:inline-flex; align-items:center; gap:4px}
+.ind-val{display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:19px; height:19px; border-radius:50%;
+  font-size:11px; font-weight:900; line-height:1; cursor:help; box-sizing:border-box}
+.ind-val.v-ok{background:#2f6b4f; color:#fff}
+.ind-val.v-ret{background:#9b2c2c; color:#fff}
+.ind-val.v-pend{background:#f5efe4; color:#6b4510; border:1px solid #d9c29a; font-size:10px}
 .elo-chip.abrir:hover{opacity:1; background:var(--elo); color:#fff}
 /* A célula da Origem passa a ter dois filhos. O flex vai num <span> DENTRO da
    célula, nunca no próprio `td`: `display:flex` num `td` o tira do modelo de
@@ -2022,15 +2026,23 @@ const daClassificacao = r => String(r.uuid || "").startsWith("SF1:");
    A LARISSA VALIDOU ESSA NF, VA PELO UUID"): a NF marcada como VALIDADA no painel ACOMPANHAMENTO CLASSIFICACAO (tratativa VALIDADO,
    chave = Campo UUID da SF1). A linha da CLASSIFICACAO aqui tem uuid "SF1:<Campo UUID>" -- casa por ele. Vem do supa.js
    (dados.validacoes); sem login (dev.html) fica vazio e nada muda. */
-let VALIDADAS = {};
-function validadaDe(r){ return daClassificacao(r) ? (VALIDADAS[String(r.uuid).slice(4).toUpperCase()] || null) : null; }
-function seloValidada(r){
-  const v = validadaDe(r);
-  if (!v) return "";
-  const d = v.e ? new Date(v.e) : null;
+let VALIDADAS = {}, VALIDACOES_OK = false;
+/* VALIDADAS_ACOMP2 (05/11/2026, "AJUSTE PARA AS NFS VALIDADAS PELA LARISSA APARECEREM COM O INDICADOR DO LADO DO UUID ... COLOQUE ICONES E
+   CORES DE PENDENTE, VALIDADO E RETORNAR"): o indicador AO LADO DO BOTAO UUID, so nas linhas da CLASSIFICACAO. VALIDADAS = {CAMPO UUID:
+   {s, p, e, t}} com as 3 situacoes; sem entrada ou EM TRATATIVA = PENDENTE. Se a leitura falhou (VALIDACOES_OK falso), nao mostra nada. */
+const IND_VAL = {
+  "VALIDADO":                  {ico: "✔", cls: "v-ok",  rot: "NF VALIDADA"},
+  "RETORNAR PEDIDO DE COMPRA": {ico: "↩", cls: "v-ret", rot: "RETORNAR PEDIDO DE COMPRA"},
+};
+function indicadorValidacao(r){
+  if (!VALIDACOES_OK || !daClassificacao(r)) return "";
+  const v = VALIDADAS[String(r.uuid).slice(4).toUpperCase()] || null, info = v ? IND_VAL[v.s] : null;
+  const d = v && v.e ? new Date(v.e) : null;
   const quando = d && !isNaN(d) ? d.toLocaleString("pt-BR", {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
-  return `<span class="selo-validada" title="${esc("NF VALIDADA POR " + (v.p || "—") + (quando ? " EM " + quando : "")
-    + (v.t ? "\n" + v.t : "") + "\n(painel ACOMPANHAMENTO CLASSIFICAÇÃO)")}">✔ VALIDADA</span>`;
+  const quem = v ? " POR " + (v.p || "—") + (quando ? " EM " + quando : "") + (v.t ? "\n" + v.t : "") : "";
+  const dica = info ? info.rot + quem : "PENDENTE DE VALIDAÇÃO" + (v ? " — EM TRATATIVA" + quem : " — a NF ainda não foi validada");
+  return `<span class="ind-val ${info ? info.cls : "v-pend"}" title="${esc(dica + "\n(painel ACOMPANHAMENTO CLASSIFICAÇÃO)")}">${
+    info ? info.ico : "⏳"}</span>`;
 }
 
 const SEM_GEMEA = [];
@@ -2664,11 +2676,6 @@ function celulaCompacta(r, col){
 
   const valor = r.c[col.chave] ?? "";
 
-  /* VALIDADAS_ACOMP: o marcador verde na ORIGEM da linha da CLASSIFICACAO cuja NF foi validada (sem elo; com elo, entra abaixo) */
-  if (col.chave === "origem" && !r._elo && validadaDe(r)){
-    return `<td class="${zona}"><span class="cel-elo">${seloValidada(r)}<span class="txt" title="${esc(valor)}">${esc(valor)}</span></span></td>`;
-  }
-
   /* O selo do elo mora na coluna ORIGEM -- que é, afinal, a coluna que existe
      para dizer de qual lado a linha veio. Não vai na do nº do título (a célula
      inteira lá é o botão de copiar, e qualquer coisa ao lado disputaria o
@@ -2682,7 +2689,7 @@ function celulaCompacta(r, col){
     return `<td class="${zona}"><span class="cel-elo"><span class="elo-chip${
       fora ? " fora" : ""}${abrir ? " abrir" : ""}" ${abrir ? 'data-elo-abrir="1"' : ""}
       title="${esc(textoDoElo(r) + (abrir ? "\nClique para mostrar as duas — apaga o filtro de Origem." : ""))
-      }">🔗${fora ? "" : r._eloQtd}</span>${seloValidada(r)}<span class="txt"
+      }">🔗${fora ? "" : r._eloQtd}</span><span class="txt"
       title="${esc(valor)}">${esc(valor)}</span></span></td>`;
   }
 
@@ -2690,8 +2697,11 @@ function celulaCompacta(r, col){
     const copia = r.copia[col.chave] ?? valor;
     // so_botao: UUID e linha digitavel viram um campo enxuto, so de copiar
     if (col.so_botao){
-      return `<td class="acao ${zona}"><button class="botao-copia so ${copia ? "" : "vazio"}" type="button"
-        data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span class="rot">${esc(col.copiar)}</span></button></td>`;
+      const botao = `<button class="botao-copia so ${copia ? "" : "vazio"}" type="button"
+        data-copiar="${esc(copia)}" title="${esc(valor) || "sem valor"}"><span class="rot">${esc(col.copiar)}</span></button>`;
+      /* VALIDADAS_ACOMP2: o indicador da validacao ao lado do botao UUID (so linha da CLASSIFICACAO) */
+      const ind = String(col.copiar || "").toUpperCase() === "UUID" ? indicadorValidacao(r) : "";
+      return `<td class="acao ${zona}">${ind ? `<span class="uuid-ind">${botao}${ind}</span>` : botao}</td>`;
     }
     // o proprio valor e o botao: clicou, copiou (numero do titulo, cod. do fornecedor)
     // ⚠ `lista`: célula com VÁRIOS valores não pode esticar a coluna (ver o CSS).
@@ -4259,7 +4269,8 @@ function desenharTudoDaAba(){
 
 function iniciar(dados){
   DADOS = dados;
-  VALIDADAS = (dados && dados.validacoes) || {};   /* VALIDADAS_ACOMP */
+  VALIDADAS = (dados && dados.validacoes) || {};   /* VALIDADAS_ACOMP2 */
+  VALIDACOES_OK = !!(dados && dados.validacoesOk);
   // Com login o banco e a fonte unica: zerar antes evita que um espelho velho
   // deste navegador ressuscite o que outra pessoa desmarcou. O que ainda nao
   // chegou la volta logo abaixo, pela fila.
