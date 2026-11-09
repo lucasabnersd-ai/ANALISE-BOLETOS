@@ -33,7 +33,7 @@ META = "#meta:"
 
 # As abas que aparecem no painel e nunca ficam vazias num dia normal. Se uma
 # delas faltar ou vier sem linha, a carga NAO sobe (ver main()).
-OBRIGATORIAS = ("associacoes", "correspondencias", "futuros", "pendentes_itau", "pedidos")
+OBRIGATORIAS = ("associacoes", "futuros", "pendentes_itau", "pedidos")   # 09/11: correspondencias saiu (aba oculta desde 05/11)
 
 
 def cabecalho_da_aba(carga: dict, aba: dict, posicao: int) -> dict:
