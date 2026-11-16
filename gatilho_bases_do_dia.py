@@ -365,6 +365,29 @@ def rodar_painel() -> int:
     return rodar_cmd(CMD, titulo="PAINEL ANALISE BOLETOS ATUALIZANDO")
 
 
+# 16/11/2026 ("AJUSTE PARA O SCRIPT DE ATUALIZACAO QUE ATUALIZA O ANALISE BOLETO ATUALIZAR ELA"): a aba ASSOCIACAO BOLETOS
+# (HENRIQUE) e as de boletos vencidos / a vencer moram no painel ACOMPANHAMENTO CLASSIFICACAO e leem DADOS/analise_boletos.json.
+# Assim que a rodada daqui termina bem, chama o atualizador de la na hora (antes ficava esperando o vigia de 30 min). O de la
+# so trabalha se a carga mudou, tem trava propria e testa antes de publicar; se a chamada falhar, o vigia de 30 min continua cobrindo.
+ACOMP = Path(r"C:\Users\lucas\PAINEIS_REPOS\ACOMPCLASSIFICACAO\auto_classificacao.pyw")
+
+
+def atualizar_acomp() -> None:
+    if not ACOMP.is_file():
+        registrar("[ACOMP] auto_classificacao.pyw nao encontrado -- o painel ACOMPANHAMENTO CLASSIFICACAO fica para o vigia de 30 min")
+        return
+    py = Path(sys.executable)
+    pyw = py.with_name("pythonw.exe")
+    try:
+        # DETACHED + NEW_PROCESS_GROUP: o pythonw nao morre quando este processo termina
+        subprocess.Popen([str(pyw if pyw.is_file() else py), str(ACOMP)], cwd=str(ACOMP.parent),
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=0x00000008 | 0x00000200 | 0x08000000, close_fds=True)
+        registrar("[ACOMP] chamei o atualizador do ACOMPANHAMENTO CLASSIFICACAO (aba ASSOCIACAO BOLETOS) -- log em .auto/log.txt de la")
+    except Exception as e:  # noqa: BLE001 -- nunca derruba o gatilho
+        registrar(f"[ACOMP] nao consegui chamar o atualizador ({type(e).__name__}: {e}) -- fica para o vigia de 30 min")
+
+
 def rodada_em_andamento() -> str:
     """Descreve a rodada do painel que estiver viva agora ('' se nenhuma).
 
@@ -526,6 +549,7 @@ def passada() -> int:
         estado["ultimo_motivo"] = "concluido"
         gravar_estado(estado)
         registrar(f"CONCLUIDO em {dur_txt}.")
+        atualizar_acomp()
         avisar_na_tela({
             "status": "ok",
             "titulo": "PAINEL ANÁLISE DE BOLETOS ATUALIZADO",
