@@ -222,7 +222,7 @@ def montar_html(achados: list[dict], resumo: dict, inicio: dt.date, fim: dt.date
              if quantos == 1 else
              f"{quantos} títulos em aberto estão vencendo em dia não útil")
     return f"""<div style="{comuns.FONTE}font-size:11pt;color:#000000;">
-  <p style="margin:0 0 12px 0;">Bom dia, Graziela,</p>
+  <p style="margin:0 0 12px 0;">Bom dia, Henrique,</p>
 
   <p style="margin:0 0 12px 0;">{frase}, somando
   <b>{reais(total)}</b>.</p>

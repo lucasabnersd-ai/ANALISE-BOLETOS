@@ -24,13 +24,13 @@ rem         (RODAR_ASSOCIADOR_BOLETOS.CMD, que no fim dele tambem sincroniza e
 rem         publica o painel BOLETOS-PENDENTES -- os dois saem da mesma rodada
 rem         de associacao, entao ou os dois andam, ou um fica mentindo)
 rem   [2/10] le a base e monta o painel      (gerar_painel.py)
-rem   [3/10] avisa a Graziela se um titulo de AMARRAR ADIANTAMENTO
+rem   [3/10] avisa o Henrique se um titulo de AMARRAR ADIANTAMENTO
 rem         estiver com boleto              (alerta_adiantamento.py)
-rem   [4/10] avisa a Graziela dos titulos em aberto vencendo em sabado,
+rem   [4/10] avisa o Henrique dos titulos em aberto vencendo em sabado,
 rem         domingo ou feriado              (alerta_dia_util.py)
-rem   [5/10] avisa o Rafael e a Graziela dos titulos BOLETO S/C que estao
+rem   [5/10] avisa o Rafael e o Henrique dos titulos BOLETO S/C que estao
 rem         COM linha digitavel e codigo de barras   (alerta_boleto_sc.py)
-rem   [6/10] avisa o Lucas e a Graziela dos titulos com bordero emitido
+rem   [6/10] avisa o Lucas e o Henrique dos titulos com bordero emitido
 rem         e SEM data de baixa            (alerta_bordero.py)
 rem   [7/10] avisa o RAFAEL dos titulos MED/CT dele vencendo ate o fim
 rem         do proximo mes                 (alerta_inclusao.py)
@@ -257,7 +257,7 @@ rem adiantamento JA PAGO -- boleto ligado a ele e sinal de erro: ou a
 rem classificacao esta errada, ou o boleto foi associado ao titulo errado, ou o
 rem fornecedor cobrou o que ja foi adiantado. Nos tres casos alguem paga duas
 rem vezes se ninguem olhar. O painel ja mostrava isso, mas so para quem entra e
-rem procura; aqui a rodada e que procura e avisa a Graziela por e-mail.
+rem procura; aqui a rodada e que procura e avisa o Henrique por e-mail.
 rem
 rem Sem `if not "%CODIGO%"=="0" goto :erro` DE PROPOSITO: o alerta_adiantamento.py
 rem sai 0 sempre que conseguiu ler o painel, e falha de e-mail nao pode derrubar
@@ -290,7 +290,7 @@ rem esta errada, ou os dados do boleto entraram onde nao deviam -- e quem
 rem paga precisa saber qual antes de pagar. So o que esta EM ABERTO, de 32
 rem dias atras a 7 a frente.
 rem
-rem Este vai para o Rafael e a Graziela, com a Gabriella em copia -- e o
+rem Este vai para o Rafael e o Henrique, com a Gabriella em copia -- e o
 rem unico dos tres com CC. Mesma TRAVA DIARIA dos outros dois.
 rem Para repetir de proposito: alerta_boleto_sc.py --forcar
 "%PYTHON%" %PYARGS% "%AQUI%alerta_boleto_sc.py"
@@ -305,7 +305,7 @@ rem dois casos o titulo continua figurando em aberto e pode ser pago de novo.
 rem Dt. Bordero de 01/01/2026 ate hoje, sem DT Baixa. O corte de 2026 foi
 rem pedido por ele em 18/09/2026, depois do primeiro disparo: 2025 fora.
 rem
-rem Este vai para o Lucas e a Graziela (.alerta_bordero_para). Mesma TRAVA
+rem Este vai para o Lucas e o Henrique (.alerta_bordero_para). Mesma TRAVA
 rem DIARIA dos outros tres. Para repetir de proposito:
 rem alerta_bordero.py --forcar
 "%PYTHON%" %PYARGS% "%AQUI%alerta_bordero.py"
@@ -360,7 +360,7 @@ rem NAO vira e-mail o codigo que falha no DV modulo 11 (seria acusar
 rem fornecedor por campo digitado errado na base) nem o convenio cujo campo
 rem de valor e "quantidade de moeda" em vez de dinheiro.
 rem
-rem Vai para o Lucas e a Graziela, com a Gabriella em copia
+rem Vai para o Lucas e o Henrique, com a Gabriella em copia
 rem (.alerta_valor_boleto_para / _copia). Mesma TRAVA DIARIA dos outros.
 rem Para repetir de proposito: alerta_valor_boleto.py --forcar
 "%PYTHON%" %PYARGS% "%AQUI%alerta_valor_boleto.py"

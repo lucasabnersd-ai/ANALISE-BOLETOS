@@ -12,7 +12,7 @@ Aqui mora o que seria copiado entre os dois: destinatario, envio pelo Outlook,
 a TRAVA DIARIA e o calendario de feriados.
 
 ⚠ A TRAVA DIARIA existe porque a rodada do painel roda VARIAS VEZES por dia (e
-agora tambem pela rodada do SE2). Sem ela a Graziela receberia o mesmo e-mail a
+agora tambem pela rodada do SE2). Sem ela o Henrique receberia o mesmo e-mail a
 cada clique, e alerta que chega demais vira alerta que ninguem le. "Diariamente"
 = uma vez por dia, no primeiro que rodar.
 """

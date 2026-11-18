@@ -14,10 +14,10 @@ rem   alerta_bordero.py       titulo com bordero emitido e SEM data de baixa
 rem   alerta_inclusao.py      titulo MED/CT do rafael.lima vencendo na janela
 rem   alerta_valor_boleto.py  boleto em aberto cobrando valor != do titulo
 rem
-rem Os dois primeiros vao para a Graziela. O terceiro (18/09/2026) vai para o
-rem Rafael e a Graziela, com a Gabriella em copia -- destinatarios em
+rem Os dois primeiros vao para o Henrique. O terceiro (18/09/2026) vai para o
+rem Rafael e o Henrique, com a Gabriella em copia -- destinatarios em
 rem .alerta_boleto_sc_para e .alerta_boleto_sc_copia, os dois FORA do repo.
-rem O quarto (18/09/2026) vai para o Lucas e a Graziela (.alerta_bordero_para).
+rem O quarto (18/09/2026) vai para o Lucas e o Henrique (.alerta_bordero_para).
 rem O quinto (21/09/2026) vai para o PROPRIO rafael.lima (.alerta_inclusao_para):
 rem titulo lancado por ele, de prefixo MED e tipo CT, vencendo de 7 dias atras
 rem ate o FIM DO PROXIMO MES -- seguro, plano de saude e concessionaria, que

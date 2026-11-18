@@ -33,7 +33,7 @@ com duas colunas a mais que o e-mail: Vlr. Titulo e Cod. Barras. A planilha
 fica em DADOS/ -- que esta no .gitignore, e por isso nao vai para o repositorio
 publico junto com fornecedor e valor.
 
-Vai para o Lucas e a Graziela (`.alerta_bordero_para`, fora do repo).
+Vai para o Lucas e o Henrique (no lugar da Graziela desde 17/11/2026) (`.alerta_bordero_para`, fora do repo).
 
 Uso:
     python alerta_bordero.py                 # manda, no maximo uma vez por dia

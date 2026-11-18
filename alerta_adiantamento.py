@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Avisa a Graziela quando um titulo de AMARRAR ADIANTAMENTO aparece COM boleto.
+"""Avisa o Henrique quando um titulo de AMARRAR ADIANTAMENTO aparece COM boleto.
 
 O `tipo_pgto_sf1` vem da classificacao (SF1). "AMARRAR ADIANTAMENTO" quer dizer
 que aquele titulo vai ser quitado contra um adiantamento ja pago -- ou seja,
@@ -110,7 +110,7 @@ def montar_html(achados: list[dict], carga: dict) -> str:
              f"{quantos} títulos classificados como <b>AMARRAR ADIANTAMENTO</b> "
              f"estão com boleto associado")
     return f"""<div style="{comuns.FONTE}font-size:11pt;color:#000000;">
-  <p style="margin:0 0 12px 0;">Bom dia, Graziela,</p>
+  <p style="margin:0 0 12px 0;">Bom dia, Henrique,</p>
 
   <p style="margin:0 0 12px 0;">{frase}.</p>
 

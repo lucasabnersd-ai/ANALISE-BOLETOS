@@ -21,7 +21,7 @@ fato e pede a verificacao; nao decide qual lado esta errado.
               Para tras pega o que venceu e ficou parado sem ninguem resolver;
               para frente, o que ainda da tempo de corrigir antes de pagar.
 
-Vai para o Rafael e a Graziela, com a Gabriella em copia
+Vai para o Rafael e o Henrique (no lugar da Graziela desde 17/11/2026), com a Gabriella em copia
 (`.alerta_boleto_sc_para` e `.alerta_boleto_sc_copia`, os dois fora do repo).
 
 Uso:
