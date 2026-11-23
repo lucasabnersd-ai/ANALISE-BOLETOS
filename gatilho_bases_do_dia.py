@@ -24,6 +24,12 @@ e SO dispara o ATUALIZAR_PAINEL.cmd quando as TRES valem ao mesmo tempo:
 Se faltar uma, nao faz nada e espera a proxima passada. Publicar com duas bases
 de hoje e uma de ontem e justamente o que ele pediu para nao acontecer.
 
+DEPOIS da 1a rodada do dia (23/11/2026, "AJUSTE PARA SEMPRE BUSCAR RELATORIOS
+MAIS RECENTES SE ATUALIZAR AS BASES"): QUALQUER base (SC7, SF1, SE2, SEFAZ,
+SC1) salva com DADO NOVO faz o painel rodar de novo com as mais recentes -- nao
+precisa mais as tres de novo. No fim de cada rodada ele confere se alguma base
+mudou enquanto rodava (VERIFICACAO no log e CONFERENCIA na tela).
+
 Antes do painel roda o CLIQUE_PARA_IMPORTAR_RET_BOLETOS_ITAU.CMD (pedido dele
 29/09/2026): ele atualiza a BOLETOS ITAU.xlsx que o associador le. Se o Itau
 der erro, o painel NAO roda (conta como falha e tenta de novo).
@@ -188,11 +194,14 @@ def situacao() -> tuple[bool, str, dict]:
     Tres jeitos de rodar (o resto espera):
       A. REGRA DO DIA: SC7, SF1 e SE2 gravadas HOJE, as tres depois da ultima
          rodada boa, com pelo menos um dado novo (inclui a SEFAZ, se mudou).
-      B. SEFAZ (pedido dele 01/10/2026, "COLOQUE A SEFAZ NO GATILHO TAMBEM")
-         e SC1 (23/10/2026, "ajuste ela pra conversar com os gatilhos"):
-         o painel ja rodou hoje com as 3 bases do dia e uma delas trouxe
-         DADO NOVO depois disso -> roda de novo. Sozinhas nao abrem o dia:
-         sem as 3 de hoje continua esperando.
+      B. QUALQUER BASE COM DADO NOVO DEPOIS DA RODADA DE HOJE -> roda de novo
+         com as mais recentes. Era so SEFAZ (01/10/2026) e SC1 (23/10/2026);
+         em 23/11/2026 ("BAIXEI UMA NOVA SE2 E NAO PUXOU" + "AJUSTE PARA
+         SEMPRE BUSCAR RELATORIOS MAIS RECENTES SE ATUALIZAR AS BASES") passou
+         a valer tambem para SC7, SF1 e SE2: antes, a SE2 baixada de novo as
+         10:09 ficou esperando a SC7 e a SF1 serem salvas de novo e o painel
+         seguiu com a SE2 das 07:45. O dia continua abrindo so com as 3 de
+         hoje (regra A); SEFAZ e SC1 sozinhas nao abrem o dia.
       C. NOVA TENTATIVA: a ultima rodada deu erro (ate TENTATIVAS por dia) ->
          repete com as mesmas bases, sem exigir que as 3 sejam salvas de novo.
          Antes de 01/10/2026 essa exigencia barrava a repeticao: o erro das
@@ -242,17 +251,19 @@ def situacao() -> tuple[bool, str, dict]:
 
     pendentes = [n for n, d in datas.items() if ultima_ok and d <= ultima_ok]
     if pendentes:
-        # B. as 3 de hoje ja foram usadas numa rodada de HOJE; so SEFAZ/SC1 mandam.
-        mandam = [n for n, d in datas_avulsas.items()
+        # B. (23/11/2026) o painel ja rodou HOJE: QUALQUER base (SC7, SF1, SE2, SEFAZ, SC1) com dado novo depois disso
+        # manda rodar de novo, com as mais recentes. Antes so SEFAZ/SC1 mandavam e a SE2 nova das 10:09 ficou de fora.
+        mandam = [n for n, d in todas_datas.items()
                   if ultima_ok and ultima_ok.date() == hoje and d > ultima_ok and n in info["novas"]]
         if mandam:
             return True, f"{', '.join(mandam)} com dado novo depois da rodada de {hhmm(ultima_ok)} ({resumo})", info
-        if len(pendentes) == 3:
-            return False, f"painel ja atualizado as {hhmm(ultima_ok)} com as 3 bases de hoje ({resumo})", info
-        return False, (
-            f"esperando {', '.join(pendentes)} de novo: as 3 precisam ser atualizadas "
-            f"depois da ultima rodada ({hhmm(ultima_ok)}) -- ou a SEFAZ/SC1 com dado novo -- {resumo}"
-        ), info
+        salvas = [n for n, d in todas_datas.items() if ultima_ok and d > ultima_ok]
+        if salvas:
+            return False, (
+                f"painel ja atualizado as {hhmm(ultima_ok)}; {', '.join(salvas)} salva(s) de novo depois, "
+                f"mas SEM dado novo ({resumo})"
+            ), info
+        return False, f"painel ja atualizado as {hhmm(ultima_ok)} com as bases mais recentes ({resumo})", info
 
     # A. as 3 sao de hoje e mais novas que a ultima rodada boa.
     mais_nova = max(todas_datas.values())
@@ -269,6 +280,24 @@ def situacao() -> tuple[bool, str, dict]:
         ), info
 
     return True, f"as 3 bases de hoje estao prontas, dado novo em {', '.join(info['novas'])} ({resumo})", info
+
+
+def mudaram_durante(info: dict) -> list[str]:
+    """23/11/2026 ("SEMPRE PUXAR E VERIFICAR OS RELATORIOS MAIS RECENTES APOS ATUALIZAR"): no fim da rodada, confere se
+    alguma base mudou de DADO enquanto o painel rodava (~55 min). Mudou = a passada seguinte roda de novo (regra B,
+    porque a base ficou mais nova que o inicio desta rodada); aqui so avisa no log e na tela. Sem como ler agora (base
+    sendo gravada) = nao avisa, e a passada seguinte decide do mesmo jeito."""
+    antes = info.get("dados") or {}
+    mudou = []
+    for n, p in {**achar_bases(), **achar_avulsas()}.items():
+        if not p or n not in antes:
+            continue
+        try:
+            if assinatura_dados(p) != antes[n]:
+                mudou.append(n)
+        except Exception:  # noqa: BLE001
+            mudou.append(n)
+    return mudou
 
 
 def achar_cmd_itau() -> Path | None:
@@ -550,12 +579,19 @@ def passada() -> int:
         gravar_estado(estado)
         registrar(f"CONCLUIDO em {dur_txt}.")
         atualizar_acomp()
+        durante = mudaram_durante(info)
+        if durante:
+            registrar(f"VERIFICACAO: {', '.join(durante)} mudou durante a rodada -- a proxima passada roda de novo com a mais recente")
+            conferencia = f"{', '.join(durante)} NOVA chegou durante a rodada: atualizo de novo em seguida"
+        else:
+            registrar("VERIFICACAO: o painel saiu com as bases mais recentes (nenhuma mudou durante a rodada)")
+            conferencia = "painel com as bases mais recentes"
         avisar_na_tela({
             "status": "ok",
             "titulo": "PAINEL ANÁLISE DE BOLETOS ATUALIZADO",
             "linhas": [
                 ["Atualizado em", f"{agora():%d/%m/%Y às %H:%M} ({dur_txt})"],
-            ] + linhas + [["ITAÚ RET", "importado antes do painel"]],
+            ] + linhas + [["ITAÚ RET", "importado antes do painel"], ["CONFERÊNCIA", conferencia]],
         })
     else:
         falhas = estado.setdefault("falhas", {})
