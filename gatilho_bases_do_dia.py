@@ -76,8 +76,10 @@ LOG = DADOS / "gatilho_bases.log"
 ESTAVEL_MIN = 3
 # Tentativas por dia quando a rodada termina com erro.
 TENTATIVAS = 3
-# Prazo da rodada inteira. Hoje ela leva ~10 min; 90 e folga para o associador.
-PRAZO_RODADA_S = 90 * 60
+# Prazo de cada etapa (Itau e ATUALIZAR_PAINEL.cmd). De 19 a 23/11 o painel levou 45-55 min; em 24/11, com a maquina
+# lenta (so ~0,5 GB de memoria livre: ler a SE2 passou de ~2 para 20 min), levou 81 min e depois estourou os 90
+# (codigo 124 as 11:30, cortada no passo [7/10] quando faltavam ~15 min). 180 da folga e ainda corta rodada travada.
+PRAZO_RODADA_S = 180 * 60
 
 
 def agora() -> datetime:
@@ -348,7 +350,17 @@ def rodar_cmd(cmd: Path, sem_pausa_por_nul: bool = False, titulo: str = "RODANDO
         try:
             codigo = proc.wait(timeout=PRAZO_RODADA_S)
         except subprocess.TimeoutExpired:
-            proc.kill()
+            # 24/11/2026: o proc.kill() so matava o cmd.exe; o python do passo que estava rodando
+            # (alerta_inclusao.py) ficou ORFAO, rodando sozinho depois do erro. taskkill /T derruba a
+            # arvore inteira (cmd + python + o que ele abriu).
+            registrar(f"   PRAZO de {PRAZO_RODADA_S // 60} min estourado -- derrubando a etapa inteira (cmd e filhos)")
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           creationflags=0x08000000)
+            try:
+                proc.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                proc.kill()
             codigo = 124
     rodar_cmd.ultimo_log = log
     return codigo
@@ -607,6 +619,9 @@ def passada() -> int:
         # 0xC000013A = STATUS_CONTROL_C_EXIT: alguem fechou a janela (ou Ctrl+C)
         if codigo in (3221225786, -1073741510):
             resto = "A janela foi FECHADA antes de terminar. " + resto
+        # 124 = o gatilho cortou a etapa por prazo (rodar_cmd), nao erro do script
+        elif codigo == 124:
+            resto = f"Passou do prazo de {PRAZO_RODADA_S // 60} min e foi interrompida. " + resto
         registrar(f"TERMINOU COM ERRO (codigo {codigo}) em {dur_txt}. {resto}")
         avisar_na_tela({
             "status": "erro",
